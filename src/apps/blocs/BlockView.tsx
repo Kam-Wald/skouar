@@ -29,6 +29,7 @@ export interface BlockHandlers {
     f: { src: string; fileName: string; fileSize: number } | undefined
   ): void
   onToggleDone(id: string): void
+  onSetDue(id: string, due: string | null): void
   onChangeDb(id: string, db: Database): void
   onEnter(id: string): void
   onDelete(id: string): void
@@ -75,6 +76,7 @@ export default function BlockView({ block, handlers }: Props) {
   const [open, setOpen] = useState(false)
   const [over, setOver] = useState(false)
   const [urlPop, setUrlPop] = useState<null | { x: number; y: number; kind: 'src' | 'href'; value: string }>(null)
+  const [duePop, setDuePop] = useState<null | { x: number; y: number }>(null)
   const active = handlers.isActive(block.id)
   const slashActive = handlers.isSlashActive(block.id)
 
@@ -448,12 +450,62 @@ export default function BlockView({ block, handlers }: Props) {
     >
       {dragHandle}
       {block.type === 'todo' && (
-        <input
-          type="checkbox"
-          className="block-todo-check"
-          checked={block.done ?? false}
-          onChange={() => handlers.onToggleDone(block.id)}
-        />
+        <>
+          <input
+            type="checkbox"
+            className="block-todo-check"
+            checked={block.done ?? false}
+            onChange={() => handlers.onToggleDone(block.id)}
+          />
+          <button
+            className={`todo-due-btn${block.due ? ' set' : ''}`}
+            title={block.due ? `Rappel : ${block.due.replace('T', ' ')}` : 'Ajouter un rappel'}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setDuePop({ x: r.left, y: r.bottom })
+            }}
+          >
+            ⏰
+          </button>
+          {duePop && (
+            <div className="url-pop" style={{ left: duePop.x, top: duePop.y + 6 }}>
+              <input
+                type="datetime-local"
+                className="db-input"
+                autoFocus
+                defaultValue={block.due ?? undefined}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handlers.onSetDue(block.id, (e.target as HTMLInputElement).value || null)
+                    setDuePop(null)
+                  }
+                  if (e.key === 'Escape') setDuePop(null)
+                }}
+              />
+              <button
+                className="db-btn"
+                onClick={(e) => {
+                  const input = (e.currentTarget.parentElement as HTMLElement).querySelector('input')
+                  handlers.onSetDue(block.id, input?.value || null)
+                  setDuePop(null)
+                }}
+              >
+                OK
+              </button>
+              {block.due && (
+                <button
+                  className="db-btn"
+                  onClick={() => {
+                    handlers.onSetDue(block.id, null)
+                    setDuePop(null)
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
       {block.type === 'bullet' && <span className="block-bullet">•</span>}
       <div
