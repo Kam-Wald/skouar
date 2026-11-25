@@ -50,8 +50,9 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 
 ## Fonctionnalités de Blocs
 
-- Blocs : paragraphe, H1, H2, puces, tâches cochables
-- **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case), filtres, tris, et **4 vues** : tableau, board (kanban groupé), galerie, calendrier
+- Blocs : paragraphe, H1/H2/H3, puces, tâches, citation, code, séparateur, image, **vidéo (embed YouTube/mp4)**, **audio**, **PDF** (lecteur), **fichier/archive** (carte téléchargeable), **menu dépliant** (blocs enfants), **bouton** (avec URL), **table des matières** (auto depuis H1–H3) — tout insérable via le **menu « / »** (filtré au clavier, flèches + Entrée)
+- **Icône (emoji) et couverture d’image** par page (upload ≤ 2 Mo ou URL), **fil d’ariane** des pages parentes
+- **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case) via formulaire inline, filtres, tris, et **8 vues** : tableau, board, galerie, calendrier, liste, chronologie, fil d’actus, graphique (barres compte/somme)
 
 ## Roadmap
 
