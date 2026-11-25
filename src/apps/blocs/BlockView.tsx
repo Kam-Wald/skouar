@@ -16,6 +16,7 @@ import type { DbRef } from './fields'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { QRCodeSVG } from 'qrcode.react'
+import { useDismiss } from './useDismiss'
 
 export interface Heading {
   id: string
@@ -94,6 +95,8 @@ export default function BlockView({ block, handlers }: Props) {
   const [over, setOver] = useState(false)
   const [urlPop, setUrlPop] = useState<null | { x: number; y: number; kind: 'src' | 'href'; value: string }>(null)
   const [duePop, setDuePop] = useState<null | { x: number; y: number }>(null)
+  useDismiss(`url-${block.id}`, !!urlPop, () => setUrlPop(null))
+  useDismiss(`due-${block.id}`, !!duePop, () => setDuePop(null))
   const active = handlers.isActive(block.id)
   const slashActive = handlers.isSlashActive(block.id)
 
@@ -226,7 +229,7 @@ export default function BlockView({ block, handlers }: Props) {
             <button
               className="block-row-del"
               title="Changer l’URL"
-              onClick={(e) => openUrlPop('src', e)}
+              data-pop={`url-${block.id}`} onClick={(e) => openUrlPop('src', e)}
             >
               🔗
             </button>
@@ -262,6 +265,7 @@ export default function BlockView({ block, handlers }: Props) {
             y={urlPop.y}
             value={urlPop.value}
             placeholder="https://…"
+            popKey={`url-${block.id}`}
             onSubmit={(v) => handlers.onChangeSrc(block.id, v || undefined)}
             onClose={() => setUrlPop(null)}
           />
@@ -323,6 +327,7 @@ export default function BlockView({ block, handlers }: Props) {
 
   if (block.type === 'button') {
     const [actOpen, setActOpen] = useState(false)
+    useDismiss(`act-${block.id}`, actOpen, () => setActOpen(false))
     const [actSrc, setActSrc] = useState(block.action?.repeatBlockId ?? '')
     const [actCount, setActCount] = useState(block.action?.count ?? 3)
     return (
@@ -356,13 +361,13 @@ export default function BlockView({ block, handlers }: Props) {
           />
         </a>
         {block.action && <span className="db-type">⚙ ×{block.action.count}</span>}
-        <button className="block-row-del" title="URL du bouton" onClick={(e) => openUrlPop('href', e)}>
+        <button className="block-row-del" title="URL du bouton" data-pop={`url-${block.id}`} onClick={(e) => openUrlPop('href', e)}>
           🔗
         </button>
         <button
           className={`block-row-del${block.action ? ' set' : ''}`}
           title="Automatisation : répéter un bloc N fois au clic"
-          onClick={() => { setActSrc(block.action?.repeatBlockId ?? ''); setActCount(block.action?.count ?? 3); setActOpen((o) => !o) }}
+          data-pop={`act-${block.id}`} onClick={() => { setActSrc(block.action?.repeatBlockId ?? ''); setActCount(block.action?.count ?? 3); setActOpen((o) => !o) }}
         >
           ⚙
         </button>
@@ -372,12 +377,13 @@ export default function BlockView({ block, handlers }: Props) {
             y={urlPop.y}
             value={urlPop.value}
             placeholder="https://…"
+            popKey={`url-${block.id}`}
             onSubmit={(v) => handlers.onChangeHref(block.id, v || undefined)}
             onClose={() => setUrlPop(null)}
           />
         )}
         {actOpen && (
-          <div className="url-pop" style={{ left: 8, top: 'auto', bottom: 8 }}>
+          <div className="url-pop" data-pop={`act-${block.id}`} style={{ left: 8, top: 'auto', bottom: 8 }}>
             <select className="db-select" value={actSrc} onChange={(e) => setActSrc(e.target.value)}>
               <option value="">Bloc à répéter…</option>
               {handlers.blocksList.map((b) => (
@@ -530,7 +536,7 @@ export default function BlockView({ block, handlers }: Props) {
         {block.src ? (
           <>
             <iframe className="block-embed" src={block.src} title="embed" />
-            <button className="block-row-del" title="Changer l'URL" onClick={(e) => openUrlPop('src', e)}>🔗</button>
+            <button className="block-row-del" title="Changer l'URL" data-pop={`url-${block.id}`} onClick={(e) => openUrlPop('src', e)}>🔗</button>
             <button className="block-row-del" title="Retirer" onClick={() => { handlers.onChangeSrc(block.id, undefined) }}>×</button>
           </>
         ) : (
@@ -543,7 +549,7 @@ export default function BlockView({ block, handlers }: Props) {
           />
         )}
         {urlPop && (
-          <UrlPop x={urlPop.x} y={urlPop.y} value={urlPop.value} placeholder="https://…" onSubmit={(v) => handlers.onChangeSrc(block.id, v || undefined)} onClose={() => setUrlPop(null)} />
+          <UrlPop x={urlPop.x} y={urlPop.y} value={urlPop.value} placeholder="https://…" popKey={`url-${block.id}`} onSubmit={(v) => handlers.onChangeSrc(block.id, v || undefined)} onClose={() => setUrlPop(null)} />
         )}
       </div>
     )
@@ -551,12 +557,14 @@ export default function BlockView({ block, handlers }: Props) {
 
   if (block.type === 'math') {
     const [editOpen, setEditOpen] = useState(false)
+    useDismiss(`math-${block.id}`, editOpen, () => setEditOpen(false))
     const [draft, setDraft] = useState('')
     return (
       <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
         {dragHandle}
         <div
           className="block-math"
+          data-pop={`math-${block.id}`}
           title="Cliquer pour éditer la formule LaTeX"
           onClick={() => { setDraft(stripHtml(block.text)); setEditOpen(true) }}
           dangerouslySetInnerHTML={{
@@ -564,7 +572,7 @@ export default function BlockView({ block, handlers }: Props) {
           }}
         />
         {editOpen && (
-          <div className="url-pop" style={{ left: 8, top: 'auto', bottom: 8 }}>
+          <div className="url-pop" data-pop={`math-${block.id}`} style={{ left: 8, top: 'auto', bottom: 8 }}>
             <textarea
               className="db-input"
               style={{ width: 320, height: 70 }}
@@ -649,10 +657,10 @@ export default function BlockView({ block, handlers }: Props) {
         {dragHandle}
         <div className="block-countdown">
           <span className="block-countdown-time">{diff == null ? '⏳ aucune date' : diff <= 0 ? '🎉 Terminé !' : fmt(diff)}</span>
-          <button className={`todo-due-btn${block.due ? ' set' : ''}`} title="Choisir la date cible" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setDuePop({ x: r.left, y: r.bottom }) }}>⏰</button>
+          <button className={`todo-due-btn${block.due ? ' set' : ''}`} title="Choisir la date cible" data-pop={`due-${block.id}`} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setDuePop({ x: r.left, y: r.bottom }) }}>⏰</button>
         </div>
         {duePop && (
-          <div className="url-pop" style={{ left: duePop.x, top: duePop.y + 6 }}>
+          <div className="url-pop" data-pop={`due-${block.id}`} style={{ left: duePop.x, top: duePop.y + 6 }}>
             <input type="datetime-local" className="db-input" autoFocus defaultValue={block.due ?? undefined}
               onKeyDown={(e) => { if (e.key === 'Enter') { handlers.onSetDue(block.id, (e.target as HTMLInputElement).value || null); setDuePop(null) } if (e.key === 'Escape') setDuePop(null) }} />
             <button className="db-btn" onClick={(e) => { const input = (e.currentTarget.parentElement as HTMLElement).querySelector('input'); handlers.onSetDue(block.id, input?.value || null); setDuePop(null) }}>OK</button>
@@ -768,7 +776,7 @@ export default function BlockView({ block, handlers }: Props) {
             ⏰
           </button>
           {duePop && (
-            <div className="url-pop" style={{ left: duePop.x, top: duePop.y + 6 }}>
+            <div className="url-pop" data-pop={`due-${block.id}`} style={{ left: duePop.x, top: duePop.y + 6 }}>
               <input
                 type="datetime-local"
                 className="db-input"
@@ -828,6 +836,7 @@ function UrlPop({
   y,
   value,
   placeholder,
+  popKey,
   onSubmit,
   onClose
 }: {
@@ -835,12 +844,13 @@ function UrlPop({
   y: number
   value: string
   placeholder: string
+  popKey: string
   onSubmit: (v: string) => void
   onClose: () => void
 }) {
   const [v, setV] = useState(value)
   return (
-    <div className="url-pop" style={{ left: x, top: y + 6 }}>
+    <div className="url-pop" data-pop={popKey} style={{ left: x, top: y + 6 }}>
       <input
         className="db-input"
         autoFocus

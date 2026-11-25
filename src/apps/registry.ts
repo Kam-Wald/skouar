@@ -14,7 +14,7 @@ export const apps: AppMeta[] = [
   {
     id: 'blocs',
     name: 'Calepin',
-    description: 'Pages et bases de données type Notion, 100 % local dans ton navigateur.',
+    description: 'Pages et bases de données type Notion.',
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,
     component: lazy(() => import('./blocs/BlocsApp'))
@@ -22,21 +22,21 @@ export const apps: AppMeta[] = [
   {
     id: 'taol',
     name: 'Taol',
-    description: 'Tableur 100 % local — bientôt disponible.',
+    description: 'Tableur — bientôt disponible.',
     icon: '🧮',
     soon: true
   },
   {
     id: 'skeud',
     name: 'Skeud',
-    description: 'Galerie et retouche d’images, 100 % local — bientôt disponible.',
+    description: 'Galerie et retouche d’images — bientôt disponible.',
     icon: '🖼️',
     soon: true
   },
   {
     id: 'son',
     name: 'Son',
-    description: 'Bibliothèque audio locale — bientôt disponible.',
+    description: 'Bibliothèque audio — bientôt disponible.',
     icon: '🎧',
     soon: true
   }

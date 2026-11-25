@@ -19,6 +19,7 @@ import {
 import BlockView, { type BlockHandlers } from './BlockView'
 import PageTree from './PageTree'
 import EmojiPicker from './EmojiPicker'
+import { useDismiss } from './useDismiss'
 import CoverMenu from './CoverMenu'
 import { coverStyle } from './covers'
 import { TEMPLATES, type TemplateSpec } from './templates'
@@ -75,6 +76,7 @@ export default function BlocsApp() {
   const [linksOpen, setLinksOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [mentionIndex, setMentionIndex] = useState(0)
 
@@ -329,7 +331,15 @@ export default function BlocsApp() {
   const mentionMatch = allBlocks.map((b) => ({ b, m: plain(b).match(/\[\[([^\]\[]*)$/) })).find((x) => x.m)
   const mentionQuery = mentionMatch?.m?.[1]?.toLowerCase() ?? ''
   const mentionPages = livePages.filter((p) => !mentionQuery || p.title.toLowerCase().includes(mentionQuery))
-  const mentionOpen = !!mentionMatch && mentionPages.length > 0
+  const mentionOpen = !!mentionMatch && !mentionDismissed && mentionPages.length > 0
+
+  useDismiss('icon', iconOpen, () => setIconOpen(false))
+  useDismiss('tags', tagsOpen, () => setTagsOpen(false))
+  useDismiss('cover', !!coverMenu, () => setCoverMenu(null))
+  useDismiss('bell', bellOpen, () => setBellOpen(false))
+  useDismiss('tpl', tplOpen, () => setTplOpen(false))
+  useDismiss('slash', slashOpen, () => setSlashDismissed(true))
+  useDismiss('mention', mentionOpen, () => setMentionDismissed(true))
 
   const headings = allBlocks
     .filter((b) => ['h1', 'h2', 'h3', 'h4'].includes(b.type))
@@ -365,6 +375,7 @@ export default function BlocsApp() {
     if (!state || !current) return
     if ('text' in patch) {
       setSlashDismissed(false)
+      setMentionDismissed(false)
       setSlashIndex(0)
     }
     updatePage(current.id, { blocks: patchBlock(current.blocks, id, patch) })
@@ -717,9 +728,15 @@ export default function BlocsApp() {
         className={`blocs-sidebar${sidebarOpen ? ' open' : ''}`}
         style={{ '--side-w': `${sideW}px` } as CSSProperties}
       >
-        <Link to="/" className="blocs-back">
-          ← Skouar
-        </Link>
+        <div className="blocs-app-head">
+          <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
+            <img className="blocs-app-logo" src={`${import.meta.env.BASE_URL}app-icons/calepin.svg`} alt="Calepin" />
+            <span className="blocs-app-name">Calepin</span>
+          </Link>
+          <Link to="/" className="blocs-back" title="Retour au launcher">
+            ←
+          </Link>
+        </div>
         <input
           className="blocs-search"
           placeholder="Rechercher… (titre, texte, BDD)"
@@ -759,6 +776,7 @@ export default function BlocsApp() {
         </div>
         <button
           className={`rappels-row${soon48.length > 0 ? ' has-soon' : ''}`}
+          data-pop="bell"
           onClick={() => setBellOpen((o) => !o)}
           title={`${dueTodos.length} rappel(s) — ${overdue.length} en retard, ${soon48.length} dans les 48 h`}
         >
@@ -831,7 +849,7 @@ export default function BlocsApp() {
             >
               <span className="blocs-side-link-ic">＋</span> Nouvelle page
             </button>
-            <button className="blocs-side-link" onClick={() => setTplOpen(true)}>
+            <button className="blocs-side-link" data-pop="tpl" onClick={() => setTplOpen(true)}>
               <span className="blocs-side-link-ic">📋</span> Templates
             </button>
           </>
@@ -906,7 +924,7 @@ export default function BlocsApp() {
           </span>
         </div>
         <div className="page-head">
-          <div className="page-icon-wrap">
+          <div className="page-icon-wrap" data-pop="icon">
             <button
               className="page-icon-btn"
               style={current.iconColor ? { backgroundColor: current.iconColor } : undefined}
@@ -936,7 +954,7 @@ export default function BlocsApp() {
             onChange={(e) => updatePage(current.id, { title: e.target.value })}
           />
           <div className="page-head-actions">
-            <div className="page-icon-wrap">
+            <div className="page-icon-wrap" data-pop="tags">
               <button className="page-cover-btn" title="Étiquettes" onClick={() => setTagsOpen((o) => !o)}>
                 🏷
               </button>
@@ -971,7 +989,7 @@ export default function BlocsApp() {
                 </div>
               )}
             </div>
-            <button className="page-cover-btn" title="Couverture (couleur, motif, URL, fichier)" onClick={(e) => {
+            <button className="page-cover-btn" title="Couverture (couleur, motif, URL, fichier)" data-pop="cover" onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
               setCoverMenu({ x: r.left, y: r.bottom })
             }}>
@@ -1073,7 +1091,7 @@ export default function BlocsApp() {
           )}
         </div>
         {slashOpen && slashBlock && slashRect && (
-          <div className="slash-menu" style={{ left: Math.min(slashRect.left, Math.max(8, window.innerWidth - 260)), top: slashRect.bottom + 6 }}>
+          <div className="slash-menu" data-pop="slash" style={{ left: Math.min(slashRect.left, Math.max(8, window.innerWidth - 260)), top: slashRect.bottom + 6 }}>
             {slashItems.map((t, i) => (
               <button
                 key={t.type}
@@ -1088,7 +1106,7 @@ export default function BlocsApp() {
           </div>
         )}
         {mentionOpen && mentionMatch && mentionRect && (
-          <div className="slash-menu" style={{ left: mentionRect.left, top: mentionRect.bottom + 6 }}>
+          <div className="slash-menu" data-pop="mention" style={{ left: mentionRect.left, top: mentionRect.bottom + 6 }}>
             {mentionPages.slice(0, 8).map((p, i) => (
               <button
                 key={p.id}
@@ -1110,7 +1128,7 @@ export default function BlocsApp() {
           />
         )}
         {bellOpen && (
-          <div className="tpl-pop bell-pop">
+          <div className="tpl-pop bell-pop" data-pop="bell">
             <div className="tpl-head">
               <strong>🔔 Rappels (tâches avec date)</strong>
               <button className="db-btn" onClick={() => setBellOpen(false)}>✕</button>
@@ -1145,7 +1163,7 @@ export default function BlocsApp() {
           />
         )}
         {tplOpen && (
-          <div className="tpl-pop">
+          <div className="tpl-pop" data-pop="tpl">
             <div className="tpl-head">
               <strong>Choisis un template</strong>
               <button className="db-btn" onClick={() => setTplOpen(false)}>✕</button>
