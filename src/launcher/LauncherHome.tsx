@@ -11,6 +11,7 @@ export default function LauncherHome() {
           alt="Skouar"
         />
         <div>
+          <p className="launcher-kicker">01 · Launcher</p>
           <h1>Skouar</h1>
           <p className="launcher-subtitle">
             Tes applications, réunies sur une seule place.

@@ -11,6 +11,9 @@ export function getAccent(): string {
 export function applyTheme(theme: string, accent: string): void {
   document.documentElement.dataset.theme = theme
   document.documentElement.style.setProperty('--accent', accent)
+  if (/^#[0-9a-fA-F]{6}$/.test(accent)) {
+    document.documentElement.style.setProperty('--accent-soft', `${accent}2e`)
+  }
   localStorage.setItem('skouar:theme', theme)
   localStorage.setItem('skouar:accent', accent)
 }

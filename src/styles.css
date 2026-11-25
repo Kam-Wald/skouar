@@ -1,12 +1,16 @@
 :root {
-  --bg: #0f172a;
-  --panel: #1e293b;
-  --panel-2: #273549;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
+  --bg: #0b0f19;
+  --panel: #121826;
+  --panel-2: #1a2334;
+  --text: #e6eaf2;
+  --muted: #8b94a7;
   --accent: #4f46e5;
-  --accent-soft: rgba(79, 70, 229, 0.25);
-  --border: #334155;
+  --accent-soft: rgba(79, 70, 229, 0.22);
+  --border: rgba(148, 163, 184, 0.16);
+  --glass: rgba(13, 17, 27, 0.72);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --radius: 14px;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 * {
@@ -32,6 +36,12 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 a {
@@ -1413,12 +1423,15 @@ th.drag-over {
 }
 
 :root[data-theme='light'] {
-  --bg: #f1f5f9;
+  --bg: #f4f6fb;
   --panel: #ffffff;
-  --panel-2: #e8edf5;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #dbe3ee;
+  --panel-2: #edf1f7;
+  --text: #101828;
+  --muted: #667085;
+  --accent-soft: rgba(79, 70, 229, 0.12);
+  --border: rgba(16, 24, 40, 0.1);
+  --glass: rgba(255, 255, 255, 0.78);
+  --shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
 }
 
 :root[data-theme='light'] body {
@@ -2149,4 +2162,92 @@ th.drag-over {
 .block-row-del.set {
   color: var(--accent);
   opacity: 1;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.launcher {
+  background:
+    radial-gradient(1100px 520px at 50% -12%, var(--accent-soft), transparent 62%),
+    var(--bg);
+}
+
+.launcher-header h1 {
+  letter-spacing: -0.03em;
+}
+
+.launcher-kicker {
+  margin: 0 0 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.app-tile {
+  border-radius: var(--radius);
+}
+
+.app-tile:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.launcher-footer {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.blocs-sidebar-head {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+}
+
+.blocs-io {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.breadcrumb,
+.crumb {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.db-type,
+.tag-chip,
+.db-agg-cell,
+.bell-badge,
+.graph-hint,
+.tpl-head strong {
+  font-family: var(--font-mono);
+}
+
+.blocs-title {
+  font-size: 2.4rem;
+  letter-spacing: -0.03em;
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.tpl-pop {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: var(--shadow);
+}
+
+.graph-overlay {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
 }
