@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import type { CellValue, Column, Database, PropType, Row, ViewType } from './types'
+import { useMemo, useRef, useState, type DragEvent } from 'react'
+import type { AggType, CellValue, Column, Database, PropType, Row, ViewType } from './types'
 import { createColumn, createRow } from './store'
 import {
   BoardView,
@@ -177,6 +177,40 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
     patch(extra)
   }
 
+  const colDragId = useRef<string | null>(null)
+  const [colOverId, setColOverId] = useState<string | null>(null)
+
+  const moveColumn = (id: string, targetId: string) => {
+    if (id === targetId) return
+    const idx = db.columns.findIndex((c) => c.id === id)
+    const tidx = db.columns.findIndex((c) => c.id === targetId)
+    if (idx < 0 || tidx < 0) return
+    const columns = [...db.columns]
+    const [c] = columns.splice(idx, 1)
+    columns.splice(tidx, 0, c)
+    patch({ columns })
+  }
+
+  const colDragProps = (id: string) => ({
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      colDragId.current = id
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault()
+      setColOverId(id)
+    },
+    onDragLeave: () => setColOverId(null),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      setColOverId(null)
+      const dragged = colDragId.current ?? e.dataTransfer.getData('text/plain')
+      colDragId.current = null
+      if (dragged) moveColumn(dragged, id)
+    }
+  })
+
   const [colForm, setColForm] = useState(false)
   const [colName, setColName] = useState('')
   const [colType, setColType] = useState<PropType>('text')
@@ -218,6 +252,42 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
 
   const deleteColumn = (colId: string) =>
     patch({ columns: db.columns.filter((c) => c.id !== colId) })
+
+  const aggOptions = (c: Column): { v: AggType; label: string }[] => {
+    const base: { v: AggType; label: string }[] = [
+      { v: 'countAll', label: 'Compter tout' },
+      { v: 'count', label: 'Compter (non vides)' }
+    ]
+    if (c.type === 'number') return [...base, { v: 'sum', label: 'Somme' }, { v: 'avg', label: 'Moyenne' }, { v: 'min', label: 'Min' }, { v: 'max', label: 'Max' }]
+    if (c.type === 'checkbox') return [...base, { v: 'checked', label: 'Cochées' }]
+    return base
+  }
+
+  const aggValue = (c: Column, agg: AggType | undefined): string => {
+    if (!agg) return ''
+    const vals = db.rows.map((r) => r.cells[c.id])
+    const nonEmpty = vals.filter((v) => v != null && v !== '')
+    switch (agg) {
+      case 'countAll': return String(db.rows.length)
+      case 'count': return String(nonEmpty.length)
+      case 'checked': return String(vals.filter((v) => v === true).length)
+      case 'sum': return String(nonEmpty.reduce<number>((a, v) => a + Number(v ?? 0), 0))
+      case 'avg': {
+        const nums = nonEmpty.map(Number).filter((n) => !Number.isNaN(n))
+        return nums.length ? String(Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100) : '—'
+      }
+      case 'min': return String(nonEmpty.length ? Math.min(...nonEmpty.map(Number)) : '—')
+      case 'max': return String(nonEmpty.length ? Math.max(...nonEmpty.map(Number)) : '—')
+      default: return ''
+    }
+  }
+
+  const setAgg = (colId: string, agg: AggType | undefined) => {
+    const aggs = { ...(db.aggs ?? {}) }
+    if (agg) aggs[colId] = agg
+    else delete aggs[colId]
+    patch({ aggs })
+  }
 
   const filterColumn = db.columns.find((c) => c.id === filterCol)
   const filterNeedsValue =
@@ -288,6 +358,7 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
         <button className="db-btn" onClick={addRow}>
           + Ligne
         </button>
+        <span className="db-type">{db.rows.length} ligne(s)</span>
         <button className="db-btn" onClick={() => setColForm(true)}>
           + Colonne
         </button>
@@ -406,7 +477,7 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           <thead>
             <tr>
               {db.columns.map((c) => (
-                <th key={c.id}>
+                <th key={c.id} className={colOverId === c.id ? 'drag-over' : ''} {...colDragProps(c.id)}>
                   <input
                     className="db-col-name"
                     value={c.name}
@@ -457,6 +528,31 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
               </tr>
             )}
           </tbody>
+          <tfoot>
+            <tr>
+              {db.columns.map((c) => (
+                <td key={c.id} className="db-agg-cell">
+                  <select
+                    className="db-select"
+                    value={db.aggs?.[c.id] ?? ''}
+                    onChange={(e) => setAgg(c.id, (e.target.value || undefined) as AggType | undefined)}
+                    title="Calcul sur cette colonne"
+                  >
+                    <option value="">—</option>
+                    {aggOptions(c).map((o) => (
+                      <option key={o.v} value={o.v}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {db.aggs?.[c.id] && (
+                    <span className="db-agg-val">= {aggValue(c, db.aggs[c.id])}</span>
+                  )}
+                </td>
+              ))}
+              <td />
+            </tr>
+          </tfoot>
         </table>
       </div>
       )}

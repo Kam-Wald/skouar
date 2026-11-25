@@ -5,9 +5,11 @@ export default function LauncherHome() {
   return (
     <div className="launcher">
       <header className="launcher-header">
-        <div className="launcher-logo" aria-hidden>
-          ▨
-        </div>
+        <img
+          className="launcher-logo-img"
+          src={`${import.meta.env.BASE_URL}icon.svg`}
+          alt="Skouar"
+        />
         <div>
           <h1>Skouar</h1>
           <p className="launcher-subtitle">
@@ -18,9 +20,13 @@ export default function LauncherHome() {
       <main className="launcher-grid">
         {apps.map((app) => (
           <Link key={app.id} to={`/app/${app.id}`} className="app-tile">
-            <span className="app-tile-icon" aria-hidden>
-              {app.icon}
-            </span>
+            {app.logo ? (
+              <img className="app-tile-logo" src={app.logo} alt="" />
+            ) : (
+              <span className="app-tile-icon" aria-hidden>
+                {app.icon}
+              </span>
+            )}
             <span className="app-tile-name">{app.name}</span>
             <span className="app-tile-desc">{app.description}</span>
           </Link>

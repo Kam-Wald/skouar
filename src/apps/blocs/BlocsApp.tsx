@@ -1,37 +1,73 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent
-} from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
-import type { Block, BlocsState, Page } from './types'
-import { createBlock, createDatabase, createPage, loadState, saveState } from './store'
+import type { Block, BlockType, BlocsState, Page } from './types'
+import { createBlock, createDatabase, createPage, loadState, saveState, uid } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
 import { BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
-import { deleteFrom, findBlock, flattenBlocks, insertAfter, patchBlock } from './tree'
+import {
+  deleteFrom,
+  descendantsOf,
+  findBlock,
+  flattenBlocks,
+  insertAfter,
+  mentionsIn,
+  moveBlockInTree,
+  patchBlock,
+  stripHtml
+} from './tree'
 import BlockView, { type BlockHandlers } from './BlockView'
 import PageTree from './PageTree'
+import EmojiPicker from './EmojiPicker'
+import CoverMenu from './CoverMenu'
+import { coverStyle } from './covers'
+import { TEMPLATES, type TemplateSpec } from './templates'
+import { exportFile, parseMarkdown, toMarkdown } from './markdown'
+import ThemeButton from '../../ThemeButton'
 
-const EMOJIS = [
-  '▦', '📄', '📝', '✅', '⭐', '🔥', '💡', '📌',
-  '🗂️', '🧠', '🎯', '🚀', '🌱', '🏠', '📚', '🎨',
-  '🔒', '❤️', '🐰', '🌙', '⚡', '🧩'
-]
+const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
+
+function tagColor(tag: string): string {
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
+  return TAG_COLORS[h % TAG_COLORS.length]
+}
+
+function cloneBlocks(blocks: Block[]): Block[] {
+  return blocks.map((b) => ({
+    ...b,
+    id: uid(),
+    db: b.db ? { ...b.db, id: uid(), columns: b.db.columns.map((c) => ({ ...c, id: uid() })), rows: b.db.rows.map((r) => ({ ...r, id: uid(), cells: { ...r.cells } })) } : undefined,
+    children: b.children ? cloneBlocks(b.children) : undefined
+  }))
+}
 
 export default function BlocsApp() {
   const [state, setState] = useState<BlocsState | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const coverInput = useRef<HTMLInputElement>(null)
+  const dragBlockId = useRef<string | null>(null)
+  const pastRef = useRef<BlocsState[]>([])
+  const futureRef = useRef<BlocsState[]>([])
+  const lastPush = useRef(0)
+  const prevState = useRef<BlocsState | null>(null)
   const [sync, setSync] = useState<SyncHandle | null>(null)
   const lastJson = useRef('')
   const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [tagFilter, setTagFilter] = useState('')
   const [iconOpen, setIconOpen] = useState(false)
+  const [tagsOpen, setTagsOpen] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [coverMenu, setCoverMenu] = useState<{ x: number; y: number } | null>(null)
+  const [tplOpen, setTplOpen] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
+  const [linksOpen, setLinksOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
+  const [mentionIndex, setMentionIndex] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -50,6 +86,55 @@ export default function BlocsApp() {
     }, 200)
     return () => clearTimeout(t)
   }, [state])
+
+  useEffect(() => {
+    if (!state) return
+    const prev = prevState.current
+    prevState.current = state
+    if (!prev) return
+    const t = setTimeout(() => {
+      const now = Date.now()
+      if (now - lastPush.current > 500) {
+        pastRef.current.push(prev)
+        if (pastRef.current.length > 100) pastRef.current.shift()
+        futureRef.current = []
+        lastPush.current = now
+      }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [state])
+
+  const undo = () => {
+    const past = pastRef.current
+    if (!past.length || !state) return
+    const prev = past[past.length - 1]
+    pastRef.current = past.slice(0, -1)
+    futureRef.current.push(state)
+    setState(prev)
+  }
+  const redo = () => {
+    const future = futureRef.current
+    if (!future.length || !state) return
+    const next = future[future.length - 1]
+    futureRef.current = future.slice(0, -1)
+    pastRef.current.push(state)
+    setState(next)
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   useEffect(() => {
     if (!state || !sync) return
@@ -100,49 +185,57 @@ export default function BlocsApp() {
     }
   })
 
+  const livePages = state?.pages.filter((p) => !p.deletedAt) ?? []
+  const trashPages = state?.pages.filter((p) => p.deletedAt) ?? []
+
   const q = query.trim().toLowerCase()
   const matches =
     q && state
-      ? state.pages.filter((p) => {
-          const blocks = flattenBlocks(p.blocks)
-          return (
-            p.title.toLowerCase().includes(q) ||
-            blocks.some(
-              (b) =>
-                b.text.toLowerCase().includes(q) ||
-                (b.db?.rows ?? []).some((r) =>
-                  Object.values(r.cells).some((v) =>
-                    String(v ?? '').toLowerCase().includes(q)
-                  )
-                )
-            )
-          )
-        })
+      ? livePages
+          .filter((p) => {
+            if (typeFilter === 'heading') return flattenBlocks(p.blocks).some((b) => ['h1','h2','h3','h4'].includes(b.type) && stripHtml(b.text).toLowerCase().includes(q))
+            if (typeFilter === 'todo') return flattenBlocks(p.blocks).some((b) => b.type === 'todo' && stripHtml(b.text).toLowerCase().includes(q))
+            if (typeFilter === 'db') return flattenBlocks(p.blocks).some((b) => b.type === 'database' && (b.db?.rows ?? []).some((r) => Object.values(r.cells).some((v) => String(v ?? '').toLowerCase().includes(q))))
+            if (typeFilter === 'text') return p.title.toLowerCase().includes(q) || flattenBlocks(p.blocks).some((b) => b.type !== 'database' && stripHtml(b.text).toLowerCase().includes(q))
+            return p.title.toLowerCase().includes(q) || flattenBlocks(p.blocks).some((b) => stripHtml(b.text).toLowerCase().includes(q) || (b.db?.rows ?? []).some((r) => Object.values(r.cells).some((v) => String(v ?? '').toLowerCase().includes(q))))
+          })
+          .map((p) => {
+            const b = flattenBlocks(p.blocks).find((x) => stripHtml(x.text).toLowerCase().includes(q))
+            const raw = b ? stripHtml(b.text) : p.title
+            const i = raw.toLowerCase().indexOf(q)
+            const start = Math.max(0, i - 30)
+            const snippet = (start > 0 ? '…' : '') + raw.slice(start, start + 90)
+            return { page: p, snippet, at: i >= 0 ? start : 0, raw }
+          })
       : null
 
+  const tagFiltered = tagFilter ? livePages.filter((p) => p.tags?.includes(tagFilter)) : livePages
+
   const current: Page | undefined =
-    state?.pages.find((p) => p.id === state.currentPageId) ?? state?.pages[0]
+    livePages.find((p) => p.id === state?.currentPageId) ?? livePages[0]
 
   const allBlocks = current ? flattenBlocks(current.blocks) : []
 
-  const slashBlock = allBlocks.find(
-    (b) => b.text.startsWith('/') && b.text.length <= 40
-  )
-  const slashQuery = slashBlock ? slashBlock.text.slice(1).toLowerCase() : ''
+  const plain = (b: Block) => stripHtml(b.text)
+
+  const slashBlock = allBlocks.find((b) => plain(b).startsWith('/') && plain(b).length <= 40)
+  const slashQuery = slashBlock ? plain(slashBlock).slice(1).toLowerCase() : ''
   const slashItems = BLOCK_TYPES.filter(
-    (t) =>
-      !slashQuery ||
-      t.title.toLowerCase().includes(slashQuery) ||
-      t.label.toLowerCase().includes(slashQuery)
+    (t) => !slashQuery || t.title.toLowerCase().includes(slashQuery) || t.label.toLowerCase().includes(slashQuery)
   )
   const slashOpen = !!slashBlock && !slashDismissed && slashItems.length > 0
 
+  const mentionMatch = allBlocks.map((b) => ({ b, m: plain(b).match(/\[\[([^\]\[]*)$/) })).find((x) => x.m)
+  const mentionQuery = mentionMatch?.m?.[1]?.toLowerCase() ?? ''
+  const mentionPages = livePages.filter((p) => !mentionQuery || p.title.toLowerCase().includes(mentionQuery))
+  const mentionOpen = !!mentionMatch && mentionPages.length > 0
+
   const headings = allBlocks
-    .filter((b) => b.type === 'h1' || b.type === 'h2' || b.type === 'h3')
+    .filter((b) => ['h1', 'h2', 'h3', 'h4'].includes(b.type))
     .map((b) => ({
       id: b.id,
-      text: b.text,
-      level: b.type === 'h1' ? 1 : b.type === 'h2' ? 2 : 3
+      text: plain(b),
+      level: b.type === 'h1' ? 1 : b.type === 'h2' ? 2 : b.type === 'h3' ? 3 : 4
     }))
 
   const crumbs: Page[] = []
@@ -156,15 +249,14 @@ export default function BlocsApp() {
     }
   }
 
+  const currentTitle = current ? (stripHtml(current.title).trim() || 'Sans titre') : ''
+  const incoming = state ? livePages.filter((p) => p.id !== current?.id && flattenBlocks(p.blocks).some((b) => mentionsIn(plain(b)).includes(currentTitle))) : []
+  const outgoing = current ? [...new Set(allBlocks.flatMap((b) => mentionsIn(plain(b))))] : []
+
   const updatePage = (pageId: string, patch: Partial<Page>) =>
     setState((s) =>
       s
-        ? {
-            ...s,
-            pages: s.pages.map((p) =>
-              p.id === pageId ? { ...p, ...patch, updatedAt: Date.now() } : p
-            )
-          }
+        ? { ...s, pages: s.pages.map((p) => (p.id === pageId ? { ...p, ...patch, updatedAt: Date.now() } : p)) }
         : s
     )
 
@@ -178,29 +270,60 @@ export default function BlocsApp() {
   }
 
   const applySlash = (t: BlockTypeDef) => {
-    if (!slashBlock) return
-    const existing = findBlock(current!.blocks, slashBlock.id)
+    if (!slashBlock || !current) return
+    const existing = findBlock(current.blocks, slashBlock.id)
     updateBlock(slashBlock.id, {
       type: t.type,
       text: '',
       done: t.type === 'todo' ? false : undefined,
-      src: undefined,
-      href: undefined,
-      fileName: undefined,
-      fileSize: undefined,
+      src: undefined, href: undefined, fileName: undefined, fileSize: undefined,
+      cols: t.type === 'columns' ? 2 : undefined,
       db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
-      children: t.type === 'toggle' ? (existing?.children ?? []) : undefined
+      children:
+        t.type === 'toggle' ? (existing?.children ?? [])
+          : t.type === 'columns' ? [createBlock('column'), createBlock('column')]
+          : undefined
     })
     setSlashDismissed(true)
   }
 
-  const insertBlockAfter = (afterId: string) => {
+  const applyMention = (title: string) => {
+    if (!mentionMatch || !current) return
+    const b = mentionMatch.b
+    const before = plain(b).slice(0, mentionMatch.m!.index)
+    const escaped = title.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    updateBlock(b.id, { text: `${before}[[${escaped}]] ` })
+  }
+
+  const insertBlockAfter = (afterId: string, block?: Block) => {
     if (!state || !current) return
-    const block = createBlock('paragraph')
+    const nb = block ?? createBlock('paragraph')
+    updatePage(current.id, { blocks: insertAfter(current.blocks, afterId, nb) })
+    pendingFocus.current = nb.id
+  }
+
+  const addChildTo = (parentId: string) => {
+    if (!state || !current) return
+    const parent = findBlock(current.blocks, parentId)
+    const nb = createBlock('paragraph')
     updatePage(current.id, {
-      blocks: insertAfter(current.blocks, afterId, block)
+      blocks: patchBlock(current.blocks, parentId, { children: [...(parent?.children ?? []), nb] })
     })
-    pendingFocus.current = block.id
+    pendingFocus.current = nb.id
+  }
+
+  const setCols = (id: string, n: number) => {
+    if (!state || !current) return
+    const b = findBlock(current.blocks, id)
+    let cols = [...(b?.children ?? [])]
+    while (cols.length < n) cols.push(createBlock('column'))
+    if (cols.length > n) cols = cols.slice(0, n)
+    updateBlock(id, { cols: n, children: cols })
+  }
+
+  const moveBlock = (id: string, targetId: string, after: boolean) => {
+    if (!state || !current || id === targetId) return
+    updatePage(current.id, { blocks: moveBlockInTree(current.blocks, id, targetId, after) })
   }
 
   const deleteBlock = (id: string) => {
@@ -217,35 +340,74 @@ export default function BlocsApp() {
 
   const handleEnter = (id: string) => {
     const block = current ? findBlock(current.blocks, id) : undefined
-    if (!block) return
-    const nb = createBlock(block.type === 'todo' ? 'todo' : 'paragraph')
-    if (!state || !current) return
-    updatePage(current.id, {
-      blocks: insertAfter(current.blocks, id, nb)
+    if (!block || !state || !current) return
+    insertBlockAfter(id, createBlock(block.type === 'todo' ? 'todo' : 'paragraph'))
+  }
+
+  const createFromTemplate = (tpl: TemplateSpec) => {
+    const page = createPage(tpl.name)
+    page.icon = tpl.icon
+    page.blocks = tpl.blocks.map((b) => {
+      const nb = createBlock(b.type as BlockType, b.text)
+      if (b.done !== undefined) nb.done = b.done
+      if (b.type === 'database') nb.db = createDatabase()
+      return nb
     })
-    pendingFocus.current = nb.id
+    setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
+    setTplOpen(false)
+    setSidebarOpen(false)
   }
 
   const addPage = (parentId: string | null = null) => {
     const page = createPage('Nouvelle page', parentId)
-    setState((s) =>
-      s ? { pages: [page, ...s.pages], currentPageId: page.id } : s
-    )
+    setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
+  }
+
+  const duplicatePage = (id: string) => {
+    setState((s) => {
+      if (!s) return s
+      const p = s.pages.find((x) => x.id === id)
+      if (!p) return s
+      const copy: Page = { ...p, id: uid(), title: `${stripHtml(p.title).trim() || 'Sans titre'} (copie)`, blocks: cloneBlocks(p.blocks), updatedAt: Date.now(), deletedAt: null }
+      const idx = s.pages.findIndex((x) => x.id === id)
+      const pages = [...s.pages]
+      pages.splice(idx + 1, 0, copy)
+      return { pages, currentPageId: copy.id }
+    })
   }
 
   const deletePage = (id: string) => {
     setState((s) => {
       if (!s) return s
+      const sub = [s.pages.find((p) => p.id === id), ...descendantsOf(s.pages, id)].filter(Boolean) as Page[]
+      return {
+        ...s,
+        pages: s.pages.map((p) => (sub.some((x) => x.id === p.id) ? { ...p, deletedAt: Date.now() } : p)),
+        currentPageId: s.currentPageId && sub.some((x) => x.id === s.currentPageId) ? s.pages.find((p) => !p.deletedAt)?.id ?? null : s.currentPageId
+      }
+    })
+  }
+
+  const restorePage = (id: string) => {
+    setState((s) => {
+      if (!s) return s
+      const sub = descendantsOf(s.pages, id)
+      return {
+        ...s,
+        pages: s.pages.map((p) => (p.id === id || sub.some((x) => x.id === p.id) ? { ...p, deletedAt: null } : p))
+      }
+    })
+  }
+
+  const purgePage = (id: string) => {
+    setState((s) => {
+      if (!s) return s
       const page = s.pages.find((p) => p.id === id)
       const newParent = page?.parentId ?? null
       const pages = s.pages
-        .filter((p) => p.id !== id)
+        .filter((p) => p.id !== id && !descendantsOf(s.pages, id).some((x) => x.id === p.id))
         .map((p) => (p.parentId === id ? { ...p, parentId: newParent } : p))
-      const next = pages.length > 0 ? pages : [createPage('Nouvelle page')]
-      return {
-        pages: next,
-        currentPageId: s.currentPageId === id ? next[0].id : s.currentPageId
-      }
+      return { pages, currentPageId: s.currentPageId === id ? pages.find((p) => !p.deletedAt)?.id ?? null : s.currentPageId }
     })
   }
 
@@ -255,13 +417,28 @@ export default function BlocsApp() {
       const p = s.pages.find((x) => x.id === id)
       if (!p) return s
       const parent = s.pages.find((x) => x.id === p.parentId)
-      return {
-        ...s,
-        pages: s.pages.map((x) =>
-          x.id === id ? { ...x, parentId: parent?.parentId ?? null } : x
-        )
-      }
+      return { ...s, pages: s.pages.map((x) => (x.id === id ? { ...x, parentId: parent?.parentId ?? null } : x)) }
     })
+  }
+
+  const movePage = (id: string, targetId: string) => {
+    setState((s) => {
+      if (!s || id === targetId) return s
+      const idx = s.pages.findIndex((p) => p.id === id)
+      const tidx = s.pages.findIndex((p) => p.id === targetId)
+      if (idx < 0 || tidx < 0) return s
+      const pages = [...s.pages]
+      const [p] = pages.splice(idx, 1)
+      pages.splice(tidx, 0, p)
+      return { ...s, pages }
+    })
+  }
+
+  const addTag = () => {
+    const t = tagInput.trim()
+    if (!t || !current) return
+    if (!current.tags?.includes(t)) updatePage(current.id, { tags: [...(current.tags ?? []), t] })
+    setTagInput('')
   }
 
   const toggleSync = () => {
@@ -290,9 +467,7 @@ export default function BlocsApp() {
         }
       }
     }, 1500)
-    window.alert(
-      `Salon « ${code} » ouvert. Sur l’autre appareil (desktop/tablette), ouvre Blocs → ⇄ Sync et entre ce même code.`
-    )
+    window.alert(`Salon « ${code} » ouvert. Sur l’autre appareil, ouvre Calepin → ⇄ Sync et entre ce même code.`)
   }
 
   const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -300,33 +475,65 @@ export default function BlocsApp() {
     e.target.value = ''
     if (!file || !state) return
     try {
-      const imported = await parseImportFile(file)
-      const ok = window.confirm(
-        `Remplacer les ${state.pages.length} page(s) actuelles par celles du fichier « ${file.name} » ?`
-      )
-      if (ok) setState(imported)
+      if (file.name.toLowerCase().endsWith('.md')) {
+        const { title, blocks } = parseMarkdown(await file.text(), file.name.replace(/\.md$/i, ''))
+        const page = createPage(title)
+        page.blocks = blocks
+        setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
+      } else {
+        const imported = await parseImportFile(file)
+        const ok = window.confirm(`Remplacer les ${livePages.length} page(s) actuelles par celles du fichier « ${file.name} » ?`)
+        if (ok) setState(imported)
+      }
     } catch {
-      window.alert('Fichier invalide : un export JSON de Skouar/Blocs est attendu.')
+      window.alert('Fichier invalide : export JSON Skouar/Calepin ou .md attendu.')
     }
   }
 
-  const setCoverFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    e.target.value = ''
-    if (!f || !current) return
-    if (f.size > 2_000_000) {
-      window.alert('Image trop lourde (max 2 Mo) : compresse-la ou utilise une URL.')
+  const onEditorPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    const item = [...e.clipboardData.items].find((i) => i.type.startsWith('image/'))
+    if (!item || !state || !current) return
+    e.preventDefault()
+    const f = item.getAsFile()
+    if (!f) return
+    if (f.size > 5_000_000) {
+      window.alert('Image trop lourde (max 5 Mo).')
       return
     }
     const reader = new FileReader()
-    reader.onload = () => updatePage(current.id, { cover: String(reader.result) })
+    reader.onload = () => {
+      const nb = createBlock('image')
+      nb.src = String(reader.result)
+      nb.fileName = f.name || 'image collée'
+      nb.fileSize = f.size
+      insertBlockAfter(activeId ?? current.blocks[current.blocks.length - 1]?.id, nb)
+    }
     reader.readAsDataURL(f)
   }
 
-  const setCoverUrl = () => {
+  const onEditorDrop = (e: ReactDragEvent<HTMLDivElement>) => {
+    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'))
+    if (!f || !state || !current) return
+    e.preventDefault()
+    if (f.size > 5_000_000) {
+      window.alert('Image trop lourde (max 5 Mo).')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const nb = createBlock('image')
+      nb.src = String(reader.result)
+      nb.fileName = f.name
+      nb.fileSize = f.size
+      insertBlockAfter(activeId ?? current.blocks[current.blocks.length - 1]?.id, nb)
+    }
+    reader.readAsDataURL(f)
+  }
+
+  const exportPageMd = () => {
     if (!current) return
-    const u = window.prompt('URL de l’image de couverture :', current.cover ?? '')
-    if (u !== null) updatePage(current.id, { cover: u || null })
+    const name = (stripHtml(current.title).trim() || 'page').replace(/[^\w-]+/g, '-').toLowerCase()
+    exportFile(`${name}.md`, toMarkdown(current), 'text/markdown')
   }
 
   if (!state || !current) {
@@ -347,12 +554,7 @@ export default function BlocsApp() {
     onChangeSrc: (id, src) => updateBlock(id, { src }),
     onChangeHref: (id, href) => updateBlock(id, { href }),
     onChangeFile: (id, f) =>
-      updateBlock(
-        id,
-        f
-          ? { src: f.src, fileName: f.fileName, fileSize: f.fileSize }
-          : { src: undefined, fileName: undefined, fileSize: undefined }
-      ),
+      updateBlock(id, f ? { src: f.src, fileName: f.fileName, fileSize: f.fileSize } : { src: undefined, fileName: undefined, fileSize: undefined }),
     onToggleDone: (id) => {
       const b = findBlock(current.blocks, id)
       updateBlock(id, { done: !(b?.done ?? false) })
@@ -360,9 +562,15 @@ export default function BlocsApp() {
     onChangeDb: (id, db) => updateBlock(id, { db }),
     onEnter: handleEnter,
     onDelete: deleteBlock,
+    onAddChildTo: addChildTo,
+    onSetCols: setCols,
+    onBlockDragStart: (id) => { dragBlockId.current = id },
+    onBlockDrop: (targetId, after) => {
+      if (dragBlockId.current) moveBlock(dragBlockId.current, targetId, after)
+      dragBlockId.current = null
+    },
     isSlashActive: (id) => slashOpen && slashBlock?.id === id,
-    onSlashNav: (dir) =>
-      setSlashIndex((i) => (i + dir + slashItems.length) % slashItems.length),
+    onSlashNav: (dir) => setSlashIndex((i) => (i + dir + slashItems.length) % slashItems.length),
     onSlashEnter: () => {
       const item = slashItems[slashIndex]
       if (item) applySlash(item)
@@ -372,194 +580,267 @@ export default function BlocsApp() {
 
   const slashEl = slashBlock ? document.getElementById(`bloc-${slashBlock.id}`) : null
   const slashRect = slashEl?.getBoundingClientRect()
+  const mentionEl = mentionMatch ? document.getElementById(`bloc-${mentionMatch.b.id}`) : null
+  const mentionRect = mentionEl?.getBoundingClientRect()
+  const cover = current.cover ?? null
+  const allTags = [...new Set(livePages.flatMap((p) => p.tags ?? []))]
 
   return (
     <div className="blocs-app">
-      <aside className="blocs-sidebar">
+      <div
+        className={`sidebar-backdrop${sidebarOpen ? ' show' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+      <aside className={`blocs-sidebar${sidebarOpen ? ' open' : ''}`}>
         <Link to="/" className="blocs-back">
           ← Skouar
         </Link>
         <input
           className="blocs-search"
-          placeholder="Rechercher dans les pages…"
+          placeholder="Rechercher… (titre, texte, BDD)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {q && (
+          <select className="blocs-search" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="all">Tous les contenus</option>
+            <option value="text">Texte</option>
+            <option value="heading">Titres</option>
+            <option value="todo">Tâches</option>
+            <option value="db">Bases de données</option>
+          </select>
+        )}
+        {!q && allTags.length > 0 && (
+          <select className="blocs-search" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+            <option value="">Toutes les étiquettes</option>
+            {allTags.map((t) => (
+              <option key={t} value={t}>🏷 {t}</option>
+            ))}
+          </select>
+        )}
         <div className="blocs-sidebar-head">
-          <span>Pages</span>
-          <button className="blocs-new-page" onClick={() => addPage()} title="Nouvelle page">
-            ＋
-          </button>
+          <span>{showTrash ? '🗑 Corbeille' : 'Pages'}</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button className="blocs-new-page" onClick={() => setShowTrash((v) => !v)} title="Corbeille / Pages">
+              🗑
+            </button>
+            {!showTrash && (
+              <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Nouvelle page (avec template)">
+                ＋
+              </button>
+            )}
+          </div>
         </div>
         <ul className="blocs-page-list">
-          {matches
-            ? matches.map((p) => (
+          {showTrash
+            ? trashPages.map((p) => (
                 <li key={p.id}>
                   <div className="blocs-page-row">
-                    <button
-                      className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
-                      onClick={() =>
-                        setState((s) => (s ? { ...s, currentPageId: p.id } : s))
-                      }
-                    >
+                    <span className="blocs-page-item" style={{ cursor: 'default' }}>
                       {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
-                      {p.title.trim() || 'Sans titre'}
-                    </button>
+                      {stripHtml(p.title).trim() || 'Sans titre'}
+                    </span>
+                    <button className="blocs-page-act" title="Restaurer" onClick={() => restorePage(p.id)}>↩</button>
+                    <button className="blocs-page-del" title="Supprimer définitivement" onClick={() => purgePage(p.id)}>×</button>
                   </div>
                 </li>
               ))
-            : (
-              <PageTree
-                pages={state.pages}
-                parentId={null}
-                depth={0}
-                currentId={current.id}
-                onSelect={(id) =>
-                  setState((s) => (s ? { ...s, currentPageId: id } : s))
-                }
-                onDelete={deletePage}
-                onAddChild={(id) => addPage(id)}
-                onPromote={promotePage}
-              />
-            )}
+            : matches
+              ? matches.map(({ page: p, snippet, at, raw }) => (
+                  <li key={p.id}>
+                    <div className="blocs-page-row">
+                      <button
+                        className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
+                        onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
+                      >
+                        {p.icon && <span className="blocs-page-icon" style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}>{p.icon}</span>}
+                        {stripHtml(p.title).trim() || 'Sans titre'}
+                      </button>
+                    </div>
+                    <div className="blocs-snippet">
+                      {snippet.slice(0, at - (raw.toLowerCase().indexOf(q) >= 0 ? Math.max(0, raw.toLowerCase().indexOf(q) - 30) : 0))}
+                      <mark>{raw.slice(Math.max(0, raw.toLowerCase().indexOf(q)), Math.max(0, raw.toLowerCase().indexOf(q)) + q.length)}</mark>
+                      {raw.slice(Math.max(0, raw.toLowerCase().indexOf(q)) + q.length, Math.max(0, raw.toLowerCase().indexOf(q)) + q.length + 60)}
+                    </div>
+                  </li>
+                ))
+              : tagFiltered
+                  .map((p) => p)
+                  .filter((p) => !q)
+                  .length >= 0 && (
+                <PageTree
+                  pages={tagFiltered}
+                  parentId={null}
+                  depth={0}
+                  currentId={current.id}
+                  onSelect={(id) => {
+                    setState((s) => (s ? { ...s, currentPageId: id } : s))
+                    setSidebarOpen(false)
+                  }}
+                  onDelete={deletePage}
+                  onAddChild={(id) => addPage(id)}
+                  onPromote={promotePage}
+                  onMovePage={movePage}
+                  onDuplicate={duplicatePage}
+                />
+              )}
         </ul>
         <div className="blocs-sidebar-foot">
-          <button
-            className={`blocs-io${sync ? ' active' : ''}`}
-            onClick={toggleSync}
-            title="Synchroniser avec un autre appareil (P2P, aucun serveur)"
-          >
+          <ThemeButton />
+          <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P">
             {sync ? `⇄ ${sync.code}` : '⇄ Sync'}
           </button>
-          <button className="blocs-io" onClick={() => exportStateToFile(state)}>
-            ↓ Exporter
+          <button className="blocs-io" onClick={() => exportStateToFile(state)} title="Export JSON complet">
+            ↓ JSON
           </button>
-          <button className="blocs-io" onClick={() => fileInput.current?.click()}>
-            ↑ Importer
+          <button className="blocs-io" onClick={() => fileInput.current?.click()} title="Import JSON ou .md">
+            ↑ Import
           </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={handleImport}
-          />
+          <input ref={fileInput} type="file" accept="application/json,.json,.md,text/markdown" hidden onChange={handleImport} />
         </div>
       </aside>
       <main className="blocs-main">
-        {current.cover && (
-          <div className="page-cover">
-            <img src={current.cover} alt="couverture de la page" />
+        <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Menu">
+          ☰
+        </button>
+        {cover && (
+          <div className="page-cover" style={cover.kind === 'color' || cover.kind === 'pattern' ? coverStyle(cover) : undefined}>
+            {(cover.kind === 'url' || cover.kind === 'file') && <img src={cover.value} alt="couverture de la page" />}
             <div className="page-cover-actions">
-              <button onClick={() => coverInput.current?.click()}>Changer</button>
-              <button onClick={setCoverUrl}>URL…</button>
-              <button onClick={() => updatePage(current.id, { cover: null })}>
-                Supprimer
+              <button
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setCoverMenu({ x: r.left, y: r.bottom })
+                }}
+              >
+                🖼 Modifier
               </button>
+              <button onClick={() => updatePage(current.id, { cover: null })}>Supprimer</button>
             </div>
           </div>
         )}
         <div className="breadcrumb">
           {crumbs.map((c) => (
             <span key={c.id} className="crumb-wrap">
-              <button
-                className="crumb"
-                onClick={() =>
-                  setState((s) => (s ? { ...s, currentPageId: c.id } : s))
-                }
-              >
-                {c.icon} {c.title.trim() || 'Sans titre'}
+              <button className="crumb" onClick={() => setState((s) => (s ? { ...s, currentPageId: c.id } : s))}>
+                {c.icon} {stripHtml(c.title).trim() || 'Sans titre'}
               </button>
               <span className="crumb-sep">/</span>
             </span>
           ))}
           <span className="crumb current">
-            {current.icon} {current.title.trim() || 'Sans titre'}
+            {current.icon} {currentTitle}
           </span>
         </div>
         <div className="page-head">
           <div className="page-icon-wrap">
             <button
               className="page-icon-btn"
+              style={current.iconColor ? { backgroundColor: current.iconColor } : undefined}
               title="Icône de la page"
               onClick={() => setIconOpen((o) => !o)}
             >
               {current.icon ?? '＋'}
             </button>
             {iconOpen && (
-              <div className="emoji-pop">
-                {EMOJIS.map((e) => (
-                  <button
-                    key={e}
-                    onClick={() => {
-                      updatePage(current.id, { icon: e })
-                      setIconOpen(false)
-                    }}
-                  >
-                    {e}
-                  </button>
-                ))}
-                <button
-                  title="Retirer l’icône"
-                  onClick={() => {
-                    updatePage(current.id, { icon: null })
-                    setIconOpen(false)
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
+              <EmojiPicker
+                currentColor={current.iconColor}
+                onPick={(e, c) => {
+                  updatePage(current.id, { icon: e, iconColor: c === 'transparent' ? null : c })
+                  setIconOpen(false)
+                }}
+                onClear={() => {
+                  updatePage(current.id, { icon: null, iconColor: null })
+                  setIconOpen(false)
+                }}
+              />
             )}
           </div>
           <input
             className="blocs-title"
-            value={current.title}
+            value={stripHtml(current.title)}
             placeholder="Sans titre"
             onChange={(e) => updatePage(current.id, { title: e.target.value })}
           />
-        </div>
-        {!current.cover && (
-          <div className="page-cover-add">
-            <button className="blocs-io" onClick={() => coverInput.current?.click()}>
-              🖼 Ajouter une couverture (fichier)
+          <div className="page-head-actions">
+            <div className="page-icon-wrap">
+              <button className="page-cover-btn" title="Étiquettes" onClick={() => setTagsOpen((o) => !o)}>
+                🏷
+              </button>
+              {tagsOpen && (
+                <div className="emoji-pop tag-pop">
+                  <div className="tag-input-row">
+                    <input
+                      className="db-input"
+                      placeholder="Nouvelle étiquette…"
+                      value={tagInput}
+                      autoFocus
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addTag()
+                        if (e.key === 'Escape') setTagsOpen(false)
+                      }}
+                    />
+                    <button className="db-btn" onClick={addTag}>＋</button>
+                  </div>
+                  <div className="tag-chips">
+                    {(current.tags ?? []).map((t) => (
+                      <span key={t} className="tag-chip" style={{ backgroundColor: tagColor(t) }}>
+                        {t}
+                        <button
+                          onClick={() => updatePage(current.id, { tags: (current.tags ?? []).filter((x) => x !== t) })}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button className="page-cover-btn" title="Couverture (couleur, motif, URL, fichier)" onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setCoverMenu({ x: r.left, y: r.bottom })
+            }}>
+              🖼
             </button>
-            <button className="blocs-io" onClick={setCoverUrl}>
-              🔗 Couverture via URL
+            <button className="page-cover-btn" title="Exporter cette page en Markdown" onClick={exportPageMd}>
+              ⇩
+            </button>
+            <button className="page-cover-btn" title="Imprimer / PDF" onClick={() => window.print()}>
+              🖨
+            </button>
+            <button className="page-cover-btn" title="Dupliquer la page" onClick={() => duplicatePage(current.id)}>
+              ⧉
             </button>
           </div>
+        </div>
+        {current.tags && current.tags.length > 0 && (
+          <div className="tag-chips page-tags">
+            {current.tags.map((t) => (
+              <span key={t} className="tag-chip" style={{ backgroundColor: tagColor(t) }}>{t}</span>
+            ))}
+          </div>
         )}
-        <input
-          ref={coverInput}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={setCoverFile}
-        />
         <div className="blocs-toolbar">
           {BLOCK_TYPES.map((t) => (
             <button
               key={t.type}
               title={t.title}
-              className={
-                activeId && findBlock(current.blocks, activeId)?.type === t.type
-                  ? 'tool active'
-                  : 'tool'
-              }
+              className={activeId && findBlock(current.blocks, activeId)?.type === t.type ? 'tool active' : 'tool'}
               onClick={() => {
                 if (!activeId) return
                 const existing = findBlock(current.blocks, activeId)
                 updateBlock(activeId, {
                   type: t.type,
                   done: t.type === 'todo' ? false : undefined,
-                  src: undefined,
-                  href: undefined,
-                  fileName: undefined,
-                  fileSize: undefined,
-                  db:
-                    t.type === 'database'
-                      ? (existing?.db ?? createDatabase())
-                      : undefined,
-                  children: t.type === 'toggle' ? (existing?.children ?? []) : undefined
+                  src: undefined, href: undefined, fileName: undefined, fileSize: undefined,
+                  cols: t.type === 'columns' ? 2 : undefined,
+                  db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
+                  children:
+                    t.type === 'toggle' ? (existing?.children ?? [])
+                      : t.type === 'columns' ? [createBlock('column'), createBlock('column')]
+                      : undefined
                 })
               }}
             >
@@ -567,7 +848,7 @@ export default function BlocsApp() {
             </button>
           ))}
         </div>
-        <div className="blocs-editor">
+        <div className="blocs-editor" onPaste={onEditorPaste} onDrop={onEditorDrop}>
           {current.blocks.map((b) => (
             <BlockView key={b.id} block={b} handlers={handlers} />
           ))}
@@ -576,13 +857,40 @@ export default function BlocsApp() {
           className="blocs-add"
           onClick={() => insertBlockAfter(current.blocks[current.blocks.length - 1].id)}
         >
-          ＋ Ajouter un bloc
+          ＋ Ajouter un bloc (ou tape /)
         </button>
+        <div className="links-panel">
+          <button className="links-toggle" onClick={() => setLinksOpen((o) => !o)}>
+            🔗 Liens — {incoming.length} entrant(s), {outgoing.length} sortant(s) {linksOpen ? '▴' : '▾'}
+          </button>
+          {linksOpen && (
+            <div className="links-body">
+              <div>
+                <strong>Entrants</strong>
+                {incoming.length === 0 && <p className="db-empty">Aucun [[{currentTitle}]] ailleurs</p>}
+                {incoming.map((p) => (
+                  <button key={p.id} className="link-item" onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}>
+                    {p.icon} {stripHtml(p.title).trim() || 'Sans titre'}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <strong>Sortants</strong>
+                {outgoing.length === 0 && <p className="db-empty">Tape [[ dans un bloc pour lier une page</p>}
+                {outgoing.map((t) => {
+                  const target = livePages.find((p) => (stripHtml(p.title).trim() || 'Sans titre') === t)
+                  return (
+                    <button key={t} className="link-item" onClick={() => target && setState((s) => (s ? { ...s, currentPageId: target.id } : s))}>
+                      [[{t}]]
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
         {slashOpen && slashBlock && slashRect && (
-          <div
-            className="slash-menu"
-            style={{ left: slashRect.left, top: slashRect.bottom + 6 }}
-          >
+          <div className="slash-menu" style={{ left: slashRect.left, top: slashRect.bottom + 6 }}>
             {slashItems.map((t, i) => (
               <button
                 key={t.type}
@@ -594,6 +902,45 @@ export default function BlocsApp() {
                 <span className="slash-label">{t.label}</span> {t.title}
               </button>
             ))}
+          </div>
+        )}
+        {mentionOpen && mentionMatch && mentionRect && (
+          <div className="slash-menu" style={{ left: mentionRect.left, top: mentionRect.bottom + 6 }}>
+            {mentionPages.slice(0, 8).map((p, i) => (
+              <button
+                key={p.id}
+                className={`slash-item${i === mentionIndex ? ' active' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setMentionIndex(i)}
+                onClick={() => applyMention(stripHtml(p.title).trim() || 'Sans titre')}
+              >
+                <span className="slash-label">{p.icon ?? '📄'}</span> {stripHtml(p.title).trim() || 'Sans titre'}
+              </button>
+            ))}
+          </div>
+        )}
+        {coverMenu && (
+          <CoverMenu
+            anchor={coverMenu}
+            onSelect={(c) => updatePage(current.id, { cover: c })}
+            onClose={() => setCoverMenu(null)}
+          />
+        )}
+        {tplOpen && (
+          <div className="tpl-pop">
+            <div className="tpl-head">
+              <strong>Choisis un template</strong>
+              <button className="db-btn" onClick={() => setTplOpen(false)}>✕</button>
+            </div>
+            <div className="tpl-grid">
+              {TEMPLATES.map((t) => (
+                <button key={t.name} className="tpl-card" onClick={() => createFromTemplate(t)}>
+                  <span className="tpl-icon">{t.icon}</span>
+                  <span className="tpl-name">{t.name}</span>
+                  <span className="db-type">{t.tag}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </main>

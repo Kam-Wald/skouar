@@ -1,3 +1,4 @@
+import { useState, type DragEvent } from 'react'
 import type { Page } from './types'
 
 export default function PageTree({
@@ -8,7 +9,9 @@ export default function PageTree({
   onSelect,
   onDelete,
   onAddChild,
-  onPromote
+  onPromote,
+  onMovePage,
+  onDuplicate
 }: {
   pages: Page[]
   parentId: string | null
@@ -18,42 +21,70 @@ export default function PageTree({
   onDelete: (id: string) => void
   onAddChild: (id: string) => void
   onPromote: (id: string) => void
+  onMovePage: (id: string, targetId: string) => void
+  onDuplicate: (id: string) => void
 }) {
+  const [overId, setOverId] = useState<string | null>(null)
+
+  const rowDragProps = (id: string) => ({
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.setData('text/plain', id)
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault()
+      setOverId(id)
+    },
+    onDragLeave: () => setOverId(null),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      setOverId(null)
+      const dragged = e.dataTransfer.getData('text/plain')
+      if (dragged) onMovePage(dragged, id)
+    }
+  })
+
   return (
     <>
       {pages
         .filter((p) => (p.parentId ?? null) === parentId)
         .map((p) => (
           <li key={p.id}>
-            <div className="blocs-page-row" style={{ paddingLeft: depth * 14 }}>
+            <div
+              className={`blocs-page-row${overId === p.id ? ' drag-over' : ''}`}
+              style={{ paddingLeft: depth * 14 }}
+              {...rowDragProps(p.id)}
+            >
+              <span className="drag-handle" title="Déplacer la page">
+                ⠿
+              </span>
               <button
                 className={`blocs-page-item${p.id === currentId ? ' selected' : ''}`}
                 onClick={() => onSelect(p.id)}
               >
-                {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
+                {p.icon && (
+                  <span
+                    className="blocs-page-icon"
+                    style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}
+                  >
+                    {p.icon}
+                  </span>
+                )}
                 {p.title.trim() || 'Sans titre'}
               </button>
-              <button
-                className="blocs-page-act"
-                title="Nouvelle sous-page"
-                onClick={() => onAddChild(p.id)}
-              >
+              <button className="blocs-page-act" title="Nouvelle sous-page" onClick={() => onAddChild(p.id)}>
                 ＋
               </button>
+              <button className="blocs-page-act" title="Dupliquer la page" onClick={() => onDuplicate(p.id)}>
+                ⧉
+              </button>
               {depth > 0 && (
-                <button
-                  className="blocs-page-act"
-                  title="Remonter d’un niveau"
-                  onClick={() => onPromote(p.id)}
-                >
+                <button className="blocs-page-act" title="Remonter d’un niveau" onClick={() => onPromote(p.id)}>
                   ⇤
                 </button>
               )}
-              <button
-                className="blocs-page-del"
-                title="Supprimer la page"
-                onClick={() => onDelete(p.id)}
-              >
+              <button className="blocs-page-del" title="Supprimer la page" onClick={() => onDelete(p.id)}>
                 ×
               </button>
             </div>
@@ -66,6 +97,8 @@ export default function PageTree({
               onDelete={onDelete}
               onAddChild={onAddChild}
               onPromote={onPromote}
+              onMovePage={onMovePage}
+              onDuplicate={onDuplicate}
             />
           </li>
         ))}
