@@ -59,10 +59,15 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **Journal quotidien** 📅 : bouton « Aujourd'hui » → page AAAA-MM-JJ créée/ouverte automatiquement
 - **Rappels de tâches** ⏰ : date/heure sur une tâche (popover inline, pas de prompt) → notification PWA à l'échéance + cloche 🔔 avec compteur de retards
 - BDD : **agrégats en pied de tableau** (compter, somme, moyenne, min, max, cochées)
+- BDD : **3 vues en plus** → **11 vues** : 🗺 **carte** (Leaflet, géocodage Nominatim, colonne « lieu »), 🗓 **frise Gantt** (2 colonnes date début/fin), 📊 **tableau de bord** (bouton 📊 sur la page : stats globales + lignes par BDD + pages récentes)
+- BDD : **nouveaux champs** : multi-sélection, URL, e-mail, téléphone, **statut** (pastille colorée), **formule** (`{Col}` + calcul), **relation** (liens vers les lignes d'une autre BDD), **rollup** (somme/moyenne/count… via la relation), **lieu** (géocodé sur la carte), id, créé le, modifié le
+- **8 nouveaux blocs** : encadré (callout coloré), **embed iframe**, **formule math KaTeX**, **barre de progression**, **QR code** (texte éditable), **compte à rebours**, **galerie d'images**, **page intégrée** (carte cliquable)
+- **Bouton automatisation** ⚙ : un clic sur le bouton duplique N fois le bloc choisi de la page (ex : blocs recette de cuisine)
+- **Modèles** : bouton 📋 (ou ＋) dans la barre latérale → picker des 20 templates
 
 - Calepin : paragraphe, H1/H2/H3, puces, tâches, citation, code, séparateur, image, **vidéo (embed YouTube/mp4)**, **audio**, **PDF** (lecteur), **fichier/archive** (carte téléchargeable), **menu dépliant** (blocs enfants), **bouton** (avec URL), **table des matières** (auto depuis H1–H3) — tout insérable via le **menu « / »** ; **drag’n’drop** des blocs, des pages, des colonnes de BDD et des cartes du board ; listes numérotées (compteur auto) et **blocs colonnes 2–4**
 - **Icône emoji + couleur de tuile** (grande galerie) et **couverture** par page : un seul picto 🖼 ouvre un menu couleur / motif (20) / URL / fichier — plus aucun `prompt()` JS pour les URL, **fil d’ariane** des pages parentes
-- **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case) via formulaire inline, filtres, tris, et **8 vues** : tableau, board, galerie, calendrier, liste, chronologie, fil d’actus, graphique (barres compte/somme)
+- **Bases de données** (bloc ▦) : colonnes typées via formulaire inline (17 types, voir ci-dessus), filtres, tris, et **11 vues** : tableau, board, galerie, calendrier, liste, chronologie, fil d’actus, graphique, carte, Gantt + tableau de bord de page
 
 ## Identité
 

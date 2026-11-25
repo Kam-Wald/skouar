@@ -6,10 +6,16 @@ import {
   type DragEvent,
   type KeyboardEvent
 } from 'react'
-import type { Block, Database } from './types'
+import type { Block, BlockAction, Database } from './types'
 import { createBlock, createDatabase } from './store'
 import { PLACEHOLDERS } from './blockTypes'
 import DatabaseView from './DatabaseView'
+import { ICON_COLORS } from './EmojiPicker'
+import { stripHtml } from './tree'
+import type { DbRef } from './fields'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
+import { QRCodeSVG } from 'qrcode.react'
 
 export interface Heading {
   id: string
@@ -31,6 +37,17 @@ export interface BlockHandlers {
   onToggleDone(id: string): void
   onSetDue(id: string, due: string | null): void
   onChangeDb(id: string, db: Database): void
+  onChangeColor(id: string, color: string | null): void
+  onChangeProgress(id: string, n: number): void
+  onAddGallery(id: string, srcs: string[]): void
+  onRemoveGallery(id: string, src: string): void
+  onSetAction(id: string, action: BlockAction | undefined): void
+  onRunAction(id: string): void
+  onOpenPage(id: string): void
+  onSetPage(id: string, pageId: string | undefined): void
+  pagesList: { id: string; title: string }[]
+  blocksList: { id: string; label: string }[]
+  allDbs: DbRef[]
   onEnter(id: string): void
   onDelete(id: string): void
   onAddChildTo(parentId: string): void
@@ -305,6 +322,9 @@ export default function BlockView({ block, handlers }: Props) {
   }
 
   if (block.type === 'button') {
+    const [actOpen, setActOpen] = useState(false)
+    const [actSrc, setActSrc] = useState(block.action?.repeatBlockId ?? '')
+    const [actCount, setActCount] = useState(block.action?.count ?? 3)
     return (
       <div
         className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`}
@@ -313,11 +333,14 @@ export default function BlockView({ block, handlers }: Props) {
         {dragHandle}
         <a
           className="block-button"
-          href={block.href || undefined}
+          href={block.action ? undefined : block.href || undefined}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => {
-            if (!block.href) e.preventDefault()
+            if (block.action) {
+              e.preventDefault()
+              handlers.onRunAction(block.id)
+            } else if (!block.href) e.preventDefault()
           }}
         >
           <span
@@ -332,8 +355,16 @@ export default function BlockView({ block, handlers }: Props) {
             onKeyDown={handleKeyDown}
           />
         </a>
+        {block.action && <span className="db-type">⚙ ×{block.action.count}</span>}
         <button className="block-row-del" title="URL du bouton" onClick={(e) => openUrlPop('href', e)}>
           🔗
+        </button>
+        <button
+          className={`block-row-del${block.action ? ' set' : ''}`}
+          title="Automatisation : répéter un bloc N fois au clic"
+          onClick={() => { setActSrc(block.action?.repeatBlockId ?? ''); setActCount(block.action?.count ?? 3); setActOpen((o) => !o) }}
+        >
+          ⚙
         </button>
         {urlPop && (
           <UrlPop
@@ -344,6 +375,37 @@ export default function BlockView({ block, handlers }: Props) {
             onSubmit={(v) => handlers.onChangeHref(block.id, v || undefined)}
             onClose={() => setUrlPop(null)}
           />
+        )}
+        {actOpen && (
+          <div className="url-pop" style={{ left: 8, top: 'auto', bottom: 8 }}>
+            <select className="db-select" value={actSrc} onChange={(e) => setActSrc(e.target.value)}>
+              <option value="">Bloc à répéter…</option>
+              {handlers.blocksList.map((b) => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              className="db-input"
+              style={{ width: 60 }}
+              value={actCount}
+              onChange={(e) => setActCount(Number(e.target.value) || 1)}
+            />
+            <button
+              className="db-btn"
+              onClick={() => {
+                if (actSrc) handlers.onSetAction(block.id, { repeatBlockId: actSrc, count: actCount })
+                setActOpen(false)
+              }}
+            >
+              OK
+            </button>
+            {block.action && (
+              <button className="db-btn" onClick={() => { handlers.onSetAction(block.id, undefined); setActOpen(false) }}>✕</button>
+            )}
+          </div>
         )}
       </div>
     )
@@ -430,6 +492,238 @@ export default function BlockView({ block, handlers }: Props) {
     )
   }
 
+  if (block.type === 'callout') {
+    const color = block.color ?? 'var(--accent)'
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-callout" style={{ borderLeftColor: color, backgroundColor: 'color-mix(in srgb, ' + color + ' 12%, transparent)' }}>
+          <span className="block-callout-ic">💡</span>
+          <div
+            id={`bloc-${block.id}`}
+            ref={ref}
+            className="block block-callout-text"
+            contentEditable
+            suppressContentEditableWarning
+            data-placeholder={PLACEHOLDERS.callout}
+            onFocus={() => handlers.onActivate(block.id)}
+            onInput={(e) => handlers.onChangeText(block.id, e.currentTarget.innerHTML)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        {active && (
+          <span className="callout-colors">
+            {ICON_COLORS.filter((c) => c !== 'transparent').map((c) => (
+              <button key={c} className="emoji-color" style={{ backgroundColor: c }} onClick={() => handlers.onChangeColor(block.id, c)} />
+            ))}
+            <button className="emoji-color" style={{ background: 'repeating-conic-gradient(#475569 0% 25%, transparent 0% 50%)', backgroundSize: '8px 8px' }} onClick={() => handlers.onChangeColor(block.id, null)} />
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === 'embed') {
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        {block.src ? (
+          <>
+            <iframe className="block-embed" src={block.src} title="embed" />
+            <button className="block-row-del" title="Changer l'URL" onClick={(e) => openUrlPop('src', e)}>🔗</button>
+            <button className="block-row-del" title="Retirer" onClick={() => { handlers.onChangeSrc(block.id, undefined) }}>×</button>
+          </>
+        ) : (
+          <input
+            className="block-image-input"
+            placeholder="URL à intégrer (site, vidéo, doc, carte…)"
+            onFocus={() => handlers.onActivate(block.id)}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => handlers.onChangeSrc(block.id, e.target.value || undefined)}
+          />
+        )}
+        {urlPop && (
+          <UrlPop x={urlPop.x} y={urlPop.y} value={urlPop.value} placeholder="https://…" onSubmit={(v) => handlers.onChangeSrc(block.id, v || undefined)} onClose={() => setUrlPop(null)} />
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === 'math') {
+    const [editOpen, setEditOpen] = useState(false)
+    const [draft, setDraft] = useState('')
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div
+          className="block-math"
+          title="Cliquer pour éditer la formule LaTeX"
+          onClick={() => { setDraft(stripHtml(block.text)); setEditOpen(true) }}
+          dangerouslySetInnerHTML={{
+            __html: katex.renderToString(stripHtml(block.text) || '…', { throwOnError: false })
+          }}
+        />
+        {editOpen && (
+          <div className="url-pop" style={{ left: 8, top: 'auto', bottom: 8 }}>
+            <textarea
+              className="db-input"
+              style={{ width: 320, height: 70 }}
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="E = mc^2"
+            />
+            <button className="db-btn" onClick={() => { handlers.onChangeText(block.id, draft); setEditOpen(false) }}>OK</button>
+            <button className="db-btn" onClick={() => setEditOpen(false)}>✕</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === 'progress') {
+    const p = block.progress ?? 0
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-progress-wrap">
+          <div className="block-progress-track">
+            <div className="block-progress-bar" style={{ width: `${p}%` }} />
+          </div>
+          <span className="db-type">{p}%</span>
+        </div>
+        {active && (
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={p}
+            className="block-progress-range"
+            onChange={(e) => handlers.onChangeProgress(block.id, Number(e.target.value))}
+          />
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === 'qr') {
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-qr">
+          <QRCodeSVG value={stripHtml(block.text) || 'https://kam-wald.github.io/skouar/'} size={140} />
+        </div>
+        <div
+          id={`bloc-${block.id}`}
+          ref={ref}
+          className="block block-qr-text"
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder={PLACEHOLDERS.qr}
+          onFocus={() => handlers.onActivate(block.id)}
+          onInput={(e) => handlers.onChangeText(block.id, e.currentTarget.innerHTML)}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
+    )
+  }
+
+  if (block.type === 'countdown') {
+    const [, setTick] = useState(0)
+    useEffect(() => {
+      const t = setInterval(() => setTick((x) => x + 1), 1000)
+      return () => clearInterval(t)
+    }, [])
+    const target = block.due ? new Date(block.due).getTime() : null
+    const diff = target ? target - Date.now() : null
+    const fmt = (ms: number) => {
+      const s = Math.max(0, Math.floor(ms / 1000))
+      const d = Math.floor(s / 86400)
+      const h = Math.floor((s % 86400) / 3600)
+      const m = Math.floor((s % 3600) / 60)
+      const sec = s % 60
+      return `${d}j ${h}h ${m}m ${sec}s`
+    }
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-countdown">
+          <span className="block-countdown-time">{diff == null ? '⏳ aucune date' : diff <= 0 ? '🎉 Terminé !' : fmt(diff)}</span>
+          <button className={`todo-due-btn${block.due ? ' set' : ''}`} title="Choisir la date cible" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setDuePop({ x: r.left, y: r.bottom }) }}>⏰</button>
+        </div>
+        {duePop && (
+          <div className="url-pop" style={{ left: duePop.x, top: duePop.y + 6 }}>
+            <input type="datetime-local" className="db-input" autoFocus defaultValue={block.due ?? undefined}
+              onKeyDown={(e) => { if (e.key === 'Enter') { handlers.onSetDue(block.id, (e.target as HTMLInputElement).value || null); setDuePop(null) } if (e.key === 'Escape') setDuePop(null) }} />
+            <button className="db-btn" onClick={(e) => { const input = (e.currentTarget.parentElement as HTMLElement).querySelector('input'); handlers.onSetDue(block.id, input?.value || null); setDuePop(null) }}>OK</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === 'gallery') {
+    const galRef = useRef<HTMLInputElement>(null)
+    const onFiles = (e: ChangeEvent<HTMLInputElement>) => {
+      const files = [...(e.target.files ?? [])].filter((f) => f.type.startsWith('image/'))
+      e.target.value = ''
+      if (!files.length) return
+      const srcs: string[] = []
+      let pending = files.length
+      for (const f of files) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          srcs.push(String(reader.result))
+          if (--pending === 0) handlers.onAddGallery(block.id, srcs)
+        }
+        reader.readAsDataURL(f)
+      }
+    }
+    return (
+      <div className={`block-row block-gallery-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-gallery">
+          {(block.srcs ?? []).map((s) => (
+            <span key={s} className="block-gallery-item">
+              <img src={s} alt="" />
+              <button className="block-row-del" onClick={() => handlers.onRemoveGallery(block.id, s)}>×</button>
+            </span>
+          ))}
+          <button className="block-media-pick" onClick={() => galRef.current?.click()}>＋ images…</button>
+          <input ref={galRef} type="file" accept="image/*" multiple hidden onChange={onFiles} />
+        </div>
+      </div>
+    )
+  }
+
+  if (block.type === 'pageembed') {
+    const target = handlers.pagesList.find((p) => p.id === block.pageId)
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="block-pageembed">
+          <select
+            className="db-select"
+            value={block.pageId ?? ''}
+            onChange={(e) => handlers.onSetPage(block.id, e.target.value || undefined)}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <option value="">Choisir une page…</option>
+            {handlers.pagesList.map((p) => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
+          {target && (
+            <button className="block-pageembed-card" onClick={() => handlers.onOpenPage(target.id)}>
+              <strong>{target.title}</strong>
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (block.type === 'database') {
     return (
       <div
@@ -443,6 +737,7 @@ export default function BlockView({ block, handlers }: Props) {
           title={block.text}
           onTitle={(t) => handlers.onChangeText(block.id, t)}
           onChange={(db) => handlers.onChangeDb(block.id, db)}
+          allDbs={handlers.allDbs}
         />
       </div>
     )
