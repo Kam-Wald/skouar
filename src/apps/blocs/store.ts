@@ -37,8 +37,8 @@ export function createBlock(type: BlockType = 'paragraph', text = ''): Block {
   return { id: uid(), type, text, done: type === 'todo' ? false : undefined }
 }
 
-export function createPage(title: string): Page {
-  return { id: uid(), title, blocks: [createBlock()], updatedAt: Date.now() }
+export function createPage(title: string, parentId: string | null = null): Page {
+  return { id: uid(), title, blocks: [createBlock()], updatedAt: Date.now(), parentId }
 }
 
 export function createColumn(name: string, type: PropType): Column {

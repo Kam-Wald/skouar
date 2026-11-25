@@ -59,5 +59,5 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - [x] Stockage IndexedDB (Dexie, migration auto depuis localStorage) + export/import JSON (boutons ↓ Exporter / ↑ Importer dans Blocs)
 - [x] Synchro P2P optionnelle (Yjs + Trystero/WebRTC, zéro serveur) : bouton ⇄ Sync dans Blocs, code de salon à partager entre appareils (v1 : état synchronisé par document, le plus récent l’emporte)
 - [ ] Synchro CRDT fine par bloc + mini-serveur perso (y-sweet, Rust) en alternative
-- [ ] Pages imbriquées + recherche
+- [x] Pages imbriquées (sous-pages, niveaux, suppression qui rebranche les enfants) + recherche (titre, blocs, cellules de BDD) dans la barre latérale
 - [ ] Version desktop autonome partageable (Tauri)

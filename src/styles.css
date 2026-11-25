@@ -607,3 +607,36 @@ a {
   color: var(--muted);
   margin-top: 2px;
 }
+
+.blocs-search {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.blocs-search:focus {
+  border-color: var(--accent);
+}
+
+.blocs-page-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.blocs-page-act {
+  color: var(--muted);
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.blocs-page-act:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}

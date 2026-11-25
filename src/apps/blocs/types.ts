@@ -46,6 +46,7 @@ export interface Page {
   title: string
   blocks: Block[]
   updatedAt: number
+  parentId?: string | null
 }
 
 export interface BlocsState {

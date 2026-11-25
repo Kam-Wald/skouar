@@ -111,6 +111,78 @@ function BlockView({
   )
 }
 
+function PageTree({
+  pages,
+  parentId,
+  depth,
+  currentId,
+  onSelect,
+  onDelete,
+  onAddChild,
+  onPromote
+}: {
+  pages: Page[]
+  parentId: string | null
+  depth: number
+  currentId: string
+  onSelect: (id: string) => void
+  onDelete: (id: string) => void
+  onAddChild: (id: string) => void
+  onPromote: (id: string) => void
+}) {
+  return (
+    <>
+      {pages
+        .filter((p) => (p.parentId ?? null) === parentId)
+        .map((p) => (
+          <li key={p.id}>
+            <div className="blocs-page-row" style={{ paddingLeft: depth * 14 }}>
+              <button
+                className={`blocs-page-item${p.id === currentId ? ' selected' : ''}`}
+                onClick={() => onSelect(p.id)}
+              >
+                {p.title.trim() || 'Sans titre'}
+              </button>
+              <button
+                className="blocs-page-act"
+                title="Nouvelle sous-page"
+                onClick={() => onAddChild(p.id)}
+              >
+                ＋
+              </button>
+              {depth > 0 && (
+                <button
+                  className="blocs-page-act"
+                  title="Remonter d’un niveau"
+                  onClick={() => onPromote(p.id)}
+                >
+                  ⇤
+                </button>
+              )}
+              <button
+                className="blocs-page-del"
+                title="Supprimer la page"
+                onClick={() => onDelete(p.id)}
+              >
+                ×
+              </button>
+            </div>
+            <PageTree
+              pages={pages}
+              parentId={p.id}
+              depth={depth + 1}
+              currentId={currentId}
+              onSelect={onSelect}
+              onDelete={onDelete}
+              onAddChild={onAddChild}
+              onPromote={onPromote}
+            />
+          </li>
+        ))}
+    </>
+  )
+}
+
 export default function BlocsApp() {
   const [state, setState] = useState<BlocsState | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -118,6 +190,25 @@ export default function BlocsApp() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [sync, setSync] = useState<SyncHandle | null>(null)
   const lastJson = useRef('')
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const matches =
+    q && state
+      ? state.pages.filter(
+          (p) =>
+            p.title.toLowerCase().includes(q) ||
+            p.blocks.some(
+              (b) =>
+                b.text.toLowerCase().includes(q) ||
+                (b.db?.rows ?? []).some((r) =>
+                  Object.values(r.cells).some((v) =>
+                    String(v ?? '').toLowerCase().includes(q)
+                  )
+                )
+            )
+        )
+      : null
 
   useEffect(() => {
     let alive = true
@@ -235,8 +326,8 @@ export default function BlocsApp() {
     insertBlockAfter(id, block?.type === 'todo' ? 'todo' : 'paragraph')
   }
 
-  const addPage = () => {
-    const page = createPage('Nouvelle page')
+  const addPage = (parentId: string | null = null) => {
+    const page = createPage('Nouvelle page', parentId)
     setState((s) =>
       s ? { pages: [page, ...s.pages], currentPageId: page.id } : s
     )
@@ -245,11 +336,30 @@ export default function BlocsApp() {
   const deletePage = (id: string) => {
     setState((s) => {
       if (!s) return s
-      const pages = s.pages.filter((p) => p.id !== id)
+      const page = s.pages.find((p) => p.id === id)
+      const newParent = page?.parentId ?? null
+      const pages = s.pages
+        .filter((p) => p.id !== id)
+        .map((p) => (p.parentId === id ? { ...p, parentId: newParent } : p))
       const next = pages.length > 0 ? pages : [createPage('Nouvelle page')]
       return {
         pages: next,
         currentPageId: s.currentPageId === id ? next[0].id : s.currentPageId
+      }
+    })
+  }
+
+  const promotePage = (id: string) => {
+    setState((s) => {
+      if (!s) return s
+      const p = s.pages.find((x) => x.id === id)
+      if (!p) return s
+      const parent = s.pages.find((x) => x.id === p.parentId)
+      return {
+        ...s,
+        pages: s.pages.map((x) =>
+          x.id === id ? { ...x, parentId: parent?.parentId ?? null } : x
+        )
       }
     })
   }
@@ -316,30 +426,48 @@ export default function BlocsApp() {
         <Link to="/" className="blocs-back">
           ← Skouar
         </Link>
+        <input
+          className="blocs-search"
+          placeholder="Rechercher dans les pages…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <div className="blocs-sidebar-head">
           <span>Pages</span>
-          <button className="blocs-new-page" onClick={addPage} title="Nouvelle page">
+          <button className="blocs-new-page" onClick={() => addPage()} title="Nouvelle page">
             ＋
           </button>
         </div>
         <ul className="blocs-page-list">
-          {state.pages.map((p) => (
-            <li key={p.id}>
-              <button
-                className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
-                onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
-              >
-                {p.title.trim() || 'Sans titre'}
-              </button>
-              <button
-                className="blocs-page-del"
-                title="Supprimer la page"
-                onClick={() => deletePage(p.id)}
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {matches
+            ? matches.map((p) => (
+                <li key={p.id}>
+                  <div className="blocs-page-row">
+                    <button
+                      className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
+                      onClick={() =>
+                        setState((s) => (s ? { ...s, currentPageId: p.id } : s))
+                      }
+                    >
+                      {p.title.trim() || 'Sans titre'}
+                    </button>
+                  </div>
+                </li>
+              ))
+            : (
+              <PageTree
+                pages={state.pages}
+                parentId={null}
+                depth={0}
+                currentId={current.id}
+                onSelect={(id) =>
+                  setState((s) => (s ? { ...s, currentPageId: id } : s))
+                }
+                onDelete={deletePage}
+                onAddChild={(id) => addPage(id)}
+                onPromote={promotePage}
+              />
+            )}
         </ul>
         <div className="blocs-sidebar-foot">
           <button
