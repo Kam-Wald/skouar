@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent as ReactDragEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Block, BlockType, BlocsState, Page } from './types'
 import { createBlock, createDatabase, createPage, loadState, saveState, uid } from './store'
@@ -66,6 +66,10 @@ export default function BlocsApp() {
   const [showTrash, setShowTrash] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
+  const [sideW, setSideW] = useState(() => {
+    const v = Number(localStorage.getItem('skouar:sidebarW'))
+    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
+  })
   const [linksOpen, setLinksOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
@@ -665,7 +669,10 @@ export default function BlocsApp() {
         className={`sidebar-backdrop${sidebarOpen ? ' show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
-      <aside className={`blocs-sidebar${sidebarOpen ? ' open' : ''}`}>
+      <aside
+        className={`blocs-sidebar${sidebarOpen ? ' open' : ''}`}
+        style={{ '--side-w': `${sideW}px` } as CSSProperties}
+      >
         <Link to="/" className="blocs-back">
           ← Skouar
         </Link>
@@ -787,6 +794,28 @@ export default function BlocsApp() {
           <input ref={fileInput} type="file" accept="application/json,.json,.md,text/markdown" hidden onChange={handleImport} />
         </div>
       </aside>
+      <div
+        className="sidebar-resizer"
+        title="Redimensionner le menu"
+        onMouseDown={(e) => {
+          e.preventDefault()
+          const startX = e.clientX
+          const startW = sideW
+          const onMove = (ev: MouseEvent) => {
+            const w = Math.min(440, Math.max(180, startW + ev.clientX - startX))
+            setSideW(w)
+            localStorage.setItem('skouar:sidebarW', String(w))
+          }
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+          }
+          window.addEventListener('mousemove', onMove)
+          window.addEventListener('mouseup', onUp)
+        }}
+      >
+        <span className="resizer-arrow">⇆</span>
+      </div>
       <main className="blocs-main">
         <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Menu">
           ☰
@@ -978,7 +1007,7 @@ export default function BlocsApp() {
           )}
         </div>
         {slashOpen && slashBlock && slashRect && (
-          <div className="slash-menu" style={{ left: slashRect.left, top: slashRect.bottom + 6 }}>
+          <div className="slash-menu" style={{ left: Math.min(slashRect.left, Math.max(8, window.innerWidth - 260)), top: slashRect.bottom + 6 }}>
             {slashItems.map((t, i) => (
               <button
                 key={t.type}

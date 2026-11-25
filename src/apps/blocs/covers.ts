@@ -49,9 +49,10 @@ export function coverStyle(cover: CoverDef | null | undefined): CSSProperties {
   if (!cover) return {}
   if (cover.kind === 'color') return { backgroundColor: cover.value }
   if (cover.kind === 'url' || cover.kind === 'file') return {}
-  const p = COVER_PATTERNS.find((x) => x.id === cover.value)
-  if (!p) return { backgroundColor: BASE }
-  const style: CSSProperties = { backgroundColor: BASE, backgroundImage: p.image }
+  const [id, hex] = cover.value.split('|')
+  const p = COVER_PATTERNS.find((x) => x.id === id)
+  if (!p) return { backgroundColor: hex || BASE }
+  const style: CSSProperties = { backgroundColor: hex || BASE, backgroundImage: p.image }
   if (p.size) style.backgroundSize = p.size
   if (p.position) style.backgroundPosition = p.position
   return style
