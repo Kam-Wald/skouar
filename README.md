@@ -51,6 +51,6 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 ## Roadmap
 
 - [ ] Test de l'installation PWA en ligne (bureau + tablette) sur l'URL Pages
-- [ ] Stockage IndexedDB (Dexie) + export/import de fichier
+- [x] Stockage IndexedDB (Dexie, migration auto depuis localStorage) + export/import JSON (boutons ↓ Exporter / ↑ Importer dans Blocs)
 - [ ] Synchro optionnelle entre appareils : CRDT (Yjs), P2P WebRTC ou mini-serveur perso
 - [ ] Version desktop autonome partageable (Tauri)

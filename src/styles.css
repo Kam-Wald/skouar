@@ -205,6 +205,32 @@ a {
   color: #f87171;
 }
 
+.blocs-sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  gap: 6px;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.blocs-io {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.blocs-io:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.blocs-loading {
+  color: var(--muted);
+}
+
 .blocs-main {
   flex: 1;
   padding: 2rem clamp(1rem, 6vw, 5rem);

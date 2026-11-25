@@ -1,6 +1,23 @@
+import Dexie, { type Table } from 'dexie'
 import type { Block, BlockType, BlocsState, Page } from './types'
 
-const STORAGE_KEY = 'skouar:blocs:v1'
+const LEGACY_KEY = 'skouar:blocs:v1'
+const STATE_KEY = 'blocs'
+
+interface KvRow {
+  key: string
+  value: BlocsState
+}
+
+class BlocsDatabase extends Dexie {
+  kv!: Table<KvRow, string>
+  constructor() {
+    super('skouar')
+    this.version(1).stores({ kv: 'key' })
+  }
+}
+
+const db = new BlocsDatabase()
 
 export function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -14,7 +31,7 @@ export function createPage(title: string): Page {
   return { id: uid(), title, blocks: [createBlock()], updatedAt: Date.now() }
 }
 
-function seedState(): BlocsState {
+export function seedState(): BlocsState {
   const page = createPage('Bienvenue dans Blocs')
   page.blocks = [
     createBlock('h1', 'Bienvenue dans Blocs ▦'),
@@ -27,28 +44,58 @@ function seedState(): BlocsState {
     createBlock(
       'paragraph',
       'Les boutons de la barre changent le type du bloc actif (titre, liste, tâche…).'
+    ),
+    createBlock(
+      'paragraph',
+      'Dans la barre latérale : ↓ Exporter / ↑ Importer pour sauvegarder ou restaurer tes pages en fichier JSON. Les données vivent maintenant dans IndexedDB.'
     )
   ]
   return { pages: [page], currentPageId: page.id }
 }
 
-export function loadState(): BlocsState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as BlocsState
-      if (Array.isArray(parsed.pages)) return parsed
-    }
-  } catch {
-    // stockage indisponible ou corrompu : on repart d'un état sain
-  }
-  return seedState()
+function isValidState(x: unknown): x is BlocsState {
+  if (typeof x !== 'object' || x === null) return false
+  const s = x as BlocsState
+  return (
+    Array.isArray(s.pages) &&
+    s.pages.every(
+      (p) =>
+        typeof p.id === 'string' &&
+        typeof p.title === 'string' &&
+        Array.isArray(p.blocks)
+    )
+  )
 }
 
-export function saveState(state: BlocsState): void {
+export async function loadState(): Promise<BlocsState> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    const row = await db.kv.get(STATE_KEY)
+    if (row && isValidState(row.value)) return row.value
   } catch {
-    // quota dépassé : on ignore silencieusement pour l'instant
+    // IndexedDB indisponible : on tente la migration puis le seed
   }
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (isValidState(parsed)) {
+        await db.kv.put({ key: STATE_KEY, value: parsed })
+        localStorage.removeItem(LEGACY_KEY)
+        return parsed
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const seeded = seedState()
+  try {
+    await db.kv.put({ key: STATE_KEY, value: seeded })
+  } catch {
+    // ignore
+  }
+  return seeded
+}
+
+export async function saveState(state: BlocsState): Promise<void> {
+  await db.kv.put({ key: STATE_KEY, value: state })
 }

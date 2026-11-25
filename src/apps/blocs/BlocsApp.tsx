@@ -2,11 +2,13 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent
 } from 'react'
 import { Link } from 'react-router-dom'
-import type { Block, BlockType, Page } from './types'
-import { createBlock, createPage, loadState, saveState, uid } from './store'
+import type { Block, BlockType, BlocsState, Page } from './types'
+import { createBlock, createPage, loadState, saveState } from './store'
+import { exportStateToFile, parseImportFile } from './export'
 
 const BLOCK_TYPES: { type: BlockType; label: string; title: string }[] = [
   { type: 'paragraph', label: '¶', title: 'Paragraphe' },
@@ -80,9 +82,7 @@ function BlockView({
         suppressContentEditableWarning
         data-placeholder={PLACEHOLDERS[block.type]}
         onFocus={() => onActivate(block.id)}
-        onInput={(e) =>
-          onChangeText(block.id, e.currentTarget.textContent ?? '')
-        }
+        onInput={(e) => onChangeText(block.id, e.currentTarget.textContent ?? '')}
         onKeyDown={handleKeyDown}
       />
     </div>
@@ -90,12 +90,26 @@ function BlockView({
 }
 
 export default function BlocsApp() {
-  const [state, setState] = useState(loadState)
+  const [state, setState] = useState<BlocsState | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => saveState(state), 200)
+    let alive = true
+    loadState().then((s) => {
+      if (alive) setState(s)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!state) return
+    const t = setTimeout(() => {
+      void saveState(state)
+    }, 200)
     return () => clearTimeout(t)
   }, [state])
 
@@ -116,25 +130,29 @@ export default function BlocsApp() {
   })
 
   const current: Page | undefined =
-    state.pages.find((p) => p.id === state.currentPageId) ?? state.pages[0]
+    state?.pages.find((p) => p.id === state.currentPageId) ?? state?.pages[0]
 
   const updatePage = (pageId: string, patch: Partial<Page>) =>
-    setState((s) => ({
-      ...s,
-      pages: s.pages.map((p) =>
-        p.id === pageId ? { ...p, ...patch, updatedAt: Date.now() } : p
-      )
-    }))
+    setState((s) =>
+      s
+        ? {
+            ...s,
+            pages: s.pages.map((p) =>
+              p.id === pageId ? { ...p, ...patch, updatedAt: Date.now() } : p
+            )
+          }
+        : s
+    )
 
   const updateBlock = (id: string, patch: Partial<Block>) => {
-    if (!current) return
+    if (!state || !current) return
     updatePage(current.id, {
       blocks: current.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b))
     })
   }
 
   const insertBlockAfter = (afterId: string, type: BlockType = 'paragraph') => {
-    if (!current) return
+    if (!state || !current) return
     const index = current.blocks.findIndex((b) => b.id === afterId)
     const block = createBlock(type)
     const blocks = [...current.blocks]
@@ -144,7 +162,7 @@ export default function BlocsApp() {
   }
 
   const deleteBlock = (id: string) => {
-    if (!current) return
+    if (!state || !current) return
     const index = current.blocks.findIndex((b) => b.id === id)
     if (index < 0) return
     const blocks = current.blocks.filter((b) => b.id !== id)
@@ -155,32 +173,54 @@ export default function BlocsApp() {
   }
 
   const handleEnter = (id: string) => {
-    if (!current) return
+    if (!state || !current) return
     const block = current.blocks.find((b) => b.id === id)
     insertBlockAfter(id, block?.type === 'todo' ? 'todo' : 'paragraph')
   }
 
   const addPage = () => {
     const page = createPage('Nouvelle page')
-    setState((s) => ({
-      pages: [page, ...s.pages],
-      currentPageId: page.id
-    }))
+    setState((s) =>
+      s ? { pages: [page, ...s.pages], currentPageId: page.id } : s
+    )
   }
 
   const deletePage = (id: string) => {
     setState((s) => {
+      if (!s) return s
       const pages = s.pages.filter((p) => p.id !== id)
       const next = pages.length > 0 ? pages : [createPage('Nouvelle page')]
       return {
         pages: next,
-        currentPageId:
-          s.currentPageId === id ? next[0].id : s.currentPageId
+        currentPageId: s.currentPageId === id ? next[0].id : s.currentPageId
       }
     })
   }
 
-  if (!current) return null
+  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !state) return
+    try {
+      const imported = await parseImportFile(file)
+      const ok = window.confirm(
+        `Remplacer les ${state.pages.length} page(s) actuelles par celles du fichier « ${file.name} » ?`
+      )
+      if (ok) setState(imported)
+    } catch {
+      window.alert('Fichier invalide : un export JSON de Skouar/Blocs est attendu.')
+    }
+  }
+
+  if (!state || !current) {
+    return (
+      <div className="blocs-app">
+        <main className="blocs-main">
+          <p className="blocs-loading">Chargement…</p>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="blocs-app">
@@ -199,9 +239,7 @@ export default function BlocsApp() {
             <li key={p.id}>
               <button
                 className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
-                onClick={() =>
-                  setState((s) => ({ ...s, currentPageId: p.id }))
-                }
+                onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
               >
                 {p.title.trim() || 'Sans titre'}
               </button>
@@ -215,6 +253,21 @@ export default function BlocsApp() {
             </li>
           ))}
         </ul>
+        <div className="blocs-sidebar-foot">
+          <button className="blocs-io" onClick={() => exportStateToFile(state)}>
+            ↓ Exporter
+          </button>
+          <button className="blocs-io" onClick={() => fileInput.current?.click()}>
+            ↑ Importer
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={handleImport}
+          />
+        </div>
       </aside>
       <main className="blocs-main">
         <input
@@ -228,8 +281,19 @@ export default function BlocsApp() {
             <button
               key={t.type}
               title={t.title}
-              className={activeId && current.blocks.find((b) => b.id === activeId)?.type === t.type ? 'tool active' : 'tool'}
-              onClick={() => activeId && updateBlock(activeId, { type: t.type, done: t.type === 'todo' ? false : undefined })}
+              className={
+                activeId &&
+                current.blocks.find((b) => b.id === activeId)?.type === t.type
+                  ? 'tool active'
+                  : 'tool'
+              }
+              onClick={() =>
+                activeId &&
+                updateBlock(activeId, {
+                  type: t.type,
+                  done: t.type === 'todo' ? false : undefined
+                })
+              }
             >
               {t.label}
             </button>
@@ -244,7 +308,9 @@ export default function BlocsApp() {
               onActivate={setActiveId}
               onChangeText={(id, text) => updateBlock(id, { text })}
               onToggleDone={(id) =>
-                updateBlock(id, { done: !(current.blocks.find((x) => x.id === id)?.done ?? false) })
+                updateBlock(id, {
+                  done: !(current.blocks.find((x) => x.id === id)?.done ?? false)
+                })
               }
               onEnter={handleEnter}
               onBackspaceEmpty={deleteBlock}
@@ -253,7 +319,9 @@ export default function BlocsApp() {
         </div>
         <button
           className="blocs-add"
-          onClick={() => insertBlockAfter(current.blocks[current.blocks.length - 1].id)}
+          onClick={() =>
+            insertBlockAfter(current.blocks[current.blocks.length - 1].id)
+          }
         >
           ＋ Ajouter un bloc
         </button>
