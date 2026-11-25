@@ -169,7 +169,12 @@ export default function BlockView({ block, handlers }: Props) {
 
   const openUrlPop = (kind: 'src' | 'href', e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setUrlPop({ x: r.left, y: r.bottom, kind, value: kind === 'src' ? (block.src ?? '') : (block.href ?? '') })
+    setUrlPop({
+      x: Math.min(r.left, Math.max(8, window.innerWidth - 340)),
+      y: r.bottom,
+      kind,
+      value: kind === 'src' ? (block.src ?? '') : (block.href ?? '')
+    })
   }
 
   const mediaMeta = MEDIA_META[block.type]

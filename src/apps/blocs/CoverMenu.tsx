@@ -12,7 +12,9 @@ export default function CoverMenu({
 }) {
   const [tab, setTab] = useState<'color' | 'pattern' | 'url'>('color')
   const [url, setUrl] = useState('')
+  const [patColor, setPatColor] = useState('#312e81')
   const fileRef = useRef<HTMLInputElement>(null)
+  const x = Math.min(anchor.x, Math.max(8, window.innerWidth - 320))
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -31,7 +33,7 @@ export default function CoverMenu({
   }
 
   return (
-    <div className="cover-menu" style={{ left: anchor.x, top: anchor.y + 8 }}>
+    <div className="cover-menu" style={{ left: x, top: anchor.y + 8 }}>
       <div className="cover-tabs">
         <button className={tab === 'color' ? 'active' : ''} onClick={() => setTab('color')}>
           🎨 Couleur
@@ -62,20 +64,33 @@ export default function CoverMenu({
         </div>
       )}
       {tab === 'pattern' && (
-        <div className="cover-patterns">
-          {COVER_PATTERNS.map((p) => (
-            <button
-              key={p.id}
-              className="cover-pattern"
-              style={coverStyle({ kind: 'pattern', value: p.id })}
-              title={p.name}
-              onClick={() => {
-                onSelect({ kind: 'pattern', value: p.id })
-                onClose()
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="emoji-colors" style={{ marginBottom: 8 }}>
+            {COVER_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`emoji-color${patColor === c ? ' active' : ''}`}
+                style={{ backgroundColor: c }}
+                title={c}
+                onClick={() => setPatColor(c)}
+              />
+            ))}
+          </div>
+          <div className="cover-patterns">
+            {COVER_PATTERNS.map((p) => (
+              <button
+                key={p.id}
+                className="cover-pattern"
+                style={coverStyle({ kind: 'pattern', value: `${p.id}|${patColor}` })}
+                title={p.name}
+                onClick={() => {
+                  onSelect({ kind: 'pattern', value: `${p.id}|${patColor}` })
+                  onClose()
+                }}
+              />
+            ))}
+          </div>
+        </>
       )}
       {tab === 'url' && (
         <div className="cover-url">
