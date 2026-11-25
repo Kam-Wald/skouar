@@ -1,4 +1,4 @@
-import type { Block } from './types'
+import type { Block, Page } from './types'
 
 export function flattenBlocks(blocks: Block[]): Block[] {
   return blocks.flatMap((b) => [b, ...(b.children ? flattenBlocks(b.children) : [])])
@@ -29,11 +29,7 @@ export function patchBlock(
   )
 }
 
-export function insertAfter(
-  blocks: Block[],
-  afterId: string,
-  nb: Block
-): Block[] {
+export function insertAfter(blocks: Block[], afterId: string, nb: Block): Block[] {
   const out: Block[] = []
   for (const b of blocks) {
     const children = b.children ? insertAfter(b.children, afterId, nb) : undefined
@@ -47,4 +43,76 @@ export function deleteFrom(blocks: Block[], id: string): Block[] {
   return blocks
     .filter((b) => b.id !== id)
     .map((b) => (b.children ? { ...b, children: deleteFrom(b.children, id) } : b))
+}
+
+export function removeFrom(
+  blocks: Block[],
+  id: string
+): { blocks: Block[]; removed: Block | null } {
+  let removed: Block | null = null
+  const walk = (arr: Block[]): Block[] =>
+    arr.flatMap((b) => {
+      if (b.id === id) {
+        removed = b
+        return []
+      }
+      if (b.children) return [{ ...b, children: walk(b.children) }]
+      return [b]
+    })
+  return { blocks: walk(blocks), removed }
+}
+
+export function insertAt(
+  blocks: Block[],
+  targetId: string,
+  nb: Block,
+  after: boolean
+): Block[] {
+  const out: Block[] = []
+  for (const b of blocks) {
+    const children = b.children ? insertAt(b.children, targetId, nb, after) : undefined
+    const bb = children ? { ...b, children } : b
+    if (b.id === targetId && !after) out.push(nb)
+    out.push(bb)
+    if (b.id === targetId && after) out.push(nb)
+  }
+  return out
+}
+
+export function moveBlockInTree(
+  blocks: Block[],
+  id: string,
+  targetId: string,
+  after: boolean
+): Block[] {
+  if (id === targetId) return blocks
+  const { blocks: without, removed } = removeFrom(blocks, id)
+  if (!removed) return blocks
+  return insertAt(without, targetId, removed, after)
+}
+
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, '')
+}
+
+export function descendantsOf(pages: Page[], id: string): Page[] {
+  const out: Page[] = []
+  const walk = (pid: string) => {
+    for (const p of pages) {
+      if ((p.parentId ?? null) === pid) {
+        out.push(p)
+        walk(p.id)
+      }
+    }
+  }
+  walk(id)
+  return out
+}
+
+export function mentionsIn(text: string): string[] {
+  const re = /\[\[([^\]]+)\]\]/g
+  const out: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) out.push(m[1].trim())
+  return out
 }

@@ -2,7 +2,7 @@
 
 Lanceur d'applications **local-first** : une coque unique (le « launcher ») regroupe des applications modulaires, installable en **PWA** (icône sur le bureau / écran d'accueil) et utilisable 100 % hors ligne.
 
-Première app : **Blocs** ▦ — un éditeur de blocs type Notion (pages, titres, listes à puces, tâches), dont les données restent dans le navigateur.
+Première app : **Calepin** 🗒 — un éditeur de pages/bases de données type Notion (pages, titres, listes à puces, tâches), dont les données restent dans le navigateur.
 
 ## Stack
 
@@ -34,7 +34,7 @@ public/                      icon.svg + icônes PNG générées
 scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 ```
 
-## Utilisation de Blocs
+## Utilisation de Calepin
 
 - Barre latérale : créer / sélectionner / supprimer des pages.
 - `Entrée` crée un bloc après le bloc courant, `Backspace` dans un bloc vide le supprime.
@@ -48,11 +48,23 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - Prérequis manuel une seule fois : Settings → Pages → Source = « GitHub Actions »
 - En local, `base` reste `/` ; en CI il devient automatiquement `/skouar/` (`vite.config.ts`)
 
-## Fonctionnalités de Blocs
+## Fonctionnalités de Calepin (ex-« Blocs »)
 
-- Blocs : paragraphe, H1/H2/H3, puces, tâches, citation, code, séparateur, image, **vidéo (embed YouTube/mp4)**, **audio**, **PDF** (lecteur), **fichier/archive** (carte téléchargeable), **menu dépliant** (blocs enfants), **bouton** (avec URL), **table des matières** (auto depuis H1–H3) — tout insérable via le **menu « / »** (filtré au clavier, flèches + Entrée)
-- **Icône (emoji) et couverture d’image** par page (upload ≤ 2 Mo ou URL), **fil d’ariane** des pages parentes
+- **Annuler/rétablir** (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y), **mise en forme inline** (Ctrl+B/I/U)
+- Mentions `[[page]]` + panneau **liens entrants/sortants**, **étiquettes (tags)** colorées + filtre
+- **Corbeille** (restauration 30 j), **20 templates** de page + duplication de page
+- Import **.md**, export page en **.md** et **PDF** (impression), collage/dépôt d'image → bloc auto
+- Recherche avec filtres de type + extraits surlignés, **thème clair/sombre + accent personnalisable**, **vue mobile** (barre latérale en tiroir)
+- BDD : **agrégats en pied de tableau** (compter, somme, moyenne, min, max, cochées)
+
+- Calepin : paragraphe, H1/H2/H3, puces, tâches, citation, code, séparateur, image, **vidéo (embed YouTube/mp4)**, **audio**, **PDF** (lecteur), **fichier/archive** (carte téléchargeable), **menu dépliant** (blocs enfants), **bouton** (avec URL), **table des matières** (auto depuis H1–H3) — tout insérable via le **menu « / »** ; **drag’n’drop** des blocs, des pages, des colonnes de BDD et des cartes du board ; listes numérotées (compteur auto) et **blocs colonnes 2–4**
+- **Icône emoji + couleur de tuile** (grande galerie) et **couverture** par page : un seul picto 🖼 ouvre un menu couleur / motif (20) / URL / fichier — plus aucun `prompt()` JS pour les URL, **fil d’ariane** des pages parentes
 - **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case) via formulaire inline, filtres, tris, et **8 vues** : tableau, board, galerie, calendrier, liste, chronologie, fil d’actus, graphique (barres compte/somme)
+
+## Identité
+
+- Logo Skouar : 4 propositions dans `public/icons/variants/v1–v4.png` (v2 = trois barres, choisi par défaut ; les 4 restent dans le site ; v4 = clin d’œil lapin). Changer = modifier `scripts/gen-icons.mjs` + `public/icon.svg` et lancer `npm run icons`.
+- Logo de l’app Calepin : `public/app-icons/calepin.svg`, réutilisable comme base pour les prochaines apps.
 
 ## Roadmap
 

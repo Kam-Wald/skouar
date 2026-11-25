@@ -3,8 +3,10 @@ export type BlockType =
   | 'h1'
   | 'h2'
   | 'h3'
+  | 'h4'
   | 'todo'
   | 'bullet'
+  | 'numbered'
   | 'quote'
   | 'code'
   | 'divider'
@@ -15,6 +17,8 @@ export type BlockType =
   | 'file'
   | 'archive'
   | 'toggle'
+  | 'columns'
+  | 'column'
   | 'toc'
   | 'button'
   | 'database'
@@ -46,6 +50,8 @@ export type ViewType =
   | 'feed'
   | 'chart'
 
+export type AggType = 'count' | 'countAll' | 'sum' | 'avg' | 'min' | 'max' | 'checked'
+
 export interface Database {
   id: string
   title: string
@@ -54,6 +60,12 @@ export interface Database {
   view?: ViewType
   groupBy?: string
   chartAgg?: 'count' | 'sum'
+  aggs?: Record<string, AggType>
+}
+
+export interface Cover {
+  kind: 'color' | 'pattern' | 'url' | 'file'
+  value: string
 }
 
 export interface Block {
@@ -65,6 +77,7 @@ export interface Block {
   href?: string
   fileName?: string
   fileSize?: number
+  cols?: number
   db?: Database
   children?: Block[]
 }
@@ -76,7 +89,10 @@ export interface Page {
   updatedAt: number
   parentId?: string | null
   icon?: string | null
-  cover?: string | null
+  iconColor?: string | null
+  cover?: Cover | null
+  tags?: string[]
+  deletedAt?: number | null
 }
 
 export interface BlocsState {

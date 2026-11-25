@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type DragEvent } from 'react'
 import type { CellValue, Column, Database, Row } from './types'
 
 export function primaryColumn(db: Database): Column | undefined {
@@ -31,6 +31,8 @@ function propsLine(db: Database, r: Row, primary: Column | undefined): string {
 }
 
 export function BoardView({ db, rows, onUpdateCell }: ViewProps) {
+  const dragRowId = useRef<string | null>(null)
+
   const groupCol =
     db.columns.find((c) => c.id === db.groupBy) ??
     db.columns.find((c) => c.type === 'select') ??
@@ -64,12 +66,32 @@ export function BoardView({ db, rows, onUpdateCell }: ViewProps) {
   return (
     <div className="db-board">
       {order.map((g) => (
-        <div className="db-board-col" key={g}>
+        <div
+          className="db-board-col"
+          key={g}
+          onDragOver={(e: DragEvent) => e.preventDefault()}
+          onDrop={(e: DragEvent) => {
+            e.preventDefault()
+            const rowId = dragRowId.current ?? e.dataTransfer.getData('text/plain')
+            dragRowId.current = null
+            if (rowId && groupCol) {
+              onUpdateCell(rowId, groupCol.id, g === 'Sans étiquette' ? null : g)
+            }
+          }}
+        >
           <div className="db-board-col-head">
             {g} <span className="db-count">{groups.get(g)?.length ?? 0}</span>
           </div>
           {(groups.get(g) ?? []).map((r) => (
-            <div className="db-card" key={r.id}>
+            <div
+              className="db-card"
+              key={r.id}
+              draggable
+              onDragStart={(e: DragEvent) => {
+                dragRowId.current = r.id
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+            >
               <div className="db-card-title">
                 {primary ? cellText(r.cells[primary.id]) || 'Sans titre' : 'Ligne'}
               </div>
