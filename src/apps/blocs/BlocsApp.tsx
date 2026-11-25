@@ -25,6 +25,7 @@ import { TEMPLATES, type TemplateSpec } from './templates'
 import { exportFile, parseMarkdown, toMarkdown } from './markdown'
 import ThemeButton from '../../ThemeButton'
 import GraphView from './GraphView'
+import DashboardView from './DashboardView'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
@@ -66,6 +67,7 @@ export default function BlocsApp() {
   const [showTrash, setShowTrash] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
+  const [dashOpen, setDashOpen] = useState(false)
   const [sideW, setSideW] = useState(() => {
     const v = Number(localStorage.getItem('skouar:sidebarW'))
     return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
@@ -241,6 +243,29 @@ export default function BlocsApp() {
     return () => clearInterval(t)
   }, [state, livePages])
 
+  const allDbs = livePages.flatMap((p) =>
+    flattenBlocks(p.blocks)
+      .filter((b) => b.type === 'database' && b.db)
+      .map((b) => ({ id: b.db!.id, db: b.db! }))
+  )
+  const pagesList = livePages.map((p) => ({ id: p.id, title: stripHtml(p.title).trim() || 'Sans titre' }))
+
+  const runAction = (buttonId: string) => {
+    if (!state || !current) return
+    const btn = findBlock(current.blocks, buttonId)
+    if (!btn?.action) return
+    const src = findBlock(current.blocks, btn.action.repeatBlockId)
+    if (!src) return
+    const copies = Array.from({ length: btn.action.count }, () => {
+      const c = JSON.parse(JSON.stringify(src)) as Block
+      c.id = uid()
+      return c
+    })
+    let blocks = current.blocks
+    for (const c of copies) blocks = insertAfter(blocks, buttonId, c)
+    updatePage(current.id, { blocks })
+  }
+
   const openJournal = () => {
     const today = new Date().toISOString().slice(0, 10)
     setState((s) => {
@@ -289,6 +314,7 @@ export default function BlocsApp() {
     livePages.find((p) => p.id === state?.currentPageId) ?? livePages[0]
 
   const allBlocks = current ? flattenBlocks(current.blocks) : []
+  const blocksList = allBlocks.map((b) => ({ id: b.id, label: (stripHtml(b.text).slice(0, 40) || b.type) }))
 
   const plain = (b: Block) => stripHtml(b.text)
 
@@ -637,6 +663,23 @@ export default function BlocsApp() {
       if (due && Notification.permission === 'default') void Notification.requestPermission()
       updateBlock(id, { due, notified: false })
     },
+    onChangeColor: (id, color) => updateBlock(id, { color: color ?? undefined }),
+    onChangeProgress: (id, n) => updateBlock(id, { progress: n }),
+    onAddGallery: (id, srcs) => {
+      const b = findBlock(current.blocks, id)
+      updateBlock(id, { srcs: [...(b?.srcs ?? []), ...srcs] })
+    },
+    onRemoveGallery: (id, src) => {
+      const b = findBlock(current.blocks, id)
+      updateBlock(id, { srcs: (b?.srcs ?? []).filter((s) => s !== src) })
+    },
+    onSetAction: (id, action) => updateBlock(id, { action, href: action ? undefined : undefined }),
+    onRunAction: runAction,
+    onOpenPage: (id) => setState((s) => (s ? { ...s, currentPageId: id } : s)),
+    onSetPage: (id, pageId) => updateBlock(id, { pageId }),
+    pagesList,
+    blocksList,
+    allDbs,
     onChangeDb: (id, db) => updateBlock(id, { db }),
     onEnter: handleEnter,
     onDelete: deleteBlock,
@@ -720,9 +763,14 @@ export default function BlocsApp() {
               🗑
             </button>
             {!showTrash && (
-              <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Nouvelle page (avec template)">
-                ＋
-              </button>
+              <>
+                <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Nouvelle page (avec template)">
+                  ＋
+                </button>
+                <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Modèles / templates (20)">
+                  📋
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -930,6 +978,9 @@ export default function BlocsApp() {
             <button className="page-cover-btn" title="Dupliquer la page" onClick={() => duplicatePage(current.id)}>
               ⧉
             </button>
+            <button className="page-cover-btn" title="Tableau de bord de la page" onClick={() => setDashOpen((o) => !o)}>
+              📊
+            </button>
           </div>
         </div>
         {current.tags && current.tags.length > 0 && (
@@ -938,6 +989,13 @@ export default function BlocsApp() {
               <span key={t} className="tag-chip" style={{ backgroundColor: tagColor(t) }}>{t}</span>
             ))}
           </div>
+        )}
+        {dashOpen && (
+          <DashboardView
+            page={current}
+            allPages={livePages}
+            onOpenPage={(id) => setState((s) => (s ? { ...s, currentPageId: id } : s))}
+          />
         )}
         <div className="blocs-toolbar">
           {BLOCK_TYPES.map((t) => (

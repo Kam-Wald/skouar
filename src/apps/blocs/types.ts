@@ -21,23 +21,53 @@ export type BlockType =
   | 'column'
   | 'toc'
   | 'button'
+  | 'callout'
+  | 'embed'
+  | 'math'
+  | 'progress'
+  | 'qr'
+  | 'countdown'
+  | 'gallery'
+  | 'pageembed'
   | 'database'
 
-export type PropType = 'text' | 'number' | 'select' | 'date' | 'checkbox'
+export type PropType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'multi'
+  | 'date'
+  | 'checkbox'
+  | 'url'
+  | 'email'
+  | 'phone'
+  | 'status'
+  | 'formula'
+  | 'relation'
+  | 'rollup'
+  | 'location'
+  | 'id'
+  | 'created'
+  | 'edited'
 
 export interface Column {
   id: string
   name: string
   type: PropType
   options?: string[]
+  formula?: string
+  relationDbId?: string
+  rollupColId?: string
+  rollupAgg?: 'count' | 'sum' | 'avg' | 'min' | 'max'
 }
 
-export type CellValue = string | number | boolean | null
+export type CellValue = string | number | boolean | string[] | null
 
 export interface Row {
   id: string
   cells: Record<string, CellValue>
   createdAt?: number
+  updatedAt?: number
 }
 
 export type ViewType =
@@ -49,6 +79,8 @@ export type ViewType =
   | 'timeline'
   | 'feed'
   | 'chart'
+  | 'map'
+  | 'gantt'
 
 export type AggType = 'count' | 'countAll' | 'sum' | 'avg' | 'min' | 'max' | 'checked'
 
@@ -61,11 +93,18 @@ export interface Database {
   groupBy?: string
   chartAgg?: 'count' | 'sum'
   aggs?: Record<string, AggType>
+  ganttStart?: string
+  ganttEnd?: string
 }
 
 export interface Cover {
   kind: 'color' | 'pattern' | 'url' | 'file'
   value: string
+}
+
+export interface BlockAction {
+  repeatBlockId: string
+  count: number
 }
 
 export interface Block {
@@ -76,10 +115,15 @@ export interface Block {
   due?: string | null
   notified?: boolean
   src?: string
+  srcs?: string[]
   href?: string
   fileName?: string
   fileSize?: number
   cols?: number
+  color?: string
+  progress?: number
+  pageId?: string
+  action?: BlockAction
   db?: Database
   children?: Block[]
 }
