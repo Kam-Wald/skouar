@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type DragEvent } from 'react'
 import type { CellValue, Column, Database, PropType, Row, ViewType } from './types'
 import { createColumn, createRow } from './store'
 import {
@@ -176,6 +176,40 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
     }
     patch(extra)
   }
+
+  const colDragId = useRef<string | null>(null)
+  const [colOverId, setColOverId] = useState<string | null>(null)
+
+  const moveColumn = (id: string, targetId: string) => {
+    if (id === targetId) return
+    const idx = db.columns.findIndex((c) => c.id === id)
+    const tidx = db.columns.findIndex((c) => c.id === targetId)
+    if (idx < 0 || tidx < 0) return
+    const columns = [...db.columns]
+    const [c] = columns.splice(idx, 1)
+    columns.splice(tidx, 0, c)
+    patch({ columns })
+  }
+
+  const colDragProps = (id: string) => ({
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      colDragId.current = id
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault()
+      setColOverId(id)
+    },
+    onDragLeave: () => setColOverId(null),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      setColOverId(null)
+      const dragged = colDragId.current ?? e.dataTransfer.getData('text/plain')
+      colDragId.current = null
+      if (dragged) moveColumn(dragged, id)
+    }
+  })
 
   const [colForm, setColForm] = useState(false)
   const [colName, setColName] = useState('')
@@ -406,7 +440,7 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           <thead>
             <tr>
               {db.columns.map((c) => (
-                <th key={c.id}>
+                <th key={c.id} className={colOverId === c.id ? 'drag-over' : ''} {...colDragProps(c.id)}>
                   <input
                     className="db-col-name"
                     value={c.name}

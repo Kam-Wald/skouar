@@ -66,11 +66,29 @@ export function createDatabase(): Database {
   }
 }
 
+function migrateState(s: BlocsState): BlocsState {
+  return {
+    ...s,
+    pages: s.pages.map((p) => {
+      const legacy = p as Page & { cover?: unknown }
+      let cover = p.cover
+      if (typeof legacy.cover === 'string') {
+        cover = {
+          kind: (legacy.cover as string).startsWith('data:') ? 'file' : 'url',
+          value: legacy.cover as string
+        } as Page['cover']
+      }
+      return { ...p, cover: cover ?? null }
+    })
+  }
+}
+
 export function seedState(): BlocsState {
-  const page = createPage('Bienvenue dans Blocs')
+  const page = createPage('Bienvenue dans Carnet')
   page.icon = '▦'
+  page.iconColor = '#4f46e5'
   page.blocks = [
-    createBlock('h1', 'Bienvenue dans Blocs ▦'),
+    createBlock('h1', 'Bienvenue dans Carnet 🗒'),
     createBlock(
       'paragraph',
       "Une page est une suite de blocs. Appuie sur Entrée pour créer un nouveau bloc."
@@ -79,11 +97,11 @@ export function seedState(): BlocsState {
     createBlock('todo', 'Coche cette tâche pour la marquer faite'),
     createBlock(
       'paragraph',
-      'Les boutons de la barre changent le type du bloc actif (titre, liste, tâche…).'
+      'Les boutons de la barre changent le type du bloc actif. Tape / pour le menu des blocs (vidéo, PDF, colonnes, dépliant…).'
     ),
     createBlock(
       'paragraph',
-      'Dans la barre latérale : ↓ Exporter / ↑ Importer pour sauvegarder ou restaurer tes pages en fichier JSON. Les données vivent maintenant dans IndexedDB.'
+      'Barre latérale : ↓ Exporter / ↑ Importer (fichier JSON), ⇄ Sync (P2P). Icône 🐰 et couverture 🖼 en haut de page. Données dans IndexedDB.'
     )
   ]
   return { pages: [page], currentPageId: page.id }
@@ -106,7 +124,7 @@ function isValidState(x: unknown): x is BlocsState {
 export async function loadState(): Promise<BlocsState> {
   try {
     const row = await db.kv.get(STATE_KEY)
-    if (row && isValidState(row.value)) return row.value
+    if (row && isValidState(row.value)) return migrateState(row.value)
   } catch {
     // IndexedDB indisponible : on tente la migration puis le seed
   }
@@ -115,9 +133,10 @@ export async function loadState(): Promise<BlocsState> {
     if (raw) {
       const parsed: unknown = JSON.parse(raw)
       if (isValidState(parsed)) {
-        await db.kv.put({ key: STATE_KEY, value: parsed })
+        const migrated = migrateState(parsed)
+        await db.kv.put({ key: STATE_KEY, value: migrated })
         localStorage.removeItem(LEGACY_KEY)
-        return parsed
+        return migrated
       }
     }
   } catch {

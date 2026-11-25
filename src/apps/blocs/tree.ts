@@ -48,3 +48,49 @@ export function deleteFrom(blocks: Block[], id: string): Block[] {
     .filter((b) => b.id !== id)
     .map((b) => (b.children ? { ...b, children: deleteFrom(b.children, id) } : b))
 }
+
+export function removeFrom(
+  blocks: Block[],
+  id: string
+): { blocks: Block[]; removed: Block | null } {
+  let removed: Block | null = null
+  const walk = (arr: Block[]): Block[] =>
+    arr.flatMap((b) => {
+      if (b.id === id) {
+        removed = b
+        return []
+      }
+      if (b.children) return [{ ...b, children: walk(b.children) }]
+      return [b]
+    })
+  return { blocks: walk(blocks), removed }
+}
+
+export function insertAt(
+  blocks: Block[],
+  targetId: string,
+  nb: Block,
+  after: boolean
+): Block[] {
+  const out: Block[] = []
+  for (const b of blocks) {
+    const children = b.children ? insertAt(b.children, targetId, nb, after) : undefined
+    const bb = children ? { ...b, children } : b
+    if (b.id === targetId && !after) out.push(nb)
+    out.push(bb)
+    if (b.id === targetId && after) out.push(nb)
+  }
+  return out
+}
+
+export function moveBlockInTree(
+  blocks: Block[],
+  id: string,
+  targetId: string,
+  after: boolean
+): Block[] {
+  if (id === targetId) return blocks
+  const { blocks: without, removed } = removeFrom(blocks, id)
+  if (!removed) return blocks
+  return insertAt(without, targetId, removed, after)
+}

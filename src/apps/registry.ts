@@ -5,15 +5,17 @@ export interface AppMeta {
   name: string
   description: string
   icon: string
+  logo?: string
   component: LazyExoticComponent<ComponentType>
 }
 
 export const apps: AppMeta[] = [
   {
     id: 'blocs',
-    name: 'Blocs',
-    description: 'Éditeur de blocs type Notion, 100 % local dans ton navigateur.',
-    icon: '▦',
+    name: 'Carnet',
+    description: 'Pages et bases de données type Notion, 100 % local dans ton navigateur.',
+    icon: '🗒️',
+    logo: `${import.meta.env.BASE_URL}app-icons/carnet.svg`,
     component: lazy(() => import('./blocs/BlocsApp'))
   }
 ]

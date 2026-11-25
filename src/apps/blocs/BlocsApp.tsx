@@ -1,35 +1,35 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent
-} from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
-import type { Block, BlocsState, Page } from './types'
+import type { Block, BlocsState, Cover, Page } from './types'
 import { createBlock, createDatabase, createPage, loadState, saveState } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
 import { BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
-import { deleteFrom, findBlock, flattenBlocks, insertAfter, patchBlock } from './tree'
+import {
+  deleteFrom,
+  findBlock,
+  flattenBlocks,
+  insertAfter,
+  moveBlockInTree,
+  patchBlock
+} from './tree'
 import BlockView, { type BlockHandlers } from './BlockView'
 import PageTree from './PageTree'
-
-const EMOJIS = [
-  '▦', '📄', '📝', '✅', '⭐', '🔥', '💡', '📌',
-  '🗂️', '🧠', '🎯', '🚀', '🌱', '🏠', '📚', '🎨',
-  '🔒', '❤️', '🐰', '🌙', '⚡', '🧩'
-]
+import EmojiPicker from './EmojiPicker'
+import CoverMenu from './CoverMenu'
+import { coverStyle } from './covers'
 
 export default function BlocsApp() {
   const [state, setState] = useState<BlocsState | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const coverInput = useRef<HTMLInputElement>(null)
+  const dragBlockId = useRef<string | null>(null)
   const [sync, setSync] = useState<SyncHandle | null>(null)
   const lastJson = useRef('')
   const [query, setQuery] = useState('')
   const [iconOpen, setIconOpen] = useState(false)
+  const [coverMenu, setCoverMenu] = useState<{ x: number; y: number } | null>(null)
   const [slashDismissed, setSlashDismissed] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
 
@@ -125,9 +125,7 @@ export default function BlocsApp() {
 
   const allBlocks = current ? flattenBlocks(current.blocks) : []
 
-  const slashBlock = allBlocks.find(
-    (b) => b.text.startsWith('/') && b.text.length <= 40
-  )
+  const slashBlock = allBlocks.find((b) => b.text.startsWith('/') && b.text.length <= 40)
   const slashQuery = slashBlock ? slashBlock.text.slice(1).toLowerCase() : ''
   const slashItems = BLOCK_TYPES.filter(
     (t) =>
@@ -138,11 +136,11 @@ export default function BlocsApp() {
   const slashOpen = !!slashBlock && !slashDismissed && slashItems.length > 0
 
   const headings = allBlocks
-    .filter((b) => b.type === 'h1' || b.type === 'h2' || b.type === 'h3')
+    .filter((b) => ['h1', 'h2', 'h3', 'h4'].includes(b.type))
     .map((b) => ({
       id: b.id,
       text: b.text,
-      level: b.type === 'h1' ? 1 : b.type === 'h2' ? 2 : 3
+      level: b.type === 'h1' ? 1 : b.type === 'h2' ? 2 : b.type === 'h3' ? 3 : 4
     }))
 
   const crumbs: Page[] = []
@@ -178,8 +176,8 @@ export default function BlocsApp() {
   }
 
   const applySlash = (t: BlockTypeDef) => {
-    if (!slashBlock) return
-    const existing = findBlock(current!.blocks, slashBlock.id)
+    if (!slashBlock || !current) return
+    const existing = findBlock(current.blocks, slashBlock.id)
     updateBlock(slashBlock.id, {
       type: t.type,
       text: '',
@@ -188,8 +186,14 @@ export default function BlocsApp() {
       href: undefined,
       fileName: undefined,
       fileSize: undefined,
+      cols: t.type === 'columns' ? 2 : undefined,
       db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
-      children: t.type === 'toggle' ? (existing?.children ?? []) : undefined
+      children:
+        t.type === 'toggle'
+          ? (existing?.children ?? [])
+          : t.type === 'columns'
+            ? [createBlock('column'), createBlock('column')]
+            : undefined
     })
     setSlashDismissed(true)
   }
@@ -197,10 +201,36 @@ export default function BlocsApp() {
   const insertBlockAfter = (afterId: string) => {
     if (!state || !current) return
     const block = createBlock('paragraph')
-    updatePage(current.id, {
-      blocks: insertAfter(current.blocks, afterId, block)
-    })
+    updatePage(current.id, { blocks: insertAfter(current.blocks, afterId, block) })
     pendingFocus.current = block.id
+  }
+
+  const addChildTo = (parentId: string) => {
+    if (!state || !current) return
+    const parent = findBlock(current.blocks, parentId)
+    const nb = createBlock('paragraph')
+    updatePage(current.id, {
+      blocks: patchBlock(current.blocks, parentId, {
+        children: [...(parent?.children ?? []), nb]
+      })
+    })
+    pendingFocus.current = nb.id
+  }
+
+  const setCols = (id: string, n: number) => {
+    if (!state || !current) return
+    const b = findBlock(current.blocks, id)
+    let cols = [...(b?.children ?? [])]
+    while (cols.length < n) cols.push(createBlock('column'))
+    if (cols.length > n) cols = cols.slice(0, n)
+    updateBlock(id, { cols: n, children: cols })
+  }
+
+  const moveBlock = (id: string, targetId: string, after: boolean) => {
+    if (!state || !current || id === targetId) return
+    updatePage(current.id, {
+      blocks: moveBlockInTree(current.blocks, id, targetId, after)
+    })
   }
 
   const deleteBlock = (id: string) => {
@@ -217,20 +247,15 @@ export default function BlocsApp() {
 
   const handleEnter = (id: string) => {
     const block = current ? findBlock(current.blocks, id) : undefined
-    if (!block) return
+    if (!block || !state || !current) return
     const nb = createBlock(block.type === 'todo' ? 'todo' : 'paragraph')
-    if (!state || !current) return
-    updatePage(current.id, {
-      blocks: insertAfter(current.blocks, id, nb)
-    })
+    updatePage(current.id, { blocks: insertAfter(current.blocks, id, nb) })
     pendingFocus.current = nb.id
   }
 
   const addPage = (parentId: string | null = null) => {
     const page = createPage('Nouvelle page', parentId)
-    setState((s) =>
-      s ? { pages: [page, ...s.pages], currentPageId: page.id } : s
-    )
+    setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
   }
 
   const deletePage = (id: string) => {
@@ -264,6 +289,19 @@ export default function BlocsApp() {
     })
   }
 
+  const movePage = (id: string, targetId: string) => {
+    setState((s) => {
+      if (!s || id === targetId) return s
+      const idx = s.pages.findIndex((p) => p.id === id)
+      const tidx = s.pages.findIndex((p) => p.id === targetId)
+      if (idx < 0 || tidx < 0) return s
+      const pages = [...s.pages]
+      const [p] = pages.splice(idx, 1)
+      pages.splice(tidx, 0, p)
+      return { ...s, pages }
+    })
+  }
+
   const toggleSync = () => {
     if (sync) {
       sync.leave()
@@ -291,7 +329,7 @@ export default function BlocsApp() {
       }
     }, 1500)
     window.alert(
-      `Salon « ${code} » ouvert. Sur l’autre appareil (desktop/tablette), ouvre Blocs → ⇄ Sync et entre ce même code.`
+      `Salon « ${code} » ouvert. Sur l’autre appareil, ouvre Carnet → ⇄ Sync et entre ce même code.`
     )
   }
 
@@ -306,27 +344,8 @@ export default function BlocsApp() {
       )
       if (ok) setState(imported)
     } catch {
-      window.alert('Fichier invalide : un export JSON de Skouar/Blocs est attendu.')
+      window.alert('Fichier invalide : un export JSON de Skouar/Carnet est attendu.')
     }
-  }
-
-  const setCoverFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    e.target.value = ''
-    if (!f || !current) return
-    if (f.size > 2_000_000) {
-      window.alert('Image trop lourde (max 2 Mo) : compresse-la ou utilise une URL.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => updatePage(current.id, { cover: String(reader.result) })
-    reader.readAsDataURL(f)
-  }
-
-  const setCoverUrl = () => {
-    if (!current) return
-    const u = window.prompt('URL de l’image de couverture :', current.cover ?? '')
-    if (u !== null) updatePage(current.id, { cover: u || null })
   }
 
   if (!state || !current) {
@@ -360,6 +379,15 @@ export default function BlocsApp() {
     onChangeDb: (id, db) => updateBlock(id, { db }),
     onEnter: handleEnter,
     onDelete: deleteBlock,
+    onAddChildTo: addChildTo,
+    onSetCols: setCols,
+    onBlockDragStart: (id) => {
+      dragBlockId.current = id
+    },
+    onBlockDrop: (targetId, after) => {
+      if (dragBlockId.current) moveBlock(dragBlockId.current, targetId, after)
+      dragBlockId.current = null
+    },
     isSlashActive: (id) => slashOpen && slashBlock?.id === id,
     onSlashNav: (dir) =>
       setSlashIndex((i) => (i + dir + slashItems.length) % slashItems.length),
@@ -372,6 +400,8 @@ export default function BlocsApp() {
 
   const slashEl = slashBlock ? document.getElementById(`bloc-${slashBlock.id}`) : null
   const slashRect = slashEl?.getBoundingClientRect()
+
+  const cover: Cover | null = current.cover ?? null
 
   return (
     <div className="blocs-app">
@@ -398,11 +428,13 @@ export default function BlocsApp() {
                   <div className="blocs-page-row">
                     <button
                       className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
-                      onClick={() =>
-                        setState((s) => (s ? { ...s, currentPageId: p.id } : s))
-                      }
+                      onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
                     >
-                      {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
+                      {p.icon && (
+                        <span className="blocs-page-icon" style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}>
+                          {p.icon}
+                        </span>
+                      )}
                       {p.title.trim() || 'Sans titre'}
                     </button>
                   </div>
@@ -414,12 +446,11 @@ export default function BlocsApp() {
                 parentId={null}
                 depth={0}
                 currentId={current.id}
-                onSelect={(id) =>
-                  setState((s) => (s ? { ...s, currentPageId: id } : s))
-                }
+                onSelect={(id) => setState((s) => (s ? { ...s, currentPageId: id } : s))}
                 onDelete={deletePage}
                 onAddChild={(id) => addPage(id)}
                 onPromote={promotePage}
+                onMovePage={movePage}
               />
             )}
         </ul>
@@ -437,25 +468,28 @@ export default function BlocsApp() {
           <button className="blocs-io" onClick={() => fileInput.current?.click()}>
             ↑ Importer
           </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={handleImport}
-          />
+          <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={handleImport} />
         </div>
       </aside>
       <main className="blocs-main">
-        {current.cover && (
-          <div className="page-cover">
-            <img src={current.cover} alt="couverture de la page" />
+        {cover && (
+          <div
+            className="page-cover"
+            style={cover.kind === 'color' || cover.kind === 'pattern' ? coverStyle(cover) : undefined}
+          >
+            {(cover.kind === 'url' || cover.kind === 'file') && (
+              <img src={cover.value} alt="couverture de la page" />
+            )}
             <div className="page-cover-actions">
-              <button onClick={() => coverInput.current?.click()}>Changer</button>
-              <button onClick={setCoverUrl}>URL…</button>
-              <button onClick={() => updatePage(current.id, { cover: null })}>
-                Supprimer
+              <button
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setCoverMenu({ x: r.left, y: r.bottom })
+                }}
+              >
+                🖼 Modifier
               </button>
+              <button onClick={() => updatePage(current.id, { cover: null })}>Supprimer</button>
             </div>
           </div>
         )}
@@ -464,9 +498,7 @@ export default function BlocsApp() {
             <span key={c.id} className="crumb-wrap">
               <button
                 className="crumb"
-                onClick={() =>
-                  setState((s) => (s ? { ...s, currentPageId: c.id } : s))
-                }
+                onClick={() => setState((s) => (s ? { ...s, currentPageId: c.id } : s))}
               >
                 {c.icon} {c.title.trim() || 'Sans titre'}
               </button>
@@ -481,34 +513,24 @@ export default function BlocsApp() {
           <div className="page-icon-wrap">
             <button
               className="page-icon-btn"
+              style={current.iconColor ? { backgroundColor: current.iconColor } : undefined}
               title="Icône de la page"
               onClick={() => setIconOpen((o) => !o)}
             >
               {current.icon ?? '＋'}
             </button>
             {iconOpen && (
-              <div className="emoji-pop">
-                {EMOJIS.map((e) => (
-                  <button
-                    key={e}
-                    onClick={() => {
-                      updatePage(current.id, { icon: e })
-                      setIconOpen(false)
-                    }}
-                  >
-                    {e}
-                  </button>
-                ))}
-                <button
-                  title="Retirer l’icône"
-                  onClick={() => {
-                    updatePage(current.id, { icon: null })
-                    setIconOpen(false)
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
+              <EmojiPicker
+                currentColor={current.iconColor}
+                onPick={(e, c) => {
+                  updatePage(current.id, { icon: e, iconColor: c === 'transparent' ? null : c })
+                  setIconOpen(false)
+                }}
+                onClear={() => {
+                  updatePage(current.id, { icon: null, iconColor: null })
+                  setIconOpen(false)
+                }}
+              />
             )}
           </div>
           <input
@@ -517,24 +539,17 @@ export default function BlocsApp() {
             placeholder="Sans titre"
             onChange={(e) => updatePage(current.id, { title: e.target.value })}
           />
+          <button
+            className="page-cover-btn"
+            title="Couverture de la page (couleur, motif, URL, fichier)"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setCoverMenu({ x: r.left, y: r.bottom })
+            }}
+          >
+            🖼
+          </button>
         </div>
-        {!current.cover && (
-          <div className="page-cover-add">
-            <button className="blocs-io" onClick={() => coverInput.current?.click()}>
-              🖼 Ajouter une couverture (fichier)
-            </button>
-            <button className="blocs-io" onClick={setCoverUrl}>
-              🔗 Couverture via URL
-            </button>
-          </div>
-        )}
-        <input
-          ref={coverInput}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={setCoverFile}
-        />
         <div className="blocs-toolbar">
           {BLOCK_TYPES.map((t) => (
             <button
@@ -555,11 +570,14 @@ export default function BlocsApp() {
                   href: undefined,
                   fileName: undefined,
                   fileSize: undefined,
-                  db:
-                    t.type === 'database'
-                      ? (existing?.db ?? createDatabase())
-                      : undefined,
-                  children: t.type === 'toggle' ? (existing?.children ?? []) : undefined
+                  cols: t.type === 'columns' ? 2 : undefined,
+                  db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
+                  children:
+                    t.type === 'toggle'
+                      ? (existing?.children ?? [])
+                      : t.type === 'columns'
+                        ? [createBlock('column'), createBlock('column')]
+                        : undefined
                 })
               }}
             >
@@ -579,10 +597,7 @@ export default function BlocsApp() {
           ＋ Ajouter un bloc
         </button>
         {slashOpen && slashBlock && slashRect && (
-          <div
-            className="slash-menu"
-            style={{ left: slashRect.left, top: slashRect.bottom + 6 }}
-          >
+          <div className="slash-menu" style={{ left: slashRect.left, top: slashRect.bottom + 6 }}>
             {slashItems.map((t, i) => (
               <button
                 key={t.type}
@@ -595,6 +610,13 @@ export default function BlocsApp() {
               </button>
             ))}
           </div>
+        )}
+        {coverMenu && (
+          <CoverMenu
+            anchor={coverMenu}
+            onSelect={(c) => updatePage(current.id, { cover: c })}
+            onClose={() => setCoverMenu(null)}
+          />
         )}
       </main>
     </div>
