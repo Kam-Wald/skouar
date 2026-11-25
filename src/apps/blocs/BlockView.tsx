@@ -55,6 +55,7 @@ export interface BlockHandlers {
   onSetCols(id: string, n: number): void
   onBlockDragStart(id: string): void
   onBlockDrop(targetId: string, after: boolean): void
+  onBlockContextMenu(id: string, e: React.MouseEvent): void
   isSlashActive(id: string): boolean
   onSlashNav(dir: 1 | -1): void
   onSlashEnter(): void
@@ -173,6 +174,10 @@ export default function BlockView({ block, handlers }: Props) {
   )
 
   const rowDropProps = {
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault()
+      handlers.onBlockContextMenu(block.id, e)
+    },
     onDragOver: (e: DragEvent) => {
       e.preventDefault()
       setOver(true)

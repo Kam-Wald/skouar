@@ -68,3 +68,16 @@ export const PLACEHOLDERS: Record<BlockType, string> = {
   pageembed: '',
   database: 'Base de données'
 }
+
+export const BLOCK_CATS: Record<BlockType, string> = {
+  paragraph: 'Texte', h1: 'Texte', h2: 'Texte', h3: 'Texte', h4: 'Texte',
+  quote: 'Texte', code: 'Texte', callout: 'Texte', divider: 'Texte',
+  bullet: 'Listes', numbered: 'Listes', todo: 'Listes', toggle: 'Listes',
+  columns: 'Mise en page', column: 'Mise en page', toc: 'Mise en page', pageembed: 'Mise en page',
+  image: 'Médias', gallery: 'Médias', video: 'Médias', audio: 'Médias',
+  pdf: 'Médias', file: 'Médias', archive: 'Médias', embed: 'Médias',
+  math: 'Avancé', progress: 'Avancé', qr: 'Avancé', countdown: 'Avancé', button: 'Avancé',
+  database: 'Avancé'
+}
+
+export const BLOCK_CAT_ORDER = ['Texte', 'Listes', 'Mise en page', 'Médias', 'Avancé']

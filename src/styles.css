@@ -2418,3 +2418,188 @@ th.drag-over {
   font-size: 0.95rem;
   letter-spacing: -0.01em;
 }
+
+:root {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+.page-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding-top: 0.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 90;
+  min-width: 210px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: var(--shadow);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.ctx-item:hover {
+  background: var(--panel-2);
+}
+
+.ctx-item.danger {
+  color: #f87171;
+}
+
+.ctx-ic {
+  width: 18px;
+  text-align: center;
+}
+
+.slash-menu {
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.slash-cat {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  padding: 6px 8px 2px;
+}
+
+.blocs-side-label {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 0.6rem 0 2px 0.2rem;
+}
+
+.blocs-side-link-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blocs-side-link-time {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--muted);
+  margin: 1rem 0;
+}
+
+.empty-state p {
+  margin: 0.25rem 0;
+}
+
+.empty-hint kbd {
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.empty-state .db-btn {
+  margin-top: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+.empty-state .db-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+}
+
+.toast button {
+  color: var(--accent);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.toast button:hover {
+  border-color: var(--accent);
+}
+
+.skel {
+  background: var(--panel-2);
+  border-radius: 8px;
+  animation: skel-pulse 1.2s ease-in-out infinite;
+}
+
+.skel-title {
+  width: 260px;
+  height: 38px;
+  margin: 1rem 0;
+}
+
+.skel-line {
+  width: min(560px, 80%);
+  height: 18px;
+  margin: 10px 0;
+}
+
+.skel-line.short {
+  width: min(320px, 50%);
+}
+
+.app-loading {
+  padding: 2rem;
+}
+
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

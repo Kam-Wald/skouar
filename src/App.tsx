@@ -5,7 +5,7 @@ import { apps } from './apps/registry'
 
 export default function App() {
   return (
-    <Suspense fallback={<div className="app-loading">Chargement…</div>}>
+    <Suspense fallback={<div className="app-loading"><div className="skel skel-title" /><div className="skel skel-line" /><div className="skel skel-line short" /></div>}>
       <Routes>
         <Route path="/" element={<LauncherHome />} />
         {apps

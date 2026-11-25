@@ -658,7 +658,9 @@ export default function DatabaseView({ db, title, onTitle, onChange, allDbs }: P
               ))}
               {visibleRows.length === 0 && (
                 <tr>
-                  <td className="db-empty" colSpan={db.columns.length + 1}>Aucune ligne</td>
+                  <td className="db-empty" colSpan={db.columns.length + 1}>
+                    Aucune ligne — <button className="db-btn" onClick={addRow}>＋ Nouvelle ligne</button>
+                  </td>
                 </tr>
               )}
             </tbody>

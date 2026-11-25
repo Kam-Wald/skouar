@@ -116,3 +116,18 @@ export function mentionsIn(text: string): string[] {
   while ((m = re.exec(text))) out.push(m[1].trim())
   return out
 }
+
+export function moveSibling(blocks: Block[], id: string, dir: -1 | 1): Block[] {
+  const i = blocks.findIndex((b) => b.id === id)
+  if (i >= 0) {
+    const j = i + dir
+    if (j < 0 || j >= blocks.length) return blocks
+    const arr = [...blocks]
+    const [x] = arr.splice(i, 1)
+    arr.splice(j, 0, x)
+    return arr
+  }
+  return blocks.map((b) =>
+    b.children?.length ? { ...b, children: moveSibling(b.children, id, dir) } : b
+  )
+}
