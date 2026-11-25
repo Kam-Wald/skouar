@@ -41,9 +41,16 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - La barre d'outils convertit le bloc actif (paragraphe, H1, H2, puce, tâche).
 - Sauvegarde automatique (debounced) dans `localStorage`.
 
+## CI/CD et déploiement (GitHub Actions + Pages)
+
+- `.github/workflows/ci.yml` : à chaque PR et chaque push sur `main` → `npm ci` + `npm run build` (typecheck inclus), statut ✅/❌ sur la PR
+- `.github/workflows/pages.yml` : à chaque push sur `main` → build + déploiement de `dist/` sur **GitHub Pages** : la PWA est alors en ligne (HTTPS, installable bureau/tablette) à l'URL `https://<pseudo>.github.io/skouar/`
+- Prérequis manuel une seule fois : Settings → Pages → Source = « GitHub Actions »
+- En local, `base` reste `/` ; en CI il devient automatiquement `/skouar/` (`vite.config.ts`)
+
 ## Roadmap
 
-- [ ] Test de l'installation PWA (bureau + tablette) et hébergement statique (GitHub Pages, etc.)
+- [ ] Test de l'installation PWA en ligne (bureau + tablette) sur l'URL Pages
 - [ ] Stockage IndexedDB (Dexie) + export/import de fichier
 - [ ] Synchro optionnelle entre appareils : CRDT (Yjs), P2P WebRTC ou mini-serveur perso
 - [ ] Version desktop autonome partageable (Tauri)
