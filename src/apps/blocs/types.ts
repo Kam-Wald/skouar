@@ -30,6 +30,7 @@ export type BlockType =
   | 'gallery'
   | 'pageembed'
   | 'database'
+  | 'table'
 
 export type PropType =
   | 'text'
@@ -126,6 +127,8 @@ export interface Block {
   action?: BlockAction
   db?: Database
   children?: Block[]
+  table?: string[][]
+  lang?: string
 }
 
 export interface Page {
@@ -140,6 +143,7 @@ export interface Page {
   tags?: string[]
   deletedAt?: number | null
   lastOpened?: number
+  pinned?: boolean
 }
 
 export interface BlocsState {

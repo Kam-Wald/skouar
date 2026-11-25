@@ -57,7 +57,7 @@ export default function PageTree({
           <li key={p.id}>
             <div
               className={`blocs-page-row${overId === p.id ? ' drag-over' : ''}`}
-              style={{ paddingLeft: depth * 14 }}
+              style={{ paddingLeft: depth * 20 }}
               title={p.lastOpened ? fmtTime(p.lastOpened) : undefined}
               onContextMenu={(e) => onContextMenuPage(p.id, e)}
               {...rowDragProps(p.id)}
@@ -85,11 +85,6 @@ export default function PageTree({
               <button className="blocs-page-act" title="Dupliquer la page" onClick={() => onDuplicate(p.id)}>
                 ⧉
               </button>
-              {depth > 0 && (
-                <button className="blocs-page-act" title="Remonter d’un niveau" onClick={() => onPromote(p.id)}>
-                  ⇤
-                </button>
-              )}
               <button className="blocs-page-del" title="Supprimer la page" onClick={() => onDelete(p.id)}>
                 ×
               </button>

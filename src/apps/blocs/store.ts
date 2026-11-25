@@ -39,7 +39,9 @@ export function createBlock(type: BlockType = 'paragraph', text = ''): Block {
     type,
     text,
     done: type === 'todo' ? false : undefined,
-    children: type === 'toggle' ? [] : undefined
+    children: type === 'toggle' ? [] : undefined,
+    table: type === 'table' ? [['', ''], ['', '']] : undefined,
+    lang: type === 'code' ? 'text' : undefined
   }
 }
 

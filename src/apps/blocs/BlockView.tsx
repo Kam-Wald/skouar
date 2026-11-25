@@ -17,6 +17,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { QRCodeSVG } from 'qrcode.react'
 import { useDismiss } from './useDismiss'
+import { highlightCode } from './highlight'
 
 export interface Heading {
   id: string
@@ -56,6 +57,8 @@ export interface BlockHandlers {
   onBlockDragStart(id: string): void
   onBlockDrop(targetId: string, after: boolean): void
   onBlockContextMenu(id: string, e: React.MouseEvent): void
+  onSetTable(id: string, rows: string[][]): void
+  onSetLang(id: string, lang: string): void
   isSlashActive(id: string): boolean
   onSlashNav(dir: 1 | -1): void
   onSlashEnter(): void
@@ -75,6 +78,13 @@ export function youtubeEmbed(url: string): string | null {
   )
   return m ? `https://www.youtube.com/embed/${m[1]}` : null
 }
+
+const TEXT_COLORS = ['#e6eaf2', '#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9']
+const HL_COLORS = [
+  'rgba(250,204,21,0.35)', 'rgba(74,222,128,0.35)', 'rgba(34,211,238,0.35)',
+  'rgba(129,140,248,0.35)', 'rgba(248,113,113,0.35)', 'rgba(232,121,249,0.35)'
+]
+const LANGS = ['text', 'js', 'ts', 'python', 'json', 'css', 'html', 'bash', 'sql']
 
 const MEDIA_META: Record<string, { icon: string; urlLabel: string; accept: string }> = {
   pdf: { icon: '📕', urlLabel: 'URL du PDF…', accept: 'application/pdf' },
@@ -98,6 +108,8 @@ export default function BlockView({ block, handlers }: Props) {
   const [duePop, setDuePop] = useState<null | { x: number; y: number }>(null)
   useDismiss(`url-${block.id}`, !!urlPop, () => setUrlPop(null))
   useDismiss(`due-${block.id}`, !!duePop, () => setDuePop(null))
+  const [selBar, setSelBar] = useState<null | { x: number; y: number }>(null)
+  useDismiss(`sel-${block.id}`, !!selBar, () => setSelBar(null))
   const active = handlers.isActive(block.id)
   const slashActive = handlers.isSlashActive(block.id)
 
@@ -202,6 +214,33 @@ export default function BlockView({ block, handlers }: Props) {
     })
   }
 
+  const updateSel = () => {
+    const el = ref.current
+    if (!el) return
+    const s = window.getSelection()
+    if (!s || s.isCollapsed || s.rangeCount === 0) {
+      setSelBar(null)
+      return
+    }
+    const r = s.getRangeAt(0)
+    if (!el.contains(r.commonAncestorContainer)) {
+      setSelBar(null)
+      return
+    }
+    const rect = r.getBoundingClientRect()
+    setSelBar({
+      x: Math.min(Math.max(8, rect.left + rect.width / 2 - 130), window.innerWidth - 280),
+      y: Math.max(8, rect.top - 46)
+    })
+  }
+
+  const applySelColor = (kind: 'fore' | 'back', color: string | null) => {
+    document.execCommand('styleWithCSS', false, 'true')
+    if (kind === 'fore') document.execCommand('foreColor', false, color ?? 'inherit')
+    else document.execCommand('hiliteColor', false, color ?? 'transparent')
+    if (ref.current) handlers.onChangeText(block.id, ref.current.innerHTML)
+  }
+
   const mediaMeta = MEDIA_META[block.type]
   if (mediaMeta) {
     const isUpload = block.type === 'pdf' || block.type === 'file' || block.type === 'archive'
@@ -275,6 +314,109 @@ export default function BlockView({ block, handlers }: Props) {
             onClose={() => setUrlPop(null)}
           />
         )}
+      </div>
+    )
+  }
+
+  if (block.type === 'table') {
+    const rows = block.table ?? [['', ''], ['', '']]
+    const setCell = (ri: number, ci: number, html: string) =>
+      handlers.onSetTable(
+        block.id,
+        rows.map((row, r) => row.map((cell, c) => (r === ri && c === ci ? html : cell)))
+      )
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="table-wrap">
+          {active && (
+            <div className="table-tools">
+              <button className="db-btn" onClick={() => handlers.onSetTable(block.id, [...rows, rows[0].map(() => '')])}>
+                ＋ ligne
+              </button>
+              <button className="db-btn" onClick={() => handlers.onSetTable(block.id, rows.map((r) => [...r, '']))}>
+                ＋ colonne
+              </button>
+            </div>
+          )}
+          <table className="block-table">
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td key={ci}>
+                      <div
+                        className="table-cell"
+                        contentEditable
+                        suppressContentEditableWarning
+                        data-placeholder="…"
+                        onFocus={() => handlers.onActivate(block.id)}
+                        onInput={(e) => setCell(ri, ci, e.currentTarget.innerHTML)}
+                        ref={(el) => {
+                          if (el && el.innerHTML !== cell) el.innerHTML = cell
+                        }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (block.type === 'code') {
+    const [editing, setEditing] = useState(false)
+    const raw = block.text
+    const lines = raw.split('\n')
+    return (
+      <div className={`block-row${active ? ' block-active' : ''}${over ? ' drag-over' : ''}`} {...rowDropProps}>
+        {dragHandle}
+        <div className="code-wrap">
+          <div className="code-head">
+            <select
+              className="db-select"
+              value={block.lang ?? 'text'}
+              onChange={(e) => handlers.onSetLang(block.id, e.target.value)}
+              title="Langage"
+            >
+              {LANGS.map((l) => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+            <button className="db-btn" title="Copier le code" onClick={() => void navigator.clipboard.writeText(raw)}>
+              ⧉ Copier
+            </button>
+          </div>
+          <div className="code-body">
+            <div className="code-gutter">
+              {lines.map((_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+            {editing ? (
+              <textarea
+                className="code-edit"
+                autoFocus
+                value={raw}
+                onChange={(e) => handlers.onChangeText(block.id, e.target.value)}
+                onBlur={() => setEditing(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+              />
+            ) : (
+              <pre
+                className="code-view"
+                title="Cliquer pour éditer"
+                onClick={() => setEditing(true)}
+                dangerouslySetInnerHTML={{ __html: highlightCode(raw || ' ', block.lang ?? 'text') }}
+              />
+            )}
+          </div>
+        </div>
       </div>
     )
   }
@@ -831,7 +973,28 @@ export default function BlockView({ block, handlers }: Props) {
         onFocus={() => handlers.onActivate(block.id)}
         onInput={(e) => handlers.onChangeText(block.id, e.currentTarget.innerHTML)}
         onKeyDown={handleKeyDown}
+        onMouseUp={updateSel}
+        onKeyUp={(e) => {
+          if (e.shiftKey || e.key.startsWith('Arrow')) updateSel()
+        }}
       />
+      {selBar && (
+        <div className="sel-bar" data-pop={`sel-${block.id}`} style={{ left: selBar.x, top: selBar.y }}>
+          <span className="sel-row">
+            {TEXT_COLORS.map((c) => (
+              <button key={c} className="emoji-color" style={{ backgroundColor: c }} title={`Texte ${c}`} onMouseDown={(e) => e.preventDefault()} onClick={() => applySelColor('fore', c)} />
+            ))}
+            <button className="emoji-color sel-none" title="Couleur auto" onMouseDown={(e) => e.preventDefault()} onClick={() => applySelColor('fore', null)} />
+          </span>
+          <span className="sel-sep" />
+          <span className="sel-row">
+            {HL_COLORS.map((c) => (
+              <button key={c} className="emoji-color" style={{ backgroundColor: c }} title={`Surligner ${c}`} onMouseDown={(e) => e.preventDefault()} onClick={() => applySelColor('back', c)} />
+            ))}
+            <button className="emoji-color sel-none" title="Pas de surlignage" onMouseDown={(e) => e.preventDefault()} onClick={() => applySelColor('back', null)} />
+          </span>
+        </div>
+      )}
     </div>
   )
 }

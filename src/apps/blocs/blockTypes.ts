@@ -30,7 +30,8 @@ export const BLOCK_TYPES = [
   { type: 'pageembed', label: '🔗', title: 'Aperçu de page liée' },
   { type: 'button', label: '🔘', title: 'Bouton (lien ou automatisation)' },
   { type: 'toc', label: '☰', title: 'Table des matières' },
-  { type: 'database', label: '▦', title: 'Base de données' }
+  { type: 'database', label: '▦', title: 'Base de données' },
+  { type: 'table', label: '⊞', title: 'Tableau simple' }
 ] as const
 
 export type BlockTypeDef = (typeof BLOCK_TYPES)[number]
@@ -48,6 +49,7 @@ export const PLACEHOLDERS: Record<BlockType, string> = {
   code: 'Code…',
   callout: 'Encadré…',
   divider: '',
+  table: '',
   image: '',
   gallery: '',
   video: '',
@@ -73,7 +75,7 @@ export const BLOCK_CATS: Record<BlockType, string> = {
   paragraph: 'Texte', h1: 'Texte', h2: 'Texte', h3: 'Texte', h4: 'Texte',
   quote: 'Texte', code: 'Texte', callout: 'Texte', divider: 'Texte',
   bullet: 'Listes', numbered: 'Listes', todo: 'Listes', toggle: 'Listes',
-  columns: 'Mise en page', column: 'Mise en page', toc: 'Mise en page', pageembed: 'Mise en page',
+  columns: 'Mise en page', column: 'Mise en page', toc: 'Mise en page', pageembed: 'Mise en page', table: 'Mise en page',
   image: 'Médias', gallery: 'Médias', video: 'Médias', audio: 'Médias',
   pdf: 'Médias', file: 'Médias', archive: 'Médias', embed: 'Médias',
   math: 'Avancé', progress: 'Avancé', qr: 'Avancé', countdown: 'Avancé', button: 'Avancé',

@@ -28,6 +28,7 @@ import { exportFile, parseMarkdown, toMarkdown } from './markdown'
 import ThemeButton from '../../ThemeButton'
 import GraphView from './GraphView'
 import DashboardView from './DashboardView'
+import { exportPageHtml } from './share'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
@@ -396,6 +397,9 @@ export default function BlocsApp() {
     .filter((p) => p.lastOpened && p.id !== current?.id)
     .sort((a, b) => (b.lastOpened ?? 0) - (a.lastOpened ?? 0))
     .slice(0, 4)
+  const pinnedPages = livePages.filter((p) => p.pinned)
+  const pageTodos = allBlocks.filter((b) => b.type === 'todo')
+  const pageTodosDone = pageTodos.filter((b) => b.done).length
   const incoming = state ? livePages.filter((p) => p.id !== current?.id && flattenBlocks(p.blocks).some((b) => mentionsIn(plain(b)).includes(currentTitle))) : []
   const outgoing = current ? [...new Set(allBlocks.flatMap((b) => mentionsIn(plain(b))))] : []
 
@@ -509,6 +513,7 @@ export default function BlocsApp() {
 
   const openPageCtx = (id: string, e: React.MouseEvent) => {
     e.preventDefault()
+    const p = state?.pages.find((x) => x.id === id)
     setCtx({
       x: Math.min(e.clientX, Math.max(8, window.innerWidth - 230)),
       y: Math.min(e.clientY, Math.max(8, window.innerHeight - 190)),
@@ -516,6 +521,8 @@ export default function BlocsApp() {
         { label: 'Ouvrir', icon: '↗', onClick: () => { setState((s) => (s ? { ...s, currentPageId: id } : s)); setSidebarOpen(false) } },
         { label: 'Dupliquer', icon: '⧉', onClick: () => duplicatePage(id) },
         { label: 'Nouvelle sous-page', icon: '＋', onClick: () => addPage(id) },
+        { label: p?.pinned ? 'Retirer des favoris' : 'Épingler dans les favoris', icon: '📌', onClick: () => updatePage(id, { pinned: !p?.pinned }) },
+        { label: 'Remonter d’un niveau', icon: '⇤', onClick: () => promotePage(id) },
         { label: 'Envoyer à la corbeille', icon: '🗑', danger: true, onClick: () => deletePage(id) }
       ]
     })
@@ -771,6 +778,8 @@ export default function BlocsApp() {
     allDbs,
     onChangeDb: (id, db) => updateBlock(id, { db }),
     onBlockContextMenu: openBlockCtx,
+    onSetTable: (id, rows) => updateBlock(id, { table: rows }),
+    onSetLang: (id, lang) => updateBlock(id, { lang }),
     onEnter: handleEnter,
     onDelete: deleteBlock,
     onAddChildTo: addChildTo,
@@ -862,6 +871,25 @@ export default function BlocsApp() {
           <span>🔔 Rappels</span>
           {dueTodos.length > 0 && <span className="db-type">{dueTodos.length}</span>}
         </button>
+        {!showTrash && pinnedPages.length > 0 && (
+          <>
+            <div className="blocs-side-label">Favoris</div>
+            {pinnedPages.map((p) => (
+              <button
+                key={p.id}
+                className="blocs-side-link"
+                onClick={() => {
+                  setState((s) => (s ? { ...s, currentPageId: p.id } : s))
+                  setSidebarOpen(false)
+                }}
+              >
+                <span className="blocs-side-link-ic">{p.icon ?? '📄'}</span>
+                <span className="blocs-side-link-title">{stripHtml(p.title).trim() || 'Sans titre'}</span>
+                <span className="blocs-side-link-ic">📌</span>
+              </button>
+            ))}
+          </>
+        )}
         {!showTrash && recents.length > 0 && (
           <>
             <div className="blocs-side-label">Récents</div>
@@ -1105,8 +1133,19 @@ export default function BlocsApp() {
             <button className="page-cover-btn" title="Tableau de bord de la page" onClick={() => setDashOpen((o) => !o)}>
               📊
             </button>
+            <button className="page-cover-btn" title="Exporter la page en HTML autonome (fichier partageable)" onClick={() => exportPageHtml(current)}>
+              🔗
+            </button>
           </div>
         </div>
+          {pageTodos.length > 0 && (
+            <div className="page-progress" title={`${pageTodosDone}/${pageTodos.length} tâches terminées`}>
+              <div className="page-progress-track">
+                <div className="page-progress-bar" style={{ width: `${Math.round((pageTodosDone / pageTodos.length) * 100)}%` }} />
+              </div>
+              <span className="db-type">{pageTodosDone}/{pageTodos.length}</span>
+            </div>
+          )}
         </div>
         {current.tags && current.tags.length > 0 && (
           <div className="tag-chips page-tags">
