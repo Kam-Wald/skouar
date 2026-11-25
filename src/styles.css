@@ -2362,3 +2362,59 @@ th.drag-over {
   width: 20px;
   text-align: center;
 }
+
+.app-tile {
+  position: relative;
+}
+
+.app-tile-index {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.emoji-sec {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  padding: 4px 2px 0;
+}
+
+.emoji-grid {
+  max-height: 140px;
+}
+
+.blocs-app-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.blocs-app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.blocs-app-brand:hover .blocs-app-name {
+  color: var(--accent);
+}
+
+.blocs-app-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: block;
+}
+
+.blocs-app-name {
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}

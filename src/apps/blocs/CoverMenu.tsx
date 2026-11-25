@@ -33,7 +33,7 @@ export default function CoverMenu({
   }
 
   return (
-    <div className="cover-menu" style={{ left: x, top: anchor.y + 8 }}>
+    <div className="cover-menu" data-pop="cover" style={{ left: x, top: anchor.y + 8 }}>
       <div className="cover-tabs">
         <button className={tab === 'color' ? 'active' : ''} onClick={() => setTab('color')}>
           🎨 Couleur
