@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react'
 import type { CellValue, Column, Database, PropType, Row, ViewType } from './types'
 import { createColumn, createRow } from './store'
-import { BoardView, CalendarView, GalleryView } from './dbViews'
+import {
+  BoardView,
+  CalendarView,
+  ChartView,
+  FeedView,
+  GalleryView,
+  ListView,
+  TimelineView
+} from './dbViews'
 
 const PROP_LABELS: Record<PropType, string> = {
   text: 'Texte',
@@ -169,28 +177,26 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
     patch(extra)
   }
 
-  const addColumn = () => {
-    const name = window.prompt('Nom de la colonne :', 'Nouvelle colonne')
+  const [colForm, setColForm] = useState(false)
+  const [colName, setColName] = useState('')
+  const [colType, setColType] = useState<PropType>('text')
+  const [colOpts, setColOpts] = useState('')
+
+  const submitColumn = () => {
+    const name = colName.trim()
     if (!name) return
-    const raw = window.prompt(
-      'Type : text | number | select | date | checkbox',
-      'text'
-    )
-    const type = PROP_TYPES.includes(raw as PropType)
-      ? (raw as PropType)
-      : 'text'
-    const col = createColumn(name, type)
-    if (type === 'select') {
-      const opts = window.prompt(
-        'Options de la sélection (séparées par des virgules) :',
-        ''
-      )
-      col.options = (opts ?? '')
+    const col = createColumn(name, colType)
+    if (colType === 'select') {
+      col.options = colOpts
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
     }
     patch({ columns: [...db.columns, col] })
+    setColForm(false)
+    setColName('')
+    setColType('text')
+    setColOpts('')
   }
 
   const addRow = () => patch({ rows: [...db.rows, createRow(db.columns)] })
@@ -257,6 +263,10 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           <option value="board">▮ Board</option>
           <option value="gallery">▤ Galerie</option>
           <option value="calendar">▦ Calendrier</option>
+          <option value="list">☰ Liste</option>
+          <option value="timeline">🕒 Chronologie</option>
+          <option value="feed">📰 Fil d’actus</option>
+          <option value="chart">📊 Graphique</option>
         </select>
         {view === 'board' && (
           <select
@@ -278,7 +288,7 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
         <button className="db-btn" onClick={addRow}>
           + Ligne
         </button>
-        <button className="db-btn" onClick={addColumn}>
+        <button className="db-btn" onClick={() => setColForm(true)}>
           + Colonne
         </button>
         <select
@@ -347,6 +357,49 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           </button>
         )}
       </div>
+      {colForm && (
+        <div className="db-col-form">
+          <input
+            className="db-input"
+            placeholder="Nom de la colonne"
+            value={colName}
+            autoFocus
+            onChange={(e) => setColName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitColumn()
+              if (e.key === 'Escape') setColForm(false)
+            }}
+          />
+          <select
+            className="db-select"
+            value={colType}
+            onChange={(e) => setColType(e.target.value as PropType)}
+          >
+            {PROP_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {PROP_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          {colType === 'select' && (
+            <input
+              className="db-input"
+              placeholder="Options séparées par des virgules"
+              value={colOpts}
+              onChange={(e) => setColOpts(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitColumn()
+              }}
+            />
+          )}
+          <button className="db-btn" onClick={submitColumn}>
+            Ajouter
+          </button>
+          <button className="db-btn" onClick={() => setColForm(false)}>
+            Annuler
+          </button>
+        </div>
+      )}
       {view === 'table' && (
       <div className="db-scroll">
         <table className="db-table">
@@ -408,13 +461,25 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
       </div>
       )}
       {view === 'board' && (
-        <BoardView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+        <BoardView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
       )}
       {view === 'gallery' && (
-        <GalleryView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+        <GalleryView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
       )}
       {view === 'calendar' && (
-        <CalendarView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+        <CalendarView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
+      )}
+      {view === 'list' && (
+        <ListView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
+      )}
+      {view === 'timeline' && (
+        <TimelineView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
+      )}
+      {view === 'feed' && (
+        <FeedView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
+      )}
+      {view === 'chart' && (
+        <ChartView db={db} rows={visibleRows} onUpdateCell={updateCell} onPatch={patch} />
       )}
     </div>
   )

@@ -34,7 +34,13 @@ export function uid(): string {
 }
 
 export function createBlock(type: BlockType = 'paragraph', text = ''): Block {
-  return { id: uid(), type, text, done: type === 'todo' ? false : undefined }
+  return {
+    id: uid(),
+    type,
+    text,
+    done: type === 'todo' ? false : undefined,
+    children: type === 'toggle' ? [] : undefined
+  }
 }
 
 export function createPage(title: string, parentId: string | null = null): Page {
@@ -48,7 +54,7 @@ export function createColumn(name: string, type: PropType): Column {
 export function createRow(columns: Column[]): Row {
   const cells: Record<string, CellValue> = {}
   for (const c of columns) cells[c.id] = c.type === 'checkbox' ? false : null
-  return { id: uid(), cells }
+  return { id: uid(), cells, createdAt: Date.now() }
 }
 
 export function createDatabase(): Database {
@@ -62,6 +68,7 @@ export function createDatabase(): Database {
 
 export function seedState(): BlocsState {
   const page = createPage('Bienvenue dans Blocs')
+  page.icon = '▦'
   page.blocks = [
     createBlock('h1', 'Bienvenue dans Blocs ▦'),
     createBlock(
