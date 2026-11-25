@@ -763,14 +763,15 @@ a {
   z-index: 50;
   top: 54px;
   left: 0;
-  display: grid;
-  grid-template-columns: repeat(6, 34px);
+  display: flex;
+  flex-direction: column;
   gap: 2px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 6px;
+  padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-width: calc(100vw - 24px);
 }
 
 .emoji-pop button {
@@ -2250,4 +2251,114 @@ th.drag-over {
   background: var(--glass);
   backdrop-filter: blur(18px) saturate(1.3);
   -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.app-tile.soon {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.app-tile.soon:hover {
+  transform: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.app-tile-badge {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.blocs-sidebar,
+.blocs-page-list {
+  overflow-x: hidden;
+}
+
+.blocs-page-list li {
+  display: block;
+}
+
+.blocs-page-row,
+.blocs-page-item {
+  min-width: 0;
+}
+
+.blocs-page-sub {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rappels-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.rappels-row:hover {
+  border-color: var(--accent);
+}
+
+.rappels-row.has-soon {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.rappels-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.rappels-row.has-soon .rappels-dot {
+  background: #ef4444;
+  animation: rappel-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rappel-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.rappels-row .db-type {
+  margin-left: auto;
+}
+
+.blocs-side-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.blocs-side-link:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.blocs-side-link-ic {
+  width: 20px;
+  text-align: center;
 }

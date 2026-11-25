@@ -6,7 +6,8 @@ export interface AppMeta {
   description: string
   icon: string
   logo?: string
-  component: LazyExoticComponent<ComponentType>
+  soon?: boolean
+  component?: LazyExoticComponent<ComponentType>
 }
 
 export const apps: AppMeta[] = [
@@ -17,5 +18,26 @@ export const apps: AppMeta[] = [
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,
     component: lazy(() => import('./blocs/BlocsApp'))
+  },
+  {
+    id: 'taol',
+    name: 'Taol',
+    description: 'Tableur 100 % local — bientôt disponible.',
+    icon: '🧮',
+    soon: true
+  },
+  {
+    id: 'skeud',
+    name: 'Skeud',
+    description: 'Galerie et retouche d’images, 100 % local — bientôt disponible.',
+    icon: '🖼️',
+    soon: true
+  },
+  {
+    id: 'son',
+    name: 'Son',
+    description: 'Bibliothèque audio locale — bientôt disponible.',
+    icon: '🎧',
+    soon: true
   }
 ]
