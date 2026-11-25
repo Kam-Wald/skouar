@@ -1,10 +1,40 @@
-export type BlockType = 'paragraph' | 'h1' | 'h2' | 'todo' | 'bullet'
+export type BlockType =
+  | 'paragraph'
+  | 'h1'
+  | 'h2'
+  | 'todo'
+  | 'bullet'
+  | 'database'
+
+export type PropType = 'text' | 'number' | 'select' | 'date' | 'checkbox'
+
+export interface Column {
+  id: string
+  name: string
+  type: PropType
+  options?: string[]
+}
+
+export type CellValue = string | number | boolean | null
+
+export interface Row {
+  id: string
+  cells: Record<string, CellValue>
+}
+
+export interface Database {
+  id: string
+  title: string
+  columns: Column[]
+  rows: Row[]
+}
 
 export interface Block {
   id: string
   type: BlockType
   text: string
   done?: boolean
+  db?: Database
 }
 
 export interface Page {

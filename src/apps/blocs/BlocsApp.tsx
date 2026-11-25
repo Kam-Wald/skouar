@@ -6,17 +6,19 @@ import {
   type KeyboardEvent
 } from 'react'
 import { Link } from 'react-router-dom'
-import type { Block, BlockType, BlocsState, Page } from './types'
-import { createBlock, createPage, loadState, saveState } from './store'
+import type { Block, BlockType, BlocsState, Database, Page } from './types'
+import { createBlock, createDatabase, createPage, loadState, saveState } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
+import DatabaseView from './DatabaseView'
 
 const BLOCK_TYPES: { type: BlockType; label: string; title: string }[] = [
   { type: 'paragraph', label: '¶', title: 'Paragraphe' },
   { type: 'h1', label: 'H1', title: 'Titre 1' },
   { type: 'h2', label: 'H2', title: 'Titre 2' },
   { type: 'bullet', label: '•', title: 'Liste à puces' },
-  { type: 'todo', label: '☑', title: 'Tâche' }
+  { type: 'todo', label: '☑', title: 'Tâche' },
+  { type: 'database', label: '▦', title: 'Base de données' }
 ]
 
 const PLACEHOLDERS: Record<BlockType, string> = {
@@ -24,7 +26,8 @@ const PLACEHOLDERS: Record<BlockType, string> = {
   h1: 'Titre 1',
   h2: 'Titre 2',
   bullet: 'Élément de liste',
-  todo: 'Tâche à faire'
+  todo: 'Tâche à faire',
+  database: 'Base de données'
 }
 
 interface BlockViewProps {
@@ -33,6 +36,7 @@ interface BlockViewProps {
   onActivate: (id: string) => void
   onChangeText: (id: string, text: string) => void
   onToggleDone: (id: string) => void
+  onChangeDb: (id: string, db: Database) => void
   onEnter: (id: string) => void
   onBackspaceEmpty: (id: string) => void
 }
@@ -43,6 +47,7 @@ function BlockView({
   onActivate,
   onChangeText,
   onToggleDone,
+  onChangeDb,
   onEnter,
   onBackspaceEmpty
 }: BlockViewProps) {
@@ -62,6 +67,22 @@ function BlockView({
       e.preventDefault()
       onBackspaceEmpty(block.id)
     }
+  }
+
+  if (block.type === 'database') {
+    return (
+      <div
+        className={`block-row block-db${active ? ' block-active' : ''}`}
+        onFocus={() => onActivate(block.id)}
+      >
+        <DatabaseView
+          db={block.db ?? createDatabase()}
+          title={block.text}
+          onTitle={(t) => onChangeText(block.id, t)}
+          onChange={(db) => onChangeDb(block.id, db)}
+        />
+      </div>
+    )
   }
 
   return (
@@ -361,13 +382,22 @@ export default function BlocsApp() {
                   ? 'tool active'
                   : 'tool'
               }
-              onClick={() =>
-                activeId &&
-                updateBlock(activeId, {
-                  type: t.type,
-                  done: t.type === 'todo' ? false : undefined
-                })
-              }
+              onClick={() => {
+                if (!activeId) return
+                if (t.type === 'database') {
+                  const existing = current.blocks.find((b) => b.id === activeId)
+                  updateBlock(activeId, {
+                    type: 'database',
+                    done: undefined,
+                    db: existing?.db ?? createDatabase()
+                  })
+                } else {
+                  updateBlock(activeId, {
+                    type: t.type,
+                    done: t.type === 'todo' ? false : undefined
+                  })
+                }
+              }}
             >
               {t.label}
             </button>
@@ -386,6 +416,7 @@ export default function BlocsApp() {
                   done: !(current.blocks.find((x) => x.id === id)?.done ?? false)
                 })
               }
+              onChangeDb={(id, db) => updateBlock(id, { db })}
               onEnter={handleEnter}
               onBackspaceEmpty={deleteBlock}
             />

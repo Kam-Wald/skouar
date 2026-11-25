@@ -1,5 +1,15 @@
 import Dexie, { type Table } from 'dexie'
-import type { Block, BlockType, BlocsState, Page } from './types'
+import type {
+  Block,
+  BlockType,
+  BlocsState,
+  CellValue,
+  Column,
+  Database,
+  Page,
+  PropType,
+  Row
+} from './types'
 
 const LEGACY_KEY = 'skouar:blocs:v1'
 const STATE_KEY = 'blocs'
@@ -29,6 +39,25 @@ export function createBlock(type: BlockType = 'paragraph', text = ''): Block {
 
 export function createPage(title: string): Page {
   return { id: uid(), title, blocks: [createBlock()], updatedAt: Date.now() }
+}
+
+export function createColumn(name: string, type: PropType): Column {
+  return { id: uid(), name, type, options: type === 'select' ? [] : undefined }
+}
+
+export function createRow(columns: Column[]): Row {
+  const cells: Record<string, CellValue> = {}
+  for (const c of columns) cells[c.id] = c.type === 'checkbox' ? false : null
+  return { id: uid(), cells }
+}
+
+export function createDatabase(): Database {
+  return {
+    id: uid(),
+    title: '',
+    columns: [createColumn('Nom', 'text')],
+    rows: []
+  }
 }
 
 export function seedState(): BlocsState {
