@@ -19,19 +19,30 @@ export default function LauncherHome() {
         </div>
       </header>
       <main className="launcher-grid">
-        {apps.map((app) => (
-          <Link key={app.id} to={`/app/${app.id}`} className="app-tile">
-            {app.logo ? (
-              <img className="app-tile-logo" src={app.logo} alt="" />
-            ) : (
+        {apps.map((app) =>
+          app.soon ? (
+            <div key={app.id} className="app-tile soon" aria-disabled="true">
               <span className="app-tile-icon" aria-hidden>
                 {app.icon}
               </span>
-            )}
-            <span className="app-tile-name">{app.name}</span>
-            <span className="app-tile-desc">{app.description}</span>
-          </Link>
-        ))}
+              <span className="app-tile-name">{app.name}</span>
+              <span className="app-tile-desc">{app.description}</span>
+              <span className="app-tile-badge">Bientôt</span>
+            </div>
+          ) : (
+            <Link key={app.id} to={`/app/${app.id}`} className="app-tile">
+              {app.logo ? (
+                <img className="app-tile-logo" src={app.logo} alt="" />
+              ) : (
+                <span className="app-tile-icon" aria-hidden>
+                  {app.icon}
+                </span>
+              )}
+              <span className="app-tile-name">{app.name}</span>
+              <span className="app-tile-desc">{app.description}</span>
+            </Link>
+          )
+        )}
       </main>
       <footer className="launcher-footer">
         Local-first : tes données restent sur cet appareil.

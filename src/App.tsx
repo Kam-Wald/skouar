@@ -8,13 +8,12 @@ export default function App() {
     <Suspense fallback={<div className="app-loading">Chargement…</div>}>
       <Routes>
         <Route path="/" element={<LauncherHome />} />
-        {apps.map((app) => (
-          <Route
-            key={app.id}
-            path={`/app/${app.id}/*`}
-            element={<app.component />}
-          />
-        ))}
+        {apps
+          .filter((app) => app.component)
+          .map((app) => {
+            const C = app.component!
+            return <Route key={app.id} path={`/app/${app.id}/*`} element={<C />} />
+          })}
         <Route path="*" element={<LauncherHome />} />
       </Routes>
     </Suspense>

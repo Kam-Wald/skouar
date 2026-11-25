@@ -205,6 +205,7 @@ export default function BlocsApp() {
       )
     : []
   const overdue = dueTodos.filter((d) => new Date(d.block.due!).getTime() <= Date.now())
+  const soon48 = dueTodos.filter((d) => new Date(d.block.due!).getTime() <= Date.now() + 48 * 3600 * 1000)
 
   useEffect(() => {
     if (!state) return
@@ -751,29 +752,20 @@ export default function BlocsApp() {
             <button className="blocs-new-page" onClick={() => setGraphOpen(true)} title="Graphe des pages (liens [[…]])">
               🕸
             </button>
-            <button
-              className="blocs-new-page bell-btn"
-              onClick={() => setBellOpen((o) => !o)}
-              title={`${dueTodos.length} tâche(s) avec rappel — ${overdue.length} en retard`}
-            >
-              🔔
-              {overdue.length > 0 && <span className="bell-badge">{overdue.length}</span>}
-            </button>
             <button className="blocs-new-page" onClick={() => setShowTrash((v) => !v)} title="Corbeille / Pages">
               🗑
             </button>
-            {!showTrash && (
-              <>
-                <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Nouvelle page (avec template)">
-                  ＋
-                </button>
-                <button className="blocs-new-page" onClick={() => setTplOpen(true)} title="Modèles / templates (20)">
-                  📋
-                </button>
-              </>
-            )}
           </div>
         </div>
+        <button
+          className={`rappels-row${soon48.length > 0 ? ' has-soon' : ''}`}
+          onClick={() => setBellOpen((o) => !o)}
+          title={`${dueTodos.length} rappel(s) — ${overdue.length} en retard, ${soon48.length} dans les 48 h`}
+        >
+          <span className="rappels-dot" />
+          <span>🔔 Rappels</span>
+          {dueTodos.length > 0 && <span className="db-type">{dueTodos.length}</span>}
+        </button>
         <ul className="blocs-page-list">
           {showTrash
             ? trashPages.map((p) => (
@@ -828,6 +820,22 @@ export default function BlocsApp() {
                 />
               )}
         </ul>
+        {!showTrash && (
+          <>
+            <button
+              className="blocs-side-link"
+              onClick={() => {
+                addPage(null)
+                setSidebarOpen(false)
+              }}
+            >
+              <span className="blocs-side-link-ic">＋</span> Nouvelle page
+            </button>
+            <button className="blocs-side-link" onClick={() => setTplOpen(true)}>
+              <span className="blocs-side-link-ic">📋</span> Templates
+            </button>
+          </>
+        )}
         <div className="blocs-sidebar-foot">
           <ThemeButton />
           <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P">

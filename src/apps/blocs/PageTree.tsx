@@ -88,18 +88,20 @@ export default function PageTree({
                 ×
               </button>
             </div>
-            <PageTree
-              pages={pages}
-              parentId={p.id}
-              depth={depth + 1}
-              currentId={currentId}
-              onSelect={onSelect}
-              onDelete={onDelete}
-              onAddChild={onAddChild}
-              onPromote={onPromote}
-              onMovePage={onMovePage}
-              onDuplicate={onDuplicate}
-            />
+            <ul className="blocs-page-sub">
+              <PageTree
+                pages={pages}
+                parentId={p.id}
+                depth={depth + 1}
+                currentId={currentId}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                onAddChild={onAddChild}
+                onPromote={onPromote}
+                onMovePage={onMovePage}
+                onDuplicate={onDuplicate}
+              />
+            </ul>
           </li>
         ))}
     </>
