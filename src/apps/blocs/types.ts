@@ -73,6 +73,8 @@ export interface Block {
   type: BlockType
   text: string
   done?: boolean
+  due?: string | null
+  notified?: boolean
   src?: string
   href?: string
   fileName?: string

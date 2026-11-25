@@ -1701,3 +1701,106 @@ th.drag-over {
     color: #000;
   }
 }
+
+.todo-due-btn {
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0 4px;
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.todo-due-btn.set {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.bell-btn {
+  position: relative;
+}
+
+.bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  min-width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  padding: 0 3px;
+}
+
+.bell-pop {
+  width: min(420px, 92vw);
+}
+
+.graph-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.graph-svg {
+  flex: 1;
+  width: 100%;
+}
+
+.graph-edge {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node circle {
+  fill: var(--panel-2);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.graph-node:hover circle {
+  stroke: var(--accent);
+}
+
+.graph-node.current circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.graph-node text {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.graph-node.current text {
+  fill: var(--text);
+  font-weight: 700;
+}
+
+.graph-hint {
+  padding: 8px 14px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  margin: 0;
+}

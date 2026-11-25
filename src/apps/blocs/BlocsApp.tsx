@@ -24,6 +24,7 @@ import { coverStyle } from './covers'
 import { TEMPLATES, type TemplateSpec } from './templates'
 import { exportFile, parseMarkdown, toMarkdown } from './markdown'
 import ThemeButton from '../../ThemeButton'
+import GraphView from './GraphView'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
@@ -63,6 +64,8 @@ export default function BlocsApp() {
   const [coverMenu, setCoverMenu] = useState<{ x: number; y: number } | null>(null)
   const [tplOpen, setTplOpen] = useState(false)
   const [showTrash, setShowTrash] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
   const [linksOpen, setLinksOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
@@ -187,6 +190,73 @@ export default function BlocsApp() {
 
   const livePages = state?.pages.filter((p) => !p.deletedAt) ?? []
   const trashPages = state?.pages.filter((p) => p.deletedAt) ?? []
+
+  const dueTodos = state
+    ? livePages.flatMap((p) =>
+        flattenBlocks(p.blocks)
+          .filter((b) => b.type === 'todo' && !b.done && b.due)
+          .map((b) => ({ page: p, block: b }))
+      )
+    : []
+  const overdue = dueTodos.filter((d) => new Date(d.block.due!).getTime() <= Date.now())
+
+  useEffect(() => {
+    if (!state) return
+    const check = () => {
+      const now = Date.now()
+      const toNotify = livePages.flatMap((p) =>
+        flattenBlocks(p.blocks).filter(
+          (b) => b.type === 'todo' && !b.done && b.due && new Date(b.due).getTime() <= now && !b.notified
+        ).map((b) => ({ page: p, block: b }))
+      )
+      if (!toNotify.length) return
+      if (Notification.permission === 'granted') {
+        for (const d of toNotify) {
+          new Notification('⏰ Calepin', {
+            body: `${stripHtml(d.block.text) || 'Tâche'} — ${stripHtml(d.page.title).trim() || 'page'}`
+          })
+        }
+      }
+      const ids = new Set(toNotify.map((d) => d.block.id))
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              pages: s.pages.map((p) => ({
+                ...p,
+                blocks: toNotify
+                  .filter((d) => d.page.id === p.id)
+                  .reduce((blocks, d) => patchBlock(blocks, d.block.id, { notified: true }), p.blocks)
+              }))
+            }
+          : s
+      )
+    }
+    check()
+    const t = setInterval(check, 30000)
+    return () => clearInterval(t)
+  }, [state, livePages])
+
+  const openJournal = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    setState((s) => {
+      if (!s) return s
+      const existing = s.pages.find((p) => !p.deletedAt && stripHtml(p.title).trim() === today)
+      if (existing) return { ...s, currentPageId: existing.id }
+      const tpl = TEMPLATES.find((t) => t.name === 'Journal quotidien') ?? TEMPLATES[0]
+      const page = createPage(today)
+      page.icon = '📅'
+      page.blocks = tpl.blocks.map((b) => {
+        const nb = createBlock(b.type as BlockType, b.text)
+        if (b.done !== undefined) nb.done = b.done
+        return nb
+      })
+      const h1 = page.blocks.find((b) => b.type === 'h1')
+      if (h1) h1.text = `Journal — ${today}`
+      return { pages: [page, ...s.pages], currentPageId: page.id }
+    })
+    setSidebarOpen(false)
+  }
 
   const q = query.trim().toLowerCase()
   const matches =
@@ -559,6 +629,10 @@ export default function BlocsApp() {
       const b = findBlock(current.blocks, id)
       updateBlock(id, { done: !(b?.done ?? false) })
     },
+    onSetDue: (id, due) => {
+      if (due && Notification.permission === 'default') void Notification.requestPermission()
+      updateBlock(id, { due, notified: false })
+    },
     onChangeDb: (id, db) => updateBlock(id, { db }),
     onEnter: handleEnter,
     onDelete: deleteBlock,
@@ -620,7 +694,21 @@ export default function BlocsApp() {
         )}
         <div className="blocs-sidebar-head">
           <span>{showTrash ? '🗑 Corbeille' : 'Pages'}</span>
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button className="blocs-new-page" onClick={openJournal} title="Journal du jour (AAAA-MM-JJ)">
+              📅
+            </button>
+            <button className="blocs-new-page" onClick={() => setGraphOpen(true)} title="Graphe des pages (liens [[…]])">
+              🕸
+            </button>
+            <button
+              className="blocs-new-page bell-btn"
+              onClick={() => setBellOpen((o) => !o)}
+              title={`${dueTodos.length} tâche(s) avec rappel — ${overdue.length} en retard`}
+            >
+              🔔
+              {overdue.length > 0 && <span className="bell-badge">{overdue.length}</span>}
+            </button>
             <button className="blocs-new-page" onClick={() => setShowTrash((v) => !v)} title="Corbeille / Pages">
               🗑
             </button>
@@ -924,6 +1012,41 @@ export default function BlocsApp() {
             anchor={coverMenu}
             onSelect={(c) => updatePage(current.id, { cover: c })}
             onClose={() => setCoverMenu(null)}
+          />
+        )}
+        {bellOpen && (
+          <div className="tpl-pop bell-pop">
+            <div className="tpl-head">
+              <strong>🔔 Rappels (tâches avec date)</strong>
+              <button className="db-btn" onClick={() => setBellOpen(false)}>✕</button>
+            </div>
+            {dueTodos.length === 0 && <p className="db-empty">Aucune tâche avec rappel — clique ⏰ sur une tâche</p>}
+            {dueTodos.map(({ page, block }) => (
+              <button
+                key={block.id}
+                className="link-item"
+                onClick={() => {
+                  setState((s) => (s ? { ...s, currentPageId: page.id } : s))
+                  setBellOpen(false)
+                  setSidebarOpen(false)
+                  setTimeout(() => document.getElementById(`bloc-${block.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+                }}
+              >
+                ⏰ {block.due?.replace('T', ' ')} — {stripHtml(block.text) || 'Tâche'} <span className="db-type">({stripHtml(page.title).trim() || 'page'})</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {graphOpen && (
+          <GraphView
+            pages={livePages}
+            currentId={current?.id ?? null}
+            onOpen={(id) => {
+              setState((s) => (s ? { ...s, currentPageId: id } : s))
+              setGraphOpen(false)
+              setSidebarOpen(false)
+            }}
+            onClose={() => setGraphOpen(false)}
           />
         )}
         {tplOpen && (

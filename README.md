@@ -55,6 +55,9 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **Corbeille** (restauration 30 j), **20 templates** de page + duplication de page
 - Import **.md**, export page en **.md** et **PDF** (impression), collage/dépôt d'image → bloc auto
 - Recherche avec filtres de type + extraits surlignés, **thème clair/sombre + accent personnalisable**, **vue mobile** (barre latérale en tiroir)
+- **Vue graphe** 🕸 (barre latérale) : nœuds = pages, arêtes = [[mentions]] + sous-pages, simulation de forces, zoom, clic = ouvrir la page
+- **Journal quotidien** 📅 : bouton « Aujourd'hui » → page AAAA-MM-JJ créée/ouverte automatiquement
+- **Rappels de tâches** ⏰ : date/heure sur une tâche (popover inline, pas de prompt) → notification PWA à l'échéance + cloche 🔔 avec compteur de retards
 - BDD : **agrégats en pied de tableau** (compter, somme, moyenne, min, max, cochées)
 
 - Calepin : paragraphe, H1/H2/H3, puces, tâches, citation, code, séparateur, image, **vidéo (embed YouTube/mp4)**, **audio**, **PDF** (lecteur), **fichier/archive** (carte téléchargeable), **menu dépliant** (blocs enfants), **bouton** (avec URL), **table des matières** (auto depuis H1–H3) — tout insérable via le **menu « / »** ; **drag’n’drop** des blocs, des pages, des colonnes de BDD et des cartes du board ; listes numérotées (compteur auto) et **blocs colonnes 2–4**
