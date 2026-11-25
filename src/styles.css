@@ -484,3 +484,126 @@ a {
   text-align: center;
   padding: 1rem;
 }
+
+.db-board {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  align-items: flex-start;
+}
+
+.db-board-col {
+  min-width: 220px;
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.db-board-col-head {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.35rem 0.5rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.db-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.db-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.db-card-title {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.db-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.db-gallery-card {
+  margin-bottom: 0;
+}
+
+.db-gallery-line {
+  font-size: 0.8rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.db-gallery-k {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.db-cal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  text-transform: capitalize;
+}
+
+.db-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.db-cal-dow {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.25rem 0;
+}
+
+.db-cal-day {
+  min-height: 84px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.78rem;
+  background: var(--panel);
+}
+
+.db-cal-day.today {
+  border-color: var(--accent);
+}
+
+.db-cal-num {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.db-cal-ev {
+  margin-top: 2px;
+  background: var(--accent-soft);
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-cal-more {
+  color: var(--muted);
+  margin-top: 2px;
+}

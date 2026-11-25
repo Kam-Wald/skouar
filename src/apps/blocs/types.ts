@@ -22,11 +22,15 @@ export interface Row {
   cells: Record<string, CellValue>
 }
 
+export type ViewType = 'table' | 'board' | 'gallery' | 'calendar'
+
 export interface Database {
   id: string
   title: string
   columns: Column[]
   rows: Row[]
+  view?: ViewType
+  groupBy?: string
 }
 
 export interface Block {

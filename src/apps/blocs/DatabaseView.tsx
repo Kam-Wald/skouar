@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { CellValue, Column, Database, PropType, Row } from './types'
+import type { CellValue, Column, Database, PropType, Row, ViewType } from './types'
 import { createColumn, createRow } from './store'
+import { BoardView, CalendarView, GalleryView } from './dbViews'
 
 const PROP_LABELS: Record<PropType, string> = {
   text: 'Texte',
@@ -155,6 +156,19 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
 
   const patch = (p: Partial<Database>) => onChange({ ...db, ...p })
 
+  const view: ViewType = db.view ?? 'table'
+
+  const switchView = (v: ViewType) => {
+    const extra: Partial<Database> = { view: v }
+    if (v === 'board' && !db.groupBy) {
+      const g =
+        db.columns.find((c) => c.type === 'select') ??
+        db.columns.find((c) => c.type === 'text')
+      if (g) extra.groupBy = g.id
+    }
+    patch(extra)
+  }
+
   const addColumn = () => {
     const name = window.prompt('Nom de la colonne :', 'Nouvelle colonne')
     if (!name) return
@@ -233,6 +247,34 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
         onKeyDown={(e) => e.stopPropagation()}
       />
       <div className="db-toolbar">
+        <select
+          className="db-select"
+          value={view}
+          onChange={(e) => switchView(e.target.value as ViewType)}
+          title="Changer de vue"
+        >
+          <option value="table">▦ Tableau</option>
+          <option value="board">▮ Board</option>
+          <option value="gallery">▤ Galerie</option>
+          <option value="calendar">▦ Calendrier</option>
+        </select>
+        {view === 'board' && (
+          <select
+            className="db-select"
+            value={db.groupBy ?? ''}
+            onChange={(e) => patch({ groupBy: e.target.value || undefined })}
+            title="Colonne de groupement"
+          >
+            <option value="">Grouper par…</option>
+            {db.columns
+              .filter((c) => c.type === 'select' || c.type === 'text')
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        )}
         <button className="db-btn" onClick={addRow}>
           + Ligne
         </button>
@@ -305,6 +347,7 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           </button>
         )}
       </div>
+      {view === 'table' && (
       <div className="db-scroll">
         <table className="db-table">
           <thead>
@@ -363,6 +406,16 @@ export default function DatabaseView({ db, title, onTitle, onChange }: Props) {
           </tbody>
         </table>
       </div>
+      )}
+      {view === 'board' && (
+        <BoardView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+      )}
+      {view === 'gallery' && (
+        <GalleryView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+      )}
+      {view === 'calendar' && (
+        <CalendarView db={db} rows={visibleRows} onUpdateCell={updateCell} />
+      )}
     </div>
   )
 }

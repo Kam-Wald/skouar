@@ -51,7 +51,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 ## Fonctionnalités de Blocs
 
 - Blocs : paragraphe, H1, H2, puces, tâches cochables
-- **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case), filtres, tris, vue tableau
+- **Bases de données** (bloc ▦) : colonnes typées (texte, nombre, sélection, date, case), filtres, tris, et **4 vues** : tableau, board (kanban groupé), galerie, calendrier
 
 ## Roadmap
 
@@ -59,6 +59,5 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - [x] Stockage IndexedDB (Dexie, migration auto depuis localStorage) + export/import JSON (boutons ↓ Exporter / ↑ Importer dans Blocs)
 - [x] Synchro P2P optionnelle (Yjs + Trystero/WebRTC, zéro serveur) : bouton ⇄ Sync dans Blocs, code de salon à partager entre appareils (v1 : état synchronisé par document, le plus récent l’emporte)
 - [ ] Synchro CRDT fine par bloc + mini-serveur perso (y-sweet, Rust) en alternative
-- [ ] Vues kanban / galerie / calendrier pour les BDD
 - [ ] Pages imbriquées + recherche
 - [ ] Version desktop autonome partageable (Tauri)
