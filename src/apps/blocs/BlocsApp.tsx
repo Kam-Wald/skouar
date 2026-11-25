@@ -4,7 +4,7 @@ import type { Block, BlockType, BlocsState, Page } from './types'
 import { createBlock, createDatabase, createPage, loadState, saveState, uid } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
-import { BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
+import { BLOCK_CATS, BLOCK_CAT_ORDER, BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
 import {
   deleteFrom,
   descendantsOf,
@@ -13,6 +13,7 @@ import {
   insertAfter,
   mentionsIn,
   moveBlockInTree,
+  moveSibling,
   patchBlock,
   stripHtml
 } from './tree'
@@ -29,6 +30,19 @@ import GraphView from './GraphView'
 import DashboardView from './DashboardView'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
+
+function relTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return "à l'instant"
+  const m = Math.floor(s / 60)
+  if (m < 60) return `il y a ${m} min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `il y a ${h} h`
+  const d = Math.floor(h / 24)
+  if (d === 1) return 'hier'
+  if (d < 7) return `il y a ${d} j`
+  return new Date(ts).toLocaleDateString('fr-FR')
+}
 
 function tagColor(tag: string): string {
   let h = 0
@@ -77,6 +91,8 @@ export default function BlocsApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
   const [mentionDismissed, setMentionDismissed] = useState(false)
+  const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
+  const [ctx, setCtx] = useState<null | { x: number; y: number; items: { label: string; icon?: string; danger?: boolean; onClick: () => void }[] }>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [mentionIndex, setMentionIndex] = useState(0)
 
@@ -327,6 +343,10 @@ export default function BlocsApp() {
     (t) => !slashQuery || t.title.toLowerCase().includes(slashQuery) || t.label.toLowerCase().includes(slashQuery)
   )
   const slashOpen = !!slashBlock && !slashDismissed && slashItems.length > 0
+  const slashGroups = BLOCK_CAT_ORDER.map((cat) => ({
+    cat,
+    items: slashItems.map((t, i) => ({ t, i })).filter((x) => (BLOCK_CATS[x.t.type] ?? 'Avancé') === cat)
+  })).filter((g) => g.items.length > 0)
 
   const mentionMatch = allBlocks.map((b) => ({ b, m: plain(b).match(/\[\[([^\]\[]*)$/) })).find((x) => x.m)
   const mentionQuery = mentionMatch?.m?.[1]?.toLowerCase() ?? ''
@@ -340,6 +360,17 @@ export default function BlocsApp() {
   useDismiss('tpl', tplOpen, () => setTplOpen(false))
   useDismiss('slash', slashOpen, () => setSlashDismissed(true))
   useDismiss('mention', mentionOpen, () => setMentionDismissed(true))
+  useDismiss('ctx', !!ctx, () => setCtx(null))
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 5200)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  useEffect(() => {
+    if (current?.id) updatePage(current.id, { lastOpened: Date.now() })
+  }, [current?.id])
 
   const headings = allBlocks
     .filter((b) => ['h1', 'h2', 'h3', 'h4'].includes(b.type))
@@ -361,6 +392,10 @@ export default function BlocsApp() {
   }
 
   const currentTitle = current ? (stripHtml(current.title).trim() || 'Sans titre') : ''
+  const recents = livePages
+    .filter((p) => p.lastOpened && p.id !== current?.id)
+    .sort((a, b) => (b.lastOpened ?? 0) - (a.lastOpened ?? 0))
+    .slice(0, 4)
   const incoming = state ? livePages.filter((p) => p.id !== current?.id && flattenBlocks(p.blocks).some((b) => mentionsIn(plain(b)).includes(currentTitle))) : []
   const outgoing = current ? [...new Set(allBlocks.flatMap((b) => mentionsIn(plain(b))))] : []
 
@@ -440,12 +475,14 @@ export default function BlocsApp() {
 
   const deleteBlock = (id: string) => {
     if (!state || !current) return
+    const snapshot = current.blocks
     const flat = flattenBlocks(current.blocks)
     const index = flat.findIndex((b) => b.id === id)
     if (index < 0) return
     let blocks = deleteFrom(current.blocks, id)
     if (blocks.length === 0) blocks = [createBlock()]
     updatePage(current.id, { blocks })
+    setToast({ key: Date.now(), msg: 'Bloc supprimé', action: () => updatePage(current.id, { blocks: snapshot }) })
     const target = flat[Math.max(0, index - 1)]
     if (target && target.id !== id) pendingFocus.current = target.id
   }
@@ -468,6 +505,42 @@ export default function BlocsApp() {
     setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
     setTplOpen(false)
     setSidebarOpen(false)
+  }
+
+  const openPageCtx = (id: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    setCtx({
+      x: Math.min(e.clientX, Math.max(8, window.innerWidth - 230)),
+      y: Math.min(e.clientY, Math.max(8, window.innerHeight - 190)),
+      items: [
+        { label: 'Ouvrir', icon: '↗', onClick: () => { setState((s) => (s ? { ...s, currentPageId: id } : s)); setSidebarOpen(false) } },
+        { label: 'Dupliquer', icon: '⧉', onClick: () => duplicatePage(id) },
+        { label: 'Nouvelle sous-page', icon: '＋', onClick: () => addPage(id) },
+        { label: 'Envoyer à la corbeille', icon: '🗑', danger: true, onClick: () => deletePage(id) }
+      ]
+    })
+  }
+
+  const openBlockCtx = (id: string, e: React.MouseEvent) => {
+    if (!current) return
+    setCtx({
+      x: Math.min(e.clientX, Math.max(8, window.innerWidth - 230)),
+      y: Math.min(e.clientY, Math.max(8, window.innerHeight - 210)),
+      items: [
+        {
+          label: 'Dupliquer le bloc', icon: '⧉', onClick: () => {
+            const b = findBlock(current.blocks, id)
+            if (!b) return
+            const c = JSON.parse(JSON.stringify(b)) as Block
+            c.id = uid()
+            updatePage(current.id, { blocks: insertAfter(current.blocks, id, c) })
+          }
+        },
+        { label: 'Monter', icon: '↑', onClick: () => updatePage(current.id, { blocks: moveSibling(current.blocks, id, -1) }) },
+        { label: 'Descendre', icon: '↓', onClick: () => updatePage(current.id, { blocks: moveSibling(current.blocks, id, 1) }) },
+        { label: 'Supprimer', icon: '🗑', danger: true, onClick: () => deleteBlock(id) }
+      ]
+    })
   }
 
   const addPage = (parentId: string | null = null) => {
@@ -498,6 +571,7 @@ export default function BlocsApp() {
         currentPageId: s.currentPageId && sub.some((x) => x.id === s.currentPageId) ? s.pages.find((p) => !p.deletedAt)?.id ?? null : s.currentPageId
       }
     })
+    setToast({ key: Date.now(), msg: 'Page envoyée à la corbeille', action: () => restorePage(id) })
   }
 
   const restorePage = (id: string) => {
@@ -652,7 +726,10 @@ export default function BlocsApp() {
     return (
       <div className="blocs-app">
         <main className="blocs-main">
-          <p className="blocs-loading">Chargement…</p>
+          <div className="skel skel-title" />
+          <div className="skel skel-line" />
+          <div className="skel skel-line" />
+          <div className="skel skel-line short" />
         </main>
       </div>
     )
@@ -693,6 +770,7 @@ export default function BlocsApp() {
     blocksList,
     allDbs,
     onChangeDb: (id, db) => updateBlock(id, { db }),
+    onBlockContextMenu: openBlockCtx,
     onEnter: handleEnter,
     onDelete: deleteBlock,
     onAddChildTo: addChildTo,
@@ -784,6 +862,25 @@ export default function BlocsApp() {
           <span>🔔 Rappels</span>
           {dueTodos.length > 0 && <span className="db-type">{dueTodos.length}</span>}
         </button>
+        {!showTrash && recents.length > 0 && (
+          <>
+            <div className="blocs-side-label">Récents</div>
+            {recents.map((p) => (
+              <button
+                key={p.id}
+                className="blocs-side-link"
+                onClick={() => {
+                  setState((s) => (s ? { ...s, currentPageId: p.id } : s))
+                  setSidebarOpen(false)
+                }}
+              >
+                <span className="blocs-side-link-ic">{p.icon ?? '📄'}</span>
+                <span className="blocs-side-link-title">{stripHtml(p.title).trim() || 'Sans titre'}</span>
+                <span className="blocs-side-link-time">{relTime(p.lastOpened ?? 0)}</span>
+              </button>
+            ))}
+          </>
+        )}
         <ul className="blocs-page-list">
           {showTrash
             ? trashPages.map((p) => (
@@ -835,6 +932,8 @@ export default function BlocsApp() {
                   onPromote={promotePage}
                   onMovePage={movePage}
                   onDuplicate={duplicatePage}
+                  onContextMenuPage={openPageCtx}
+                  fmtTime={relTime}
                 />
               )}
         </ul>
@@ -910,18 +1009,17 @@ export default function BlocsApp() {
             </div>
           </div>
         )}
+        <div className="page-top">
         <div className="breadcrumb">
           {crumbs.map((c) => (
             <span key={c.id} className="crumb-wrap">
               <button className="crumb" onClick={() => setState((s) => (s ? { ...s, currentPageId: c.id } : s))}>
-                {c.icon} {stripHtml(c.title).trim() || 'Sans titre'}
+                {stripHtml(c.title).trim() || 'Sans titre'}
               </button>
               <span className="crumb-sep">/</span>
             </span>
           ))}
-          <span className="crumb current">
-            {current.icon} {currentTitle}
-          </span>
+          <span className="crumb current">{currentTitle}</span>
         </div>
         <div className="page-head">
           <div className="page-icon-wrap" data-pop="icon">
@@ -1009,6 +1107,7 @@ export default function BlocsApp() {
             </button>
           </div>
         </div>
+        </div>
         {current.tags && current.tags.length > 0 && (
           <div className="tag-chips page-tags">
             {current.tags.map((t) => (
@@ -1050,6 +1149,13 @@ export default function BlocsApp() {
           ))}
         </div>
         <div className="blocs-editor" onPaste={onEditorPaste} onDrop={onEditorDrop}>
+          {current.blocks.length === 0 && (
+            <div className="empty-state">
+              <p><strong>Cette page est vide.</strong></p>
+              <p className="empty-hint">Tape <kbd>/</kbd> pour ajouter un bloc, ou choisis un modèle :</p>
+              <button className="db-btn" onClick={() => setTplOpen(true)}>📋 Voir les 20 templates</button>
+            </div>
+          )}
           {current.blocks.map((b) => (
             <BlockView key={b.id} block={b} handlers={handlers} />
           ))}
@@ -1090,18 +1196,45 @@ export default function BlocsApp() {
             </div>
           )}
         </div>
+        {ctx && (
+          <div className="ctx-menu" data-pop="ctx" style={{ left: ctx.x, top: ctx.y }}>
+            {ctx.items.map((it, i) => (
+              <button
+                key={i}
+                className={`ctx-item${it.danger ? ' danger' : ''}`}
+                onClick={() => {
+                  setCtx(null)
+                  it.onClick()
+                }}
+              >
+                {it.icon && <span className="ctx-ic">{it.icon}</span>} {it.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {toast && (
+          <div className="toast" key={toast.key}>
+            <span>{toast.msg}</span>
+            {toast.action && <button onClick={() => { setToast(null); toast.action?.() }}>Annuler</button>}
+          </div>
+        )}
         {slashOpen && slashBlock && slashRect && (
           <div className="slash-menu" data-pop="slash" style={{ left: Math.min(slashRect.left, Math.max(8, window.innerWidth - 260)), top: slashRect.bottom + 6 }}>
-            {slashItems.map((t, i) => (
-              <button
-                key={t.type}
-                className={`slash-item${i === slashIndex ? ' active' : ''}`}
-                onMouseDown={(e) => e.preventDefault()}
-                onMouseEnter={() => setSlashIndex(i)}
-                onClick={() => applySlash(t)}
-              >
-                <span className="slash-label">{t.label}</span> {t.title}
-              </button>
+            {slashGroups.map((g) => (
+              <div key={g.cat}>
+                <div className="slash-cat">{g.cat}</div>
+                {g.items.map(({ t, i }) => (
+                  <button
+                    key={t.type}
+                    className={`slash-item${i === slashIndex ? ' active' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setSlashIndex(i)}
+                    onClick={() => applySlash(t)}
+                  >
+                    <span className="slash-label">{t.label}</span> {t.title}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         )}

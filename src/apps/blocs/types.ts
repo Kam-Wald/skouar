@@ -139,6 +139,7 @@ export interface Page {
   cover?: Cover | null
   tags?: string[]
   deletedAt?: number | null
+  lastOpened?: number
 }
 
 export interface BlocsState {

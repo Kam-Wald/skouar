@@ -11,7 +11,9 @@ export default function PageTree({
   onAddChild,
   onPromote,
   onMovePage,
-  onDuplicate
+  onDuplicate,
+  onContextMenuPage,
+  fmtTime
 }: {
   pages: Page[]
   parentId: string | null
@@ -23,6 +25,8 @@ export default function PageTree({
   onPromote: (id: string) => void
   onMovePage: (id: string, targetId: string) => void
   onDuplicate: (id: string) => void
+  onContextMenuPage: (id: string, e: React.MouseEvent) => void
+  fmtTime: (ts: number) => string
 }) {
   const [overId, setOverId] = useState<string | null>(null)
 
@@ -54,6 +58,8 @@ export default function PageTree({
             <div
               className={`blocs-page-row${overId === p.id ? ' drag-over' : ''}`}
               style={{ paddingLeft: depth * 14 }}
+              title={p.lastOpened ? fmtTime(p.lastOpened) : undefined}
+              onContextMenu={(e) => onContextMenuPage(p.id, e)}
               {...rowDragProps(p.id)}
             >
               <span className="drag-handle" title="Déplacer la page">
@@ -100,6 +106,8 @@ export default function PageTree({
                 onPromote={onPromote}
                 onMovePage={onMovePage}
                 onDuplicate={onDuplicate}
+                onContextMenuPage={onContextMenuPage}
+                fmtTime={fmtTime}
               />
             </ul>
           </li>
