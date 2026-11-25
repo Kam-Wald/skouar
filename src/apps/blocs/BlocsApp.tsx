@@ -12,44 +12,72 @@ import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
 import DatabaseView from './DatabaseView'
 
-const BLOCK_TYPES: { type: BlockType; label: string; title: string }[] = [
+const BLOCK_TYPES = [
   { type: 'paragraph', label: '¶', title: 'Paragraphe' },
   { type: 'h1', label: 'H1', title: 'Titre 1' },
   { type: 'h2', label: 'H2', title: 'Titre 2' },
+  { type: 'h3', label: 'H3', title: 'Titre 3' },
   { type: 'bullet', label: '•', title: 'Liste à puces' },
   { type: 'todo', label: '☑', title: 'Tâche' },
+  { type: 'quote', label: '❝', title: 'Citation' },
+  { type: 'code', label: '</>', title: 'Bloc de code' },
+  { type: 'divider', label: '―', title: 'Séparateur' },
+  { type: 'image', label: '🖼', title: 'Image' },
   { type: 'database', label: '▦', title: 'Base de données' }
-]
+] as const
+
+type BlockTypeDef = (typeof BLOCK_TYPES)[number]
 
 const PLACEHOLDERS: Record<BlockType, string> = {
-  paragraph: 'Écris quelque chose… (Entrée = nouveau bloc)',
+  paragraph: 'Écris quelque chose… (Entrée = nouveau bloc, / = menu)',
   h1: 'Titre 1',
   h2: 'Titre 2',
+  h3: 'Titre 3',
   bullet: 'Élément de liste',
   todo: 'Tâche à faire',
+  quote: 'Citation',
+  code: 'Code…',
+  divider: '',
+  image: '',
   database: 'Base de données'
 }
+
+const EMOJIS = [
+  '▦', '📄', '📝', '✅', '⭐', '🔥', '💡', '📌',
+  '🗂️', '🧠', '🎯', '🚀', '🌱', '🏠', '📚', '🎨',
+  '🔒', '❤️', '🐰', '🌙', '⚡', '🧩'
+]
 
 interface BlockViewProps {
   block: Block
   active: boolean
+  slashActive: boolean
   onActivate: (id: string) => void
   onChangeText: (id: string, text: string) => void
+  onChangeSrc: (id: string, src: string | undefined) => void
   onToggleDone: (id: string) => void
   onChangeDb: (id: string, db: Database) => void
   onEnter: (id: string) => void
   onBackspaceEmpty: (id: string) => void
+  onSlashNav: (dir: 1 | -1) => void
+  onSlashEnter: () => void
+  onSlashEscape: () => void
 }
 
 function BlockView({
   block,
   active,
+  slashActive,
   onActivate,
   onChangeText,
+  onChangeSrc,
   onToggleDone,
   onChangeDb,
   onEnter,
-  onBackspaceEmpty
+  onBackspaceEmpty,
+  onSlashNav,
+  onSlashEnter,
+  onSlashEscape
 }: BlockViewProps) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -60,6 +88,22 @@ function BlockView({
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const el = ref.current
+    if (slashActive) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        onSlashNav(1)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        onSlashNav(-1)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        onSlashEnter()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onSlashEscape()
+      }
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       onEnter(block.id)
@@ -67,6 +111,55 @@ function BlockView({
       e.preventDefault()
       onBackspaceEmpty(block.id)
     }
+  }
+
+  if (block.type === 'divider') {
+    return (
+      <div
+        className={`block-row block-divider-row${active ? ' block-active' : ''}`}
+        tabIndex={-1}
+        onFocus={() => onActivate(block.id)}
+      >
+        <hr className="block-divider" />
+        <button
+          className="block-row-del"
+          title="Supprimer le séparateur"
+          onClick={() => onBackspaceEmpty(block.id)}
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+
+  if (block.type === 'image') {
+    return (
+      <div
+        className={`block-row${active ? ' block-active' : ''}`}
+        onFocus={() => onActivate(block.id)}
+      >
+        {block.src ? (
+          <img
+            className="block-image"
+            src={block.src}
+            alt=""
+            title="Cliquer pour changer l’URL"
+            onClick={() => {
+              const u = window.prompt('URL de l’image :', block.src)
+              if (u !== null) onChangeSrc(block.id, u || undefined)
+            }}
+          />
+        ) : (
+          <input
+            className="block-image-input"
+            placeholder="Colle l’URL d’une image…"
+            onFocus={() => onActivate(block.id)}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => onChangeSrc(block.id, e.target.value || undefined)}
+          />
+        )}
+      </div>
+    )
   }
 
   if (block.type === 'database') {
@@ -141,6 +234,7 @@ function PageTree({
                 className={`blocs-page-item${p.id === currentId ? ' selected' : ''}`}
                 onClick={() => onSelect(p.id)}
               >
+                {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
                 {p.title.trim() || 'Sans titre'}
               </button>
               <button
@@ -188,27 +282,13 @@ export default function BlocsApp() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const coverInput = useRef<HTMLInputElement>(null)
   const [sync, setSync] = useState<SyncHandle | null>(null)
   const lastJson = useRef('')
   const [query, setQuery] = useState('')
-
-  const q = query.trim().toLowerCase()
-  const matches =
-    q && state
-      ? state.pages.filter(
-          (p) =>
-            p.title.toLowerCase().includes(q) ||
-            p.blocks.some(
-              (b) =>
-                b.text.toLowerCase().includes(q) ||
-                (b.db?.rows ?? []).some((r) =>
-                  Object.values(r.cells).some((v) =>
-                    String(v ?? '').toLowerCase().includes(q)
-                  )
-                )
-            )
-        )
-      : null
+  const [iconOpen, setIconOpen] = useState(false)
+  const [slashDismissed, setSlashDismissed] = useState(false)
+  const [slashIndex, setSlashIndex] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -277,8 +357,38 @@ export default function BlocsApp() {
     }
   })
 
+  const q = query.trim().toLowerCase()
+  const matches =
+    q && state
+      ? state.pages.filter(
+          (p) =>
+            p.title.toLowerCase().includes(q) ||
+            p.blocks.some(
+              (b) =>
+                b.text.toLowerCase().includes(q) ||
+                (b.db?.rows ?? []).some((r) =>
+                  Object.values(r.cells).some((v) =>
+                    String(v ?? '').toLowerCase().includes(q)
+                  )
+                )
+            )
+        )
+      : null
+
   const current: Page | undefined =
     state?.pages.find((p) => p.id === state.currentPageId) ?? state?.pages[0]
+
+  const slashBlock = current?.blocks.find(
+    (b) => b.text.startsWith('/') && b.text.length <= 40
+  )
+  const slashQuery = slashBlock ? slashBlock.text.slice(1).toLowerCase() : ''
+  const slashItems = BLOCK_TYPES.filter(
+    (t) =>
+      !slashQuery ||
+      t.title.toLowerCase().includes(slashQuery) ||
+      t.label.toLowerCase().includes(slashQuery)
+  )
+  const slashOpen = !!slashBlock && !slashDismissed && slashItems.length > 0
 
   const updatePage = (pageId: string, patch: Partial<Page>) =>
     setState((s) =>
@@ -294,9 +404,25 @@ export default function BlocsApp() {
 
   const updateBlock = (id: string, patch: Partial<Block>) => {
     if (!state || !current) return
+    if ('text' in patch) {
+      setSlashDismissed(false)
+      setSlashIndex(0)
+    }
     updatePage(current.id, {
       blocks: current.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b))
     })
+  }
+
+  const applySlash = (t: BlockTypeDef) => {
+    if (!slashBlock) return
+    updateBlock(slashBlock.id, {
+      type: t.type,
+      text: '',
+      done: t.type === 'todo' ? false : undefined,
+      src: undefined,
+      db: t.type === 'database' ? createDatabase() : undefined
+    })
+    setSlashDismissed(true)
   }
 
   const insertBlockAfter = (afterId: string, type: BlockType = 'paragraph') => {
@@ -364,21 +490,6 @@ export default function BlocsApp() {
     })
   }
 
-  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file || !state) return
-    try {
-      const imported = await parseImportFile(file)
-      const ok = window.confirm(
-        `Remplacer les ${state.pages.length} page(s) actuelles par celles du fichier « ${file.name} » ?`
-      )
-      if (ok) setState(imported)
-    } catch {
-      window.alert('Fichier invalide : un export JSON de Skouar/Blocs est attendu.')
-    }
-  }
-
   const toggleSync = () => {
     if (sync) {
       sync.leave()
@@ -410,6 +521,40 @@ export default function BlocsApp() {
     )
   }
 
+  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !state) return
+    try {
+      const imported = await parseImportFile(file)
+      const ok = window.confirm(
+        `Remplacer les ${state.pages.length} page(s) actuelles par celles du fichier « ${file.name} » ?`
+      )
+      if (ok) setState(imported)
+    } catch {
+      window.alert('Fichier invalide : un export JSON de Skouar/Blocs est attendu.')
+    }
+  }
+
+  const setCoverFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f || !current) return
+    if (f.size > 2_000_000) {
+      window.alert('Image trop lourde (max 2 Mo) : compresse-la ou utilise une URL.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => updatePage(current.id, { cover: String(reader.result) })
+    reader.readAsDataURL(f)
+  }
+
+  const setCoverUrl = () => {
+    if (!current) return
+    const u = window.prompt('URL de l’image de couverture :', current.cover ?? '')
+    if (u !== null) updatePage(current.id, { cover: u || null })
+  }
+
   if (!state || !current) {
     return (
       <div className="blocs-app">
@@ -419,6 +564,9 @@ export default function BlocsApp() {
       </div>
     )
   }
+
+  const slashEl = slashBlock ? document.getElementById(`bloc-${slashBlock.id}`) : null
+  const slashRect = slashEl?.getBoundingClientRect()
 
   return (
     <div className="blocs-app">
@@ -449,6 +597,7 @@ export default function BlocsApp() {
                         setState((s) => (s ? { ...s, currentPageId: p.id } : s))
                       }
                     >
+                      {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
                       {p.title.trim() || 'Sans titre'}
                     </button>
                   </div>
@@ -493,11 +642,75 @@ export default function BlocsApp() {
         </div>
       </aside>
       <main className="blocs-main">
+        {current.cover && (
+          <div className="page-cover">
+            <img src={current.cover} alt="couverture de la page" />
+            <div className="page-cover-actions">
+              <button onClick={() => coverInput.current?.click()}>Changer</button>
+              <button onClick={setCoverUrl}>URL…</button>
+              <button onClick={() => updatePage(current.id, { cover: null })}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="page-head">
+          <div className="page-icon-wrap">
+            <button
+              className="page-icon-btn"
+              title="Icône de la page"
+              onClick={() => setIconOpen((o) => !o)}
+            >
+              {current.icon ?? '＋'}
+            </button>
+            {iconOpen && (
+              <div className="emoji-pop">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => {
+                      updatePage(current.id, { icon: e })
+                      setIconOpen(false)
+                    }}
+                  >
+                    {e}
+                  </button>
+                ))}
+                <button
+                  title="Retirer l’icône"
+                  onClick={() => {
+                    updatePage(current.id, { icon: null })
+                    setIconOpen(false)
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+          <input
+            className="blocs-title"
+            value={current.title}
+            placeholder="Sans titre"
+            onChange={(e) => updatePage(current.id, { title: e.target.value })}
+          />
+        </div>
+        {!current.cover && (
+          <div className="page-cover-add">
+            <button className="blocs-io" onClick={() => coverInput.current?.click()}>
+              🖼 Ajouter une couverture (fichier)
+            </button>
+            <button className="blocs-io" onClick={setCoverUrl}>
+              🔗 Couverture via URL
+            </button>
+          </div>
+        )}
         <input
-          className="blocs-title"
-          value={current.title}
-          placeholder="Sans titre"
-          onChange={(e) => updatePage(current.id, { title: e.target.value })}
+          ref={coverInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={setCoverFile}
         />
         <div className="blocs-toolbar">
           {BLOCK_TYPES.map((t) => (
@@ -517,12 +730,15 @@ export default function BlocsApp() {
                   updateBlock(activeId, {
                     type: 'database',
                     done: undefined,
+                    src: undefined,
                     db: existing?.db ?? createDatabase()
                   })
                 } else {
                   updateBlock(activeId, {
                     type: t.type,
-                    done: t.type === 'todo' ? false : undefined
+                    done: t.type === 'todo' ? false : undefined,
+                    src: undefined,
+                    db: undefined
                   })
                 }
               }}
@@ -537,8 +753,10 @@ export default function BlocsApp() {
               key={b.id}
               block={b}
               active={activeId === b.id}
+              slashActive={slashOpen && slashBlock?.id === b.id}
               onActivate={setActiveId}
               onChangeText={(id, text) => updateBlock(id, { text })}
+              onChangeSrc={(id, src) => updateBlock(id, { src })}
               onToggleDone={(id) =>
                 updateBlock(id, {
                   done: !(current.blocks.find((x) => x.id === id)?.done ?? false)
@@ -547,6 +765,16 @@ export default function BlocsApp() {
               onChangeDb={(id, db) => updateBlock(id, { db })}
               onEnter={handleEnter}
               onBackspaceEmpty={deleteBlock}
+              onSlashNav={(dir) =>
+                setSlashIndex(
+                  (i) => (i + dir + slashItems.length) % slashItems.length
+                )
+              }
+              onSlashEnter={() => {
+                const item = slashItems[slashIndex]
+                if (item) applySlash(item)
+              }}
+              onSlashEscape={() => setSlashDismissed(true)}
             />
           ))}
         </div>
@@ -558,6 +786,24 @@ export default function BlocsApp() {
         >
           ＋ Ajouter un bloc
         </button>
+        {slashOpen && slashBlock && slashRect && (
+          <div
+            className="slash-menu"
+            style={{ left: slashRect.left, top: slashRect.bottom + 6 }}
+          >
+            {slashItems.map((t, i) => (
+              <button
+                key={t.type}
+                className={`slash-item${i === slashIndex ? ' active' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setSlashIndex(i)}
+                onClick={() => applySlash(t)}
+              >
+                <span className="slash-label">{t.label}</span> {t.title}
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )

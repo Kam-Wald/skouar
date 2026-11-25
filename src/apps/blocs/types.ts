@@ -2,8 +2,13 @@ export type BlockType =
   | 'paragraph'
   | 'h1'
   | 'h2'
+  | 'h3'
   | 'todo'
   | 'bullet'
+  | 'quote'
+  | 'code'
+  | 'divider'
+  | 'image'
   | 'database'
 
 export type PropType = 'text' | 'number' | 'select' | 'date' | 'checkbox'
@@ -38,6 +43,7 @@ export interface Block {
   type: BlockType
   text: string
   done?: boolean
+  src?: string
   db?: Database
 }
 
@@ -47,6 +53,8 @@ export interface Page {
   blocks: Block[]
   updatedAt: number
   parentId?: string | null
+  icon?: string | null
+  cover?: string | null
 }
 
 export interface BlocsState {

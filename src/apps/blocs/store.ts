@@ -62,6 +62,7 @@ export function createDatabase(): Database {
 
 export function seedState(): BlocsState {
   const page = createPage('Bienvenue dans Blocs')
+  page.icon = '▦'
   page.blocks = [
     createBlock('h1', 'Bienvenue dans Blocs ▦'),
     createBlock(
