@@ -8,7 +8,8 @@ import {
 import { Link } from 'react-router-dom'
 import type { Block, BlockType, BlocsState, Page } from './types'
 import { createBlock, createPage, loadState, saveState } from './store'
-import { exportStateToFile, parseImportFile } from './export'
+import { exportStateToFile, isBlocsState, parseImportFile } from './export'
+import { readRemoteState, startSync, type SyncHandle } from './sync'
 
 const BLOCK_TYPES: { type: BlockType; label: string; title: string }[] = [
   { type: 'paragraph', label: '¶', title: 'Paragraphe' },
@@ -94,6 +95,8 @@ export default function BlocsApp() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const [sync, setSync] = useState<SyncHandle | null>(null)
+  const lastJson = useRef('')
 
   useEffect(() => {
     let alive = true
@@ -112,6 +115,39 @@ export default function BlocsApp() {
     }, 200)
     return () => clearTimeout(t)
   }, [state])
+
+  useEffect(() => {
+    if (!state || !sync) return
+    const t = setTimeout(() => {
+      const json = JSON.stringify(state)
+      lastJson.current = json
+      sync.doc.transact(() => {
+        sync.doc.getMap('blocs').set('state', json)
+      })
+    }, 400)
+    return () => clearTimeout(t)
+  }, [state, sync])
+
+  useEffect(() => {
+    if (!sync) return
+    const map = sync.doc.getMap('blocs')
+    const handler = () => {
+      const json = map.get('state')
+      if (typeof json === 'string' && json !== lastJson.current) {
+        lastJson.current = json
+        try {
+          const parsed: unknown = JSON.parse(json)
+          if (isBlocsState(parsed)) setState(parsed)
+        } catch {
+          // ignore
+        }
+      }
+    }
+    map.observe(handler)
+    return () => {
+      map.unobserve(handler)
+    }
+  }, [sync])
 
   useEffect(() => {
     if (pendingFocus.current) {
@@ -212,6 +248,37 @@ export default function BlocsApp() {
     }
   }
 
+  const toggleSync = () => {
+    if (sync) {
+      sync.leave()
+      setSync(null)
+      return
+    }
+    const input = window.prompt(
+      'Code de salon de synchro (jusqu’à 12 caractères). Laisse vide pour en générer un :',
+      ''
+    )
+    if (input === null) return
+    const code = (input.trim() || Math.random().toString(36).slice(2, 8)).slice(0, 12)
+    const handle = startSync(code)
+    setSync(handle)
+    setTimeout(() => {
+      const remote = readRemoteState(handle.doc)
+      if (remote && remote !== lastJson.current) {
+        lastJson.current = remote
+        try {
+          const parsed: unknown = JSON.parse(remote)
+          if (isBlocsState(parsed)) setState(parsed)
+        } catch {
+          // ignore
+        }
+      }
+    }, 1500)
+    window.alert(
+      `Salon « ${code} » ouvert. Sur l’autre appareil (desktop/tablette), ouvre Blocs → ⇄ Sync et entre ce même code.`
+    )
+  }
+
   if (!state || !current) {
     return (
       <div className="blocs-app">
@@ -254,6 +321,13 @@ export default function BlocsApp() {
           ))}
         </ul>
         <div className="blocs-sidebar-foot">
+          <button
+            className={`blocs-io${sync ? ' active' : ''}`}
+            onClick={toggleSync}
+            title="Synchroniser avec un autre appareil (P2P, aucun serveur)"
+          >
+            {sync ? `⇄ ${sync.code}` : '⇄ Sync'}
+          </button>
           <button className="blocs-io" onClick={() => exportStateToFile(state)}>
             ↓ Exporter
           </button>

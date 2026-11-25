@@ -52,5 +52,6 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 
 - [ ] Test de l'installation PWA en ligne (bureau + tablette) sur l'URL Pages
 - [x] Stockage IndexedDB (Dexie, migration auto depuis localStorage) + export/import JSON (boutons ↓ Exporter / ↑ Importer dans Blocs)
-- [ ] Synchro optionnelle entre appareils : CRDT (Yjs), P2P WebRTC ou mini-serveur perso
+- [x] Synchro P2P optionnelle (Yjs + Trystero/WebRTC, zéro serveur) : bouton ⇄ Sync dans Blocs, code de salon à partager entre appareils (v1 : état synchronisé par document, le plus récent l’emporte)
+- [ ] Synchro CRDT fine par bloc + mini-serveur perso (y-sweet, Rust) en alternative
 - [ ] Version desktop autonome partageable (Tauri)

@@ -227,6 +227,12 @@ a {
   border-color: var(--accent);
 }
 
+.blocs-io.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .blocs-loading {
   color: var(--muted);
 }
