@@ -2772,3 +2772,52 @@ th.drag-over {
   border-radius: 999px;
   transition: width 0.25s ease;
 }
+
+.blocs-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.blocs-side-sep {
+  border-top: 1px solid var(--border);
+  margin: 0.5rem 0 0.25rem;
+  flex-shrink: 0;
+}
+
+.blocs-sidebar-head {
+  flex-shrink: 0;
+}
+
+.blocs-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+}
+
+.blocs-page-list {
+  overflow-y: visible;
+}
+
+.blocs-sidebar-foot {
+  flex-shrink: 0;
+}
+
+.emoji-grid button {
+  display: grid;
+  place-items: center;
+  min-height: 30px;
+}
+
+.emoji-grid button svg {
+  display: block;
+}
+
+.blocs-page-icon svg,
+.page-icon-btn svg,
+.blocs-side-link-ic svg {
+  display: block;
+}

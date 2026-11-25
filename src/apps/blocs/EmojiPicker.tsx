@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LUCIDE, LUCIDE_NAMES } from './Icon'
 
 export const ICON_COLORS = [
   'transparent', '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444',
@@ -53,10 +54,21 @@ export default function EmojiPicker({
       <div className="emoji-sec">Pictos (recolorables)</div>
       <div className="emoji-grid">
         {PICTS.map((e) => (
-          <button key={e} onClick={() => onPick(e, color)}>
+          <button key={e} style={color !== 'transparent' ? { color } : undefined} onClick={() => onPick(e, color)}>
             {e}
           </button>
         ))}
+      </div>
+      <div className="emoji-sec">Icônes (Lucide)</div>
+      <div className="emoji-grid">
+        {LUCIDE_NAMES.map((n) => {
+          const C = LUCIDE[n]
+          return (
+            <button key={n} title={n} onClick={() => onPick(`lucide:${n}`, color)}>
+              <C size={17} strokeWidth={2} style={color !== 'transparent' ? { color } : undefined} />
+            </button>
+          )
+        })}
       </div>
       <button className="emoji-clear" onClick={onClear}>
         ✕ Retirer l’icône
