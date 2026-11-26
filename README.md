@@ -64,7 +64,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **8 nouveaux blocs** : encadré (callout coloré), **embed iframe**, **formule math KaTeX**, **barre de progression**, **QR code** (texte éditable), **compte à rebours**, **galerie d'images**, **page intégrée** (carte cliquable)
 - **Bouton automatisation** ⚙ : un clic sur le bouton duplique N fois le bloc choisi de la page (ex : blocs recette de cuisine)
 - **Modèles** : bouton 📋 (ou ＋) dans la barre latérale → picker des 20 templates
-- **Design** : thème sombre éditorial (inspiration getartcraft) + thème clair, **glassmorphism sur les grands panneaux** (templates, graphe, rappels), launcher en **tuiles uniformes à bordure fine 1px** + 5 applis « Bientôt » non actives avec leur propre logo (Skrid ✍️ texte, Ler 📕 PDF, Skeud 🖼️ images, Taol 🧮 tableur, Tres ✏️ dessin/présentations), labels/badges/dates en **mono**, une seule couleur d'accent (états survolés/sélectionnés dérivés automatiquement)
+- **Design** : thème sombre éditorial (inspiration getartcraft) + thème clair, **glassmorphism sur les grands panneaux** (templates, graphe, rappels), launcher en **tuiles uniformes à bordure fine 1px** + 8 applis « Bientôt » non actives avec leur propre logo (Skrid ✍️, Ler 📕, Skeud 🖼️, Taol 🧮, Tres ✏️, Kod 💻, Kemm 🔄, Eur ⏱️), labels/badges/dates en **mono**, une seule couleur d'accent (états survolés/sélectionnés dérivés automatiquement)
 - **Barre latérale** : en-tête **Calepin** (logo + nom, clic = retour au launcher), encart **🔔 Rappels** avec **point rouge pulsant si un rappel est dans les 48 h** (clic → liste des rappels), puis la liste des pages (sous-pages indentées dessous, plus de scrollbar horizontale), puis les lignes **＋ Nouvelle page** et **📋 Templates**
 - **Launcher** : chaque logiciel est numéroté (01, 02…) en mono, descriptions sans le « 100 % local » (déjà en pied de page), logo Calepin distinct du logo Skouar (page à coin corné)
 - **Picker d'icônes de page** : 2 sections — émojis + **pictos monochromes recolorables** (formes, symboles, maths) via les pastilles de couleur
@@ -105,6 +105,9 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **Skeud** 🖼️ — visionneuse + retouche d'images (recadrage, filtres, cadres, calques simples, **traitement par lot**) — bientôt
 - **Taol** 🧮 — tableur local (formules, tris/filtres, graphiques, export CSV) — bientôt
 - **Tres** ✏️ — dessin & présentations (formes vectorielles + diapos, export SVG/PNG) — bientôt
+- **Kod** 💻 — éditeur de code léger (coloration, onglets, arbre de dossier local, recherche dans les fichiers) — bientôt
+- **Kemm** 🔄 — convertisseur de fichiers local (images ↔ PNG/JPEG/WebP, audio, CSV/JSON) — bientôt
+- **Eur** ⏱️ — cockpit productivité : minuteurs à techniques (Pomodoro, 52/17, timeboxing), suivi du temps par projet, kanban perso, astuces bien-être — bientôt
 
 ## Roadmap
 
