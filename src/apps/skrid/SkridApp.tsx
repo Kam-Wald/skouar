@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import ThemeButton from '../../ThemeButton'
 import { useDismiss } from '../blocs/useDismiss'
 import { stripHtml } from '../blocs/tree'
-import { buildPdf, downloadPdf, wrap, type PdfLine } from '../blocs/pdf'
+import { buildPdf, downloadPdf, wrap, type PdfLine, type PdfOpts } from '../blocs/pdf'
+import { exportFile } from '../blocs/markdown'
 import {
   createDoc,
   loadSkrid,
@@ -33,8 +34,16 @@ import {
   Strikethrough,
   Table2,
   Undo2,
-  Unlink2
+  Unlink2,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  MessageSquare,
+  Search,
+  X
 } from 'lucide-react'
+import { htmlToMarkdown, lastNDays, standaloneHtml, streakOf, todayKey, wordHtml } from './extra'
 
 type SkridView = 'doc' | 'writer' | 'stats'
 
@@ -50,6 +59,15 @@ function relTime(ts: number): string {
 
 function wordCount(html: string): number {
   return stripHtml(html).split(/\s+/).filter(Boolean).length
+}
+
+function cleanHtml(html: string): string {
+  const d = document.createElement('div')
+  d.innerHTML = html
+  d.querySelectorAll('mark.skrid-find, mark.skrid-find-cur').forEach((m) =>
+    m.replaceWith(document.createTextNode(m.textContent ?? ''))
+  )
+  return d.innerHTML
 }
 
 function htmlToLines(html: string, lines: PdfLine[]): void {
@@ -82,19 +100,29 @@ function DocTree({
   parentId,
   depth,
   currentId,
+  dragOverId,
   onSelect,
   onAddChild,
   onDelete,
-  onDuplicate
+  onDuplicate,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd
 }: {
   docs: SkridDoc[]
   parentId: string | null
   depth: number
   currentId: string | null
+  dragOverId: string | null
   onSelect: (id: string) => void
   onAddChild: (id: string) => void
   onDelete: (id: string) => void
   onDuplicate: (id: string) => void
+  onDragStart: (id: string) => void
+  onDragOver: (id: string) => void
+  onDrop: (id: string) => void
+  onDragEnd: () => void
 }) {
   return (
     <>
@@ -102,10 +130,27 @@ function DocTree({
         .filter((d) => (d.parentId ?? null) === parentId)
         .map((d) => (
           <li key={d.id}>
-            <div className="blocs-page-row" style={{ paddingLeft: depth * 20 }}>
-              <span className="drag-handle" style={{ visibility: 'hidden' }}>
-                ⸬
-              </span>
+            <div
+              className={`blocs-page-row${dragOverId === d.id ? ' drop-hint' : ''}`}
+              style={{ paddingLeft: depth * 20 }}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', d.id)
+                e.dataTransfer.effectAllowed = 'move'
+                onDragStart(d.id)
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                onDragOver(d.id)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                onDrop(d.id)
+              }}
+              onDragEnd={onDragEnd}
+            >
+              <span className="drag-handle">⸬</span>
               <button
                 className={`blocs-page-item${d.id === currentId ? ' selected' : ''}`}
                 onClick={() => onSelect(d.id)}
@@ -129,10 +174,15 @@ function DocTree({
                 parentId={d.id}
                 depth={depth + 1}
                 currentId={currentId}
+                dragOverId={dragOverId}
                 onSelect={onSelect}
                 onAddChild={onAddChild}
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+                onDragEnd={onDragEnd}
               />
             </ul>
           </li>
@@ -154,9 +204,28 @@ export default function SkridApp() {
   const [tablePop, setTablePop] = useState(false)
   const [tRows, setTRows] = useState('3')
   const [tCols, setTCols] = useState('3')
+  const [sideW, setSideW] = useState(() => {
+    const v = Number(localStorage.getItem('skouar:sidebarW'))
+    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
+  })
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQ, setFindQ] = useState('')
+  const [repl, setRepl] = useState('')
+  const [findIdx, setFindIdx] = useState(0)
+  const [findCount, setFindCount] = useState(0)
+  const [comPop, setComPop] = useState(false)
+  const [comText, setComText] = useState('')
+  const [comOpen, setComOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [expOpen, setExpOpen] = useState(false)
+  const [read, setRead] = useState(false)
+  const [readSize, setReadSize] = useState(1.3)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
+  const findMarks = useRef<HTMLElement[]>([])
   const pastRef = useRef<SkridState[]>([])
   const futureRef = useRef<SkridState[]>([])
   const prevRef = useRef<SkridState | null>(null)
@@ -165,6 +234,10 @@ export default function SkridApp() {
   useDismiss('tplsk', tplOpen, () => setTplOpen(false))
   useDismiss('sklink', linkPop, () => setLinkPop(false))
   useDismiss('sktable', tablePop, () => setTablePop(false))
+  useDismiss('skfind', findOpen, () => closeFind())
+  useDismiss('skcom', comPop, () => setComPop(false))
+  useDismiss('skcoms', comOpen, () => setComOpen(false))
+  useDismiss('skexp', expOpen, () => setExpOpen(false))
 
   useEffect(() => {
     let alive = true
@@ -216,6 +289,12 @@ export default function SkridApp() {
   }, [toast])
 
   useEffect(() => {
+    if (!findOpen) return
+    const t = setTimeout(() => runFind(), 200)
+    return () => clearTimeout(t)
+  }, [findQ, findOpen])
+
+  useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -223,6 +302,14 @@ export default function SkridApp() {
       } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
         e.preventDefault()
         redo()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setView('doc')
+        setFindOpen(true)
+      } else if (e.key === 'Escape') {
+        setRead(false)
+        setHelpOpen(false)
+        closeFind()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -234,7 +321,7 @@ export default function SkridApp() {
   useEffect(() => {
     const el = editorRef.current
     if (!el || !current) return
-    if (el.innerHTML === current.content) return
+    if (cleanHtml(el.innerHTML) === current.content) return
     const sel = window.getSelection()
     let offset = 0
     if (sel && sel.rangeCount > 0 && sel.anchorNode && el.contains(sel.anchorNode)) {
@@ -354,7 +441,15 @@ export default function SkridApp() {
 
   const saveContent = () => {
     const el = editorRef.current
-    if (el && current) updateDoc(current.id, { content: el.innerHTML })
+    if (!el || !current) return
+    const html = cleanHtml(el.innerHTML)
+    const before = wordCount(current.content)
+    const after = wordCount(html)
+    updateDoc(current.id, { content: html })
+    if (after > before) {
+      const k = todayKey()
+      setState((s) => (s ? { ...s, daily: { ...(s.daily ?? {}), [k]: (s.daily?.[k] ?? 0) + (after - before) } } : s))
+    }
   }
 
   const eachSelectedBlock = (fn: (el: HTMLElement) => void, tags = 'p,h1,h2,h3,h4,li,blockquote,div,pre,td,th') => {
@@ -453,6 +548,206 @@ export default function SkridApp() {
     saveContent()
   }
 
+  const runFind = () => {
+    const el = editorRef.current
+    if (!el) return
+    el.querySelectorAll('mark.skrid-find, mark.skrid-find-cur').forEach((m) =>
+      m.replaceWith(document.createTextNode(m.textContent ?? ''))
+    )
+    el.normalize()
+    const q = findQ.trim()
+    const marks: HTMLElement[] = []
+    if (q) {
+      const ql = q.toLowerCase()
+      for (;;) {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+        let hit: Text | null = null
+        let node = walker.nextNode() as Text | null
+        while (node) {
+          if ((node.nodeValue ?? '').toLowerCase().includes(ql)) {
+            hit = node
+            break
+          }
+          node = walker.nextNode() as Text | null
+        }
+        if (!hit) break
+        const idx = (hit.nodeValue ?? '').toLowerCase().indexOf(ql)
+        const r = document.createRange()
+        r.setStart(hit, idx)
+        r.setEnd(hit, idx + q.length)
+        const m = document.createElement('mark')
+        m.className = 'skrid-find'
+        r.surroundContents(m)
+        marks.push(m)
+      }
+    }
+    findMarks.current = marks
+    setFindCount(marks.length)
+    const idx = marks.length ? Math.min(findIdx, marks.length - 1) : 0
+    setFindIdx(idx)
+    marks.forEach((m, i) => m.classList.toggle('skrid-find-cur', i === idx))
+    if (marks.length) marks[idx]?.scrollIntoView({ block: 'center' })
+  }
+
+  const findGo = (dir: -1 | 1) => {
+    const marks = findMarks.current
+    if (!marks.length) return
+    const idx = (findIdx + dir + marks.length) % marks.length
+    setFindIdx(idx)
+    marks.forEach((m, i) => m.classList.toggle('skrid-find-cur', i === idx))
+    marks[idx]?.scrollIntoView({ block: 'center' })
+  }
+
+  const doReplace = (all: boolean) => {
+    const el = editorRef.current
+    if (!el || !findQ.trim()) return
+    const targets = all
+      ? (Array.from(el.querySelectorAll('mark.skrid-find, mark.skrid-find-cur')) as HTMLElement[])
+      : findMarks.current[findIdx]
+        ? [findMarks.current[findIdx]]
+        : []
+    for (const m of targets) m.replaceWith(document.createTextNode(repl))
+    saveContent()
+    runFind()
+  }
+
+  const closeFind = () => {
+    const el = editorRef.current
+    const had = el?.querySelector('mark.skrid-find, mark.skrid-find-cur')
+    if (el && had) {
+      el.querySelectorAll('mark.skrid-find, mark.skrid-find-cur').forEach((m) =>
+        m.replaceWith(document.createTextNode(m.textContent ?? ''))
+      )
+      saveContent()
+    }
+    findMarks.current = []
+    setFindCount(0)
+    setFindOpen(false)
+  }
+
+  const addComment = () => {
+    const text = comText.trim()
+    const sel = window.getSelection()
+    if (current && text && sel && sel.rangeCount > 0 && !sel.isCollapsed && editorRef.current?.contains(sel.anchorNode)) {
+      const cid = uid()
+      const r = sel.getRangeAt(0)
+      const frag = r.extractContents()
+      const span = document.createElement('span')
+      span.className = 'skrid-com'
+      span.id = `com-${cid}`
+      span.appendChild(frag)
+      r.insertNode(span)
+      sel.removeAllRanges()
+      const html = cleanHtml(editorRef.current!.innerHTML)
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              docs: s.docs.map((d) =>
+                d.id === current.id
+                  ? { ...d, content: html, comments: { ...(d.comments ?? {}), [cid]: { text, at: Date.now() } }, updatedAt: Date.now() }
+                  : d
+              )
+            }
+          : s
+      )
+      setToast({ key: Date.now(), msg: 'Commentaire ajouté 💬' })
+    }
+    setComText('')
+    setComPop(false)
+  }
+
+  const deleteComment = (cid: string) => {
+    const el = editorRef.current
+    if (!el || !current) return
+    const span = el.querySelector(`#com-${cid}`)
+    if (span) span.replaceWith(document.createTextNode(span.textContent ?? ''))
+    const html = cleanHtml(el.innerHTML)
+    setState((s) =>
+      s
+        ? {
+            ...s,
+            docs: s.docs.map((d) => {
+              if (d.id !== current.id) return d
+              const comments = { ...(d.comments ?? {}) }
+              delete comments[cid]
+              return { ...d, content: html, comments, updatedAt: Date.now() }
+            })
+          }
+        : s
+    )
+  }
+
+  const comGoto = (cid: string) => {
+    const el = editorRef.current?.querySelector(`#com-${cid}`) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ block: 'center' })
+      el.classList.add('flash')
+      setTimeout(() => el.classList.remove('flash'), 1400)
+    }
+  }
+
+  const moveDocTo = (id: string, targetId: string) => {
+    setState((s) => {
+      if (!s) return s
+      const d = s.docs.find((x) => x.id === id)
+      const t = s.docs.find((x) => x.id === targetId)
+      if (!d || !t || d.id === t.id) return s
+      if (descendants(s.docs, id).some((x) => x.id === targetId)) return s
+      const docs = s.docs.filter((x) => x.id !== id)
+      if ((d.parentId ?? null) === (t.parentId ?? null)) {
+        const i = docs.findIndex((x) => x.id === targetId)
+        docs.splice(i, 0, { ...d, updatedAt: Date.now() })
+      } else {
+        docs.push({ ...d, parentId: t.id, updatedAt: Date.now() })
+      }
+      return { ...s, docs }
+    })
+  }
+
+  const pdfOpts = (): PdfOpts => {
+    const p = state?.pdf ?? {}
+    return {
+      topNum: state?.pdfNumTop ?? true,
+      bottomNum: state?.pdfNumBottom ?? true,
+      xOfY: p.xOfY ?? false,
+      footerText: p.footerTitle ? state?.bookTitle || 'Livre' : undefined,
+      format: p.format ?? 'a4',
+      margin: p.margin ?? (p.format === 'a5' ? 40 : undefined),
+      font: p.font ?? 'sans',
+      toc: p.toc ?? false,
+      pageBreakPerChapter: p.pageBreak ?? false,
+      titlePage: p.titlePage ?? false,
+      titleText: state?.bookTitle || 'Livre'
+    }
+  }
+
+  const setPdfOpt = (k: string, v: unknown) =>
+    setState((s) => (s ? { ...s, pdf: { ...(s.pdf ?? {}), [k]: v } } : s))
+
+  const exportChapter = (format: 'pdf' | 'html' | 'md' | 'doc') => {
+    if (!current || !state) return
+    const title = current.title.trim() || 'Sans titre'
+    const fname = title.replace(/[\\/:*?"<>|]/g, '-')
+    if (format === 'pdf') {
+      const lines: PdfLine[] = [
+        { text: title, size: 20, font: 2, indent: 0, gapBefore: 0 },
+        { text: `${state.bookTitle || 'Livre'} — Skrid · ${new Date().toLocaleDateString('fr-FR')}`, size: 9, font: 1, indent: 0, gapBefore: 4 },
+        { text: '', size: 6, font: 1, indent: 0, gapBefore: 8 }
+      ]
+      htmlToLines(current.content, lines)
+      downloadPdf(buildPdf(lines, { ...pdfOpts(), toc: false, titlePage: false }), `${fname}.pdf`)
+    } else if (format === 'html') {
+      exportFile(`${fname}.html`, standaloneHtml(title, state.bookTitle || 'Livre', current.content), 'text/html')
+    } else if (format === 'md') {
+      exportFile(`${fname}.md`, `# ${title}\n\n${htmlToMarkdown(current.content)}`, 'text/markdown')
+    } else {
+      exportFile(`${fname}.doc`, wordHtml(title, current.content), 'application/msword')
+    }
+    setToast({ key: Date.now(), msg: `Chapitre exporté (${format.toUpperCase()}) ⬇` })
+    setExpOpen(false)
+  }
+
   const fmtFromUi = (cmd: string, value?: string) => {
     editorRef.current?.focus()
     fmt(cmd, value)
@@ -482,6 +777,13 @@ export default function SkridApp() {
   const totalWords = state ? orderedDocs(state.docs).reduce((a, d) => a + wordCount(d.content), 0) : 0
   const docsOrdered = state ? orderedDocs(state.docs) : []
   const maxW = Math.max(1, ...docsOrdered.map((d) => wordCount(d.content)))
+  const daily = state?.daily ?? {}
+  const days14 = lastNDays(daily, 14)
+  const maxD = Math.max(1, ...days14.map((d) => d.words))
+  const sum7 = lastNDays(daily, 7).reduce((a, d) => a + d.words, 0)
+  const streak = streakOf(daily)
+  const chapIdx = docsOrdered.findIndex((d) => d.id === current?.id)
+  const comCount = Object.keys(current?.comments ?? {}).length
 
   const exportBook = () => {
     if (!state) return
@@ -491,10 +793,10 @@ export default function SkridApp() {
     ]
     orderedDocs(state.docs).forEach((d, i) => {
       lines.push({ text: '', size: 8, font: 1, indent: 0, gapBefore: i === 0 ? 40 : 90 })
-      lines.push({ text: d.title.trim() || 'Sans titre', size: 18, font: 2, indent: 0, gapBefore: 0 })
+      lines.push({ text: d.title.trim() || 'Sans titre', size: 18, font: 2, indent: 0, gapBefore: 0, chapter: d.title.trim() || 'Sans titre' })
       htmlToLines(d.content, lines)
     })
-    downloadPdf(buildPdf(lines), `${(state.bookTitle || 'livre').replace(/[\\/:*?"<>|]/g, '-')}.pdf`)
+    downloadPdf(buildPdf(lines, pdfOpts()), `${(state.bookTitle || 'livre').replace(/[\\/:*?"<>|]/g, '-')}.pdf`)
     setToast({ key: Date.now(), msg: 'Livre exporté en PDF 📄' })
   }
 
@@ -511,7 +813,10 @@ export default function SkridApp() {
   }
 
   return (
-    <div className={`blocs-app skrid-app${focus ? ' focus' : ''}`}>
+    <div
+      className={`blocs-app skrid-app${focus ? ' focus' : ''}${read ? ' reading' : ''}${view !== 'doc' ? ' altview' : ''}`}
+      style={{ '--side-w': `${sideW}px` } as CSSProperties}
+    >
       {!focus && (
         <aside className="blocs-sidebar skrid-side">
           <div className="blocs-app-head">
@@ -557,10 +862,22 @@ export default function SkridApp() {
                 parentId={null}
                 depth={0}
                 currentId={current.id}
+                dragOverId={dragOverId}
                 onSelect={(id) => setState((s) => (s ? { ...s, currentId: id } : s))}
                 onAddChild={(id) => addDoc(id)}
                 onDelete={deleteDoc}
                 onDuplicate={duplicateDoc}
+                onDragStart={(id) => setDragId(id)}
+                onDragOver={(id) => setDragOverId(id)}
+                onDrop={(id) => {
+                  if (dragId) moveDocTo(dragId, id)
+                  setDragId(null)
+                  setDragOverId(null)
+                }}
+                onDragEnd={() => {
+                  setDragId(null)
+                  setDragOverId(null)
+                }}
               />
             </ul>
           </div>
@@ -582,7 +899,206 @@ export default function SkridApp() {
           </div>
         </aside>
       )}
+      {!focus && (
+        <div
+          className="sidebar-resizer"
+          title="Redimensionner le menu"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            const startX = e.clientX
+            const startW = sideW
+            const onMove = (ev: MouseEvent) => {
+              const w = Math.min(440, Math.max(180, startW + ev.clientX - startX))
+              setSideW(w)
+              localStorage.setItem('skouar:sidebarW', String(w))
+            }
+            const onUp = () => {
+              window.removeEventListener('mousemove', onMove)
+              window.removeEventListener('mouseup', onUp)
+            }
+            window.addEventListener('mousemove', onMove)
+            window.addEventListener('mouseup', onUp)
+          }}
+        >
+          <span className="resizer-arrow">⇆</span>
+        </div>
+      )}
       <main className="blocs-main skrid-main">
+        {read && view === 'doc' && (
+          <div className="skrid-read-bar" data-pop="skread">
+            <button className="db-btn" title="Police plus petite" onClick={() => setReadSize((s) => Math.max(0.9, Math.round((s - 0.1) * 10) / 10))}>
+              A−
+            </button>
+            <button className="db-btn" title="Police plus grande" onClick={() => setReadSize((s) => Math.min(2.2, Math.round((s + 0.1) * 10) / 10))}>
+              A+
+            </button>
+            <button className="db-btn" title="Quitter le mode lecture (Échap)" onClick={() => setRead(false)}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {view === 'doc' && findOpen && (
+          <div className="skrid-find" data-pop="skfind">
+            <input
+              className="db-input"
+              autoFocus
+              placeholder="Rechercher… (Ctrl+F)"
+              value={findQ}
+              onChange={(e) => setFindQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') findGo(e.shiftKey ? -1 : 1)
+                if (e.key === 'Escape') closeFind()
+              }}
+            />
+            <span className="mono skrid-find-count">{findCount ? `${Math.min(findIdx + 1, findCount)}/${findCount}` : '0'}</span>
+            <button className="tool" title="Occurrence précédente" onMouseDown={(e) => e.preventDefault()} onClick={() => findGo(-1)}>
+              <ChevronUp size={14} />
+            </button>
+            <button className="tool" title="Occurrence suivante" onMouseDown={(e) => e.preventDefault()} onClick={() => findGo(1)}>
+              <ChevronDown size={14} />
+            </button>
+            <input
+              className="db-input"
+              placeholder="Remplacer par…"
+              value={repl}
+              onChange={(e) => setRepl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') doReplace(false)
+              }}
+            />
+            <button className="db-btn" onMouseDown={(e) => e.preventDefault()} onClick={() => doReplace(false)}>
+              Remplacer
+            </button>
+            <button className="db-btn" onMouseDown={(e) => e.preventDefault()} onClick={() => doReplace(true)}>
+              Tout
+            </button>
+            <button className="tool" title="Fermer (Échap)" onClick={closeFind}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {view === 'doc' && comOpen && (
+          <div className="skrid-comments" data-pop="skcoms">
+            <div className="tpl-head">
+              <strong>Commentaires ({comCount})</strong>
+              <button className="db-btn" onClick={() => setComOpen(false)}>
+                ✕
+              </button>
+            </div>
+            {Object.entries(current.comments ?? {}).map(([cid, c]) => (
+              <div className="skrid-com-item" key={cid}>
+                <p>{c.text}</p>
+                <div className="skrid-com-meta">
+                  <span className="mono">{relTime(c.at)}</span>
+                  <button className="db-btn" onClick={() => comGoto(cid)}>
+                    Voir
+                  </button>
+                  <button className="db-btn" onClick={() => deleteComment(cid)}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!comCount && <p className="mono skrid-com-empty">Sélectionne du texte puis 💬 dans la barre pour annoter.</p>}
+          </div>
+        )}
+        {expOpen && (
+          <div className="skrid-pop skrid-exp" data-pop="skexp">
+            <button className="skrid-exp-btn" onClick={() => exportChapter('pdf')}>⬇ Chapitre en PDF</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('html')}>⬇ Chapitre en HTML</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('md')}>⬇ Chapitre en Markdown</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('doc')}>⬇ Chapitre en .doc</button>
+            <div className="skrid-exp-sep" />
+            <button className="skrid-exp-btn" onClick={exportBook}>⬇ Livre entier en PDF</button>
+            <label className="skrid-exp-opt">
+              <input
+                type="checkbox"
+                checked={state.pdfNumTop ?? true}
+                onChange={(e) => setState((s) => (s ? { ...s, pdfNumTop: e.target.checked } : s))}
+              />
+              Numéros de page en haut du PDF
+            </label>
+            <label className="skrid-exp-opt">
+              <input
+                type="checkbox"
+                checked={state.pdfNumBottom ?? true}
+                onChange={(e) => setState((s) => (s ? { ...s, pdfNumBottom: e.target.checked } : s))}
+              />
+              Numéros de page en bas du PDF
+            </label>
+            <div className="skrid-exp-sep" />
+            <label className="skrid-exp-opt">
+              <input type="checkbox" checked={state.pdf?.xOfY ?? false} onChange={(e) => setPdfOpt('xOfY', e.target.checked)} />
+              « Page X sur Y » en bas
+            </label>
+            <label className="skrid-exp-opt">
+              <input type="checkbox" checked={state.pdf?.footerTitle ?? false} onChange={(e) => setPdfOpt('footerTitle', e.target.checked)} />
+              Titre du livre en pied de page
+            </label>
+            <label className="skrid-exp-opt">
+              <input type="checkbox" checked={state.pdf?.toc ?? false} onChange={(e) => setPdfOpt('toc', e.target.checked)} />
+              Sommaire automatique
+            </label>
+            <label className="skrid-exp-opt">
+              <input type="checkbox" checked={state.pdf?.pageBreak ?? false} onChange={(e) => setPdfOpt('pageBreak', e.target.checked)} />
+              Saut de page avant chaque chapitre
+            </label>
+            <label className="skrid-exp-opt">
+              <input type="checkbox" checked={state.pdf?.titlePage ?? false} onChange={(e) => setPdfOpt('titlePage', e.target.checked)} />
+              Page de garde (titre du livre)
+            </label>
+            <label className="skrid-exp-opt">
+              Format
+              <select className="skrid-select skrid-exp-sel" value={state.pdf?.format ?? 'a4'} onChange={(e) => setPdfOpt('format', e.target.value)}>
+                <option value="a4">A4 (210×297)</option>
+                <option value="a5">A5 (148×210)</option>
+                <option value="livret">Livret (2×A5 sur A4 paysage)</option>
+              </select>
+            </label>
+            <label className="skrid-exp-opt">
+              Marges
+              <select
+                className="skrid-select skrid-exp-sel"
+                value={String(state.pdf?.margin ?? 0)}
+                onChange={(e) => setPdfOpt('margin', Number(e.target.value) || undefined)}
+              >
+                <option value="0">par défaut</option>
+                <option value="36">étroites</option>
+                <option value="50">normales</option>
+                <option value="70">larges</option>
+              </select>
+            </label>
+            <label className="skrid-exp-opt">
+              Police PDF
+              <select className="skrid-select skrid-exp-sel" value={state.pdf?.font ?? 'sans'} onChange={(e) => setPdfOpt('font', e.target.value)}>
+                <option value="sans">Sans (Helvetica)</option>
+                <option value="serif">Serif (Times)</option>
+                <option value="mono">Mono (Courier)</option>
+              </select>
+            </label>
+          </div>
+        )}
+        {helpOpen && (
+          <div className="skrid-help-ov" onClick={() => setHelpOpen(false)}>
+            <div className="skrid-help" data-pop="skhelp" onClick={(e) => e.stopPropagation()}>
+              <div className="tpl-head">
+                <strong>Raccourcis clavier</strong>
+                <button className="db-btn" onClick={() => setHelpOpen(false)}>
+                  ✕
+                </button>
+              </div>
+              <div className="skrid-help-grid">
+                <span><kbd>Ctrl</kbd>+<kbd>B</kbd></span><span>gras</span>
+                <span><kbd>Ctrl</kbd>+<kbd>I</kbd></span><span>italique</span>
+                <span><kbd>Ctrl</kbd>+<kbd>U</kbd></span><span>souligné</span>
+                <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></span><span>annuler / rétablir</span>
+                <span><kbd>Ctrl</kbd>+<kbd>F</kbd></span><span>rechercher / remplacer</span>
+                <span><kbd>Échap</kbd></span><span>fermer popover, quitter le mode lecture</span>
+                <span>double-clic</span><span>cocher une case de liste</span>
+              </div>
+            </div>
+          </div>
+        )}
         {tplOpen && (
           <div className="tpl-pop" data-pop="tplsk">
             <div className="tpl-head">
@@ -612,6 +1128,7 @@ export default function SkridApp() {
         )}
         {view === 'doc' ? (
           <>
+            {!read && (
             <div className="page-top">
               <div className="page-head">
                 <input
@@ -621,6 +1138,7 @@ export default function SkridApp() {
                   onChange={(e) => updateDoc(current.id, { title: e.target.value })}
                 />
                 <div className="page-head-actions">
+                  <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
                   <button
                     className="page-cover-btn"
                     title={focus ? 'Quitter le mode focus' : 'Mode focus (sans sidebar ni barre)'}
@@ -628,8 +1146,15 @@ export default function SkridApp() {
                   >
                     {focus ? '↔' : '🎯'}
                   </button>
-                  <button className="page-cover-btn" title="Exporter le livre en PDF" onClick={exportBook}>
-                    📄
+                  <button className={`page-cover-btn${read ? ' active' : ''}`} title="Mode lecture (plein écran, police réglable)" onClick={() => setRead((r) => !r)}>
+                    <BookOpen size={16} />
+                  </button>
+                  <button className={`page-cover-btn${comOpen ? ' active' : ''}`} title={`Commentaires (${comCount})`} onClick={() => setComOpen((o) => !o)}>
+                    <MessageSquare size={16} />
+                    {comCount > 0 && <span className="skrid-badge">{comCount}</span>}
+                  </button>
+                  <button className="page-cover-btn" data-pop="skexp" title="Exporter (chapitre PDF/HTML/MD/doc, livre PDF, numéros de page)" onClick={() => setExpOpen((o) => !o)}>
+                    <Download size={16} />
                   </button>
                 </div>
               </div>
@@ -642,14 +1167,22 @@ export default function SkridApp() {
                     <Redo2 size={15} />
                   </button>
                   <span className="sel-sep" />
-                  <select className="skrid-select" title="Police d'écriture" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
+                  <select className="skrid-select" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
                     <option value="" disabled>Police…</option>
                     <option value="'Iowan Old Style', Georgia, serif">Iowan (défaut)</option>
                     <option value="Inter, system-ui, sans-serif">Inter</option>
-                    <option value="Georgia, 'Times New Roman', serif">Georgia</option>
-                    <option value="'Courier New', monospace">Courier</option>
-                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="'Times New Roman', serif">Times New Roman</option>
+                    <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
+                    <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
+                    <option value="Garamond, serif">Garamond</option>
                     <option value="Verdana, sans-serif">Verdana</option>
+                    <option value="Tahoma, sans-serif">Tahoma</option>
+                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+                    <option value="'Courier New', monospace">Courier New</option>
+                    <option value="'Lucida Console', monospace">Lucida Console</option>
                     <option value="'Comic Sans MS', cursive">Comic Sans</option>
                     <option value="Impact, sans-serif">Impact</option>
                   </select>
@@ -747,6 +1280,13 @@ export default function SkridApp() {
                   <button className="tool" title="Effacer la mise en forme" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('removeFormat')}>
                     <Eraser size={15} />
                   </button>
+                  <span className="sel-sep" />
+                  <button className="tool" title="Rechercher / remplacer (Ctrl+F)" onMouseDown={(e) => e.preventDefault()} onClick={() => setFindOpen(true)}>
+                    <Search size={15} />
+                  </button>
+                  <button className="tool" data-pop="skcom" title="Commenter la sélection" onMouseDown={(e) => e.preventDefault()} onClick={() => setComPop((o) => !o)}>
+                    <MessageSquare size={15} />
+                  </button>
                 </div>
                 {linkPop && (
                   <div className="skrid-pop" data-pop="sklink">
@@ -777,14 +1317,36 @@ export default function SkridApp() {
                     </button>
                   </div>
                 )}
+                {comPop && (
+                  <div className="skrid-pop skrid-compop" data-pop="skcom">
+                    <textarea
+                      className="db-input skrid-comta"
+                      autoFocus
+                      placeholder="Ton commentaire sur la sélection…"
+                      value={comText}
+                      onChange={(e) => setComText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) addComment()
+                        if (e.key === 'Escape') setComPop(false)
+                      }}
+                    />
+                    <button className="db-btn" onClick={addComment}>
+                      OK
+                    </button>
+                  </div>
+                )}
                 <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImgFile} />
               </div>
             </div>
+            )}
             <div
               ref={editorRef}
               className="skrid-editor"
               contentEditable
               suppressContentEditableWarning
+              spellCheck
+              lang="fr"
+              style={read ? { fontSize: `${readSize}rem` } : undefined}
               data-placeholder="Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…"
               onInput={saveContent}
               onKeyDown={onEditorKeyDown}
@@ -797,6 +1359,7 @@ export default function SkridApp() {
                 }
               }}
             />
+            {!read && (
             <div className="skrid-status">
               <span className="mono">
                 {words} mot{words > 1 ? 's' : ''}
@@ -838,8 +1401,12 @@ export default function SkridApp() {
                   </button>
                 </div>
               )}
-              <span className="mono skrid-total">Livre : {totalWords} mots · {state.docs.length} chapitre{state.docs.length > 1 ? 's' : ''}</span>
+              <span className="mono skrid-total">Chapitre {chapIdx + 1}/{docsOrdered.length} · livre : {totalWords} mots · {state.docs.length} chapitre{state.docs.length > 1 ? 's' : ''}</span>
+              <button className="db-btn" title="Raccourcis clavier (?)" onClick={() => setHelpOpen(true)}>
+                ?
+              </button>
             </div>
+            )}
           </>
         ) : view === 'writer' ? (
           <div className="skrid-plan">
@@ -919,6 +1486,23 @@ export default function SkridApp() {
                     <span className="stats-bar" style={{ width: `${Math.round((wordCount(d.content) / maxW) * 100)}%` }} />
                   </span>
                   <span className="stats-val">{wordCount(d.content)}{d.wordTarget ? ` / ${d.wordTarget}` : ''} mots</span>
+                </div>
+              ))}
+            </div>
+            <p className="skrid-plan-hint mono" style={{ marginTop: 18 }}>
+              Session — {daily[todayKey()] ?? 0} mot{(daily[todayKey()] ?? 0) > 1 ? 's' : ''} aujourd'hui · {sum7} sur 7 jours · streak 🔥 {streak} jour{streak > 1 ? 's' : ''}
+            </p>
+            <div className="stats-cards">
+              <div className="stat-card"><span className="stat-num">{daily[todayKey()] ?? 0}</span><span className="stat-lbl">mots aujourd'hui</span></div>
+              <div className="stat-card"><span className="stat-num">{sum7}</span><span className="stat-lbl">mots / 7 jours</span></div>
+              <div className="stat-card"><span className="stat-num">🔥 {streak}</span><span className="stat-lbl">streak (jours)</span></div>
+              <div className="stat-card"><span className="stat-num">{maxD}</span><span className="stat-lbl">meilleur jour (14 j)</span></div>
+            </div>
+            <div className="skrid-days">
+              {days14.map((d) => (
+                <div className="skrid-day" key={d.key} title={`${d.full} : ${d.words} mots`}>
+                  <span className="skrid-day-bar" style={{ height: `${Math.max(5, Math.round((d.words / maxD) * 100))}%` }} />
+                  <span className="skrid-day-lbl">{d.day}</span>
                 </div>
               ))}
             </div>

@@ -7,12 +7,28 @@ export interface SkridDoc {
   parentId?: string | null
   wordTarget?: number
   updatedAt: number
+  comments?: Record<string, { text: string; at: number }>
+}
+
+export interface SkridPdfOpts {
+  format?: 'a4' | 'a5' | 'livret'
+  margin?: number
+  font?: 'sans' | 'serif' | 'mono'
+  toc?: boolean
+  pageBreak?: boolean
+  titlePage?: boolean
+  xOfY?: boolean
+  footerTitle?: boolean
 }
 
 export interface SkridState {
   bookTitle: string
   docs: SkridDoc[]
   currentId: string | null
+  daily?: Record<string, number>
+  pdfNumTop?: boolean
+  pdfNumBottom?: boolean
+  pdf?: SkridPdfOpts
 }
 
 interface KvRow {
