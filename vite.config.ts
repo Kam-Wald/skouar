@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icons/icon-512.png'],
       manifest: {
         name: 'Skouar',
         short_name: 'Skouar',

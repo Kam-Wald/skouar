@@ -1,5 +1,5 @@
-import { deflateSync } from 'node:zlib'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { deflateSync, inflateSync } from 'node:zlib'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,7 +8,6 @@ const outDir = join(root, 'public', 'icons')
 const varDir = join(outDir, 'variants')
 mkdirSync(varDir, { recursive: true })
 
-const BG = [250, 250, 250]
 const crcTable = new Int32Array(256).map((_, n) => {
   let c = n
   for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
@@ -26,57 +25,6 @@ function chunk(type, data) {
   const crc = Buffer.alloc(4)
   crc.writeUInt32BE(crc32(body), 0)
   return Buffer.concat([len, body, crc])
-}
-
-function makeCanvas(size) {
-  const px = Buffer.alloc(size * size * 4)
-  for (let i = 0; i < size * size; i++) {
-    px[i * 4] = BG[0]; px[i * 4 + 1] = BG[1]; px[i * 4 + 2] = BG[2]; px[i * 4 + 3] = 255
-  }
-  return px
-}
-function setPx(px, size, x, y, c) {
-  if (x < 0 || y < 0 || x >= size || y >= size) return
-  const o = (y * size + x) * 4
-  px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = c[3] ?? 255
-}
-function fillRoundedRect(px, size, x0, y0, x1, y1, r, c) {
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      const cx = x < x0 + r ? x0 + r : x >= x1 - r ? x1 - r - 1 : x
-      const cy = y < y0 + r ? y0 + r : y >= y1 - r ? y1 - r - 1 : y
-      if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) setPx(px, size, x, y, c)
-    }
-  }
-}
-function fillCircle(px, size, cx, cy, r, c) {
-  for (let y = cy - r; y < cy + r; y++)
-    for (let x = cx - r; x < cx + r; x++)
-      if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) setPx(px, size, x, y, c)
-}
-function fillCapsule(px, size, cx, cy, w, h, ang, c) {
-  const rad = (ang * Math.PI) / 180
-  const cos = Math.cos(rad), sin = Math.sin(rad)
-  const reach = Math.ceil(Math.hypot(w, h) / 2) + 1
-  const r = w / 2
-  const ah = w / 2, bh = h / 2
-  for (let y = cy - reach; y <= cy + reach; y++) {
-    for (let x = cx - reach; x <= cx + reach; x++) {
-      const dx = x - cx, dy = y - cy
-      const lx = Math.abs(dx * cos + dy * sin)
-      const ly = Math.abs(-dx * sin + dy * cos)
-      const qx = lx - (ah - r), qy = ly - (bh - r)
-      const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r
-      if (d <= 0) setPx(px, size, x, y, c)
-    }
-  }
-}
-function fillEllipse(px, size, cx, cy, rx, ry, c) {
-  for (let y = cy - ry; y < cy + ry; y++)
-    for (let x = cx - rx; x < cx + rx; x++) {
-      const dx = (x - cx) / rx, dy = (y - cy) / ry
-      if (dx * dx + dy * dy <= 1) setPx(px, size, x, y, c)
-    }
 }
 function encodePng(size, px) {
   const stride = size * 4 + 1
@@ -97,46 +45,54 @@ function encodePng(size, px) {
     chunk('IEND', Buffer.alloc(0))
   ])
 }
-
-const WHITE = [255, 255, 255]
-const TEAL = [13, 148, 136]
-const EYE = [119, 227, 198]
-const L1 = [165, 220, 216]
-const L2 = [120, 200, 196]
-
-function variant(size, v) {
-  const px = makeCanvas(size)
-  const m = Math.round(size * 0.22)
-  if (v === 1) {
-    fillRoundedRect(px, size, m, m, size - m, size - m, Math.round(size * 0.08), TEAL)
-  } else if (v === 2) {
-    const u = size / 512
-    const R = Math.round
-    fillCapsule(px, size, R(209*u), R(170*u), R(77*u), R(231*u), -8, TEAL)
-    fillCapsule(px, size, R(293*u), R(163*u), R(67*u), R(165*u), 20, TEAL)
-    fillEllipse(px, size, R(272*u), R(341*u), R(82*u), R(86*u), TEAL)
-    fillCircle(px, size, R(225*u), R(347*u), R(40*u), EYE)
-  } else if (v === 3) {
-    const s = Math.round(size * 0.42)
-    const r = Math.round(size * 0.07)
-    fillRoundedRect(px, size, size - m - s, m, size - m, m + s, r, L1)
-    fillRoundedRect(px, size, size - m - s - Math.round(size * 0.06), m + Math.round(size * 0.06), size - m - Math.round(size * 0.06), m + s + Math.round(size * 0.06), r, L2)
-    fillRoundedRect(px, size, m, size - m - s, m + s, size - m, r, TEAL)
-  } else {
-    const u = size / 512
-    const R = Math.round
-    fillCapsule(px, size, R(209*u), R(170*u), R(77*u), R(231*u), -8, TEAL)
-    fillCapsule(px, size, R(293*u), R(163*u), R(67*u), R(165*u), 20, TEAL)
-    fillEllipse(px, size, R(272*u), R(341*u), R(82*u), R(86*u), TEAL)
-    fillCircle(px, size, R(225*u), R(347*u), R(40*u), EYE)
+function decodePng(buf) {
+  let pos = 8, w = 0, h = 0
+  const idat = []
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos)
+    const type = buf.toString('ascii', pos + 4, pos + 8)
+    const data = buf.subarray(pos + 8, pos + 8 + len)
+    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4) }
+    if (type === 'IDAT') idat.push(data)
+    pos += 12 + len
   }
-  return px
+  const raw = inflateSync(Buffer.concat(idat))
+  const stride = w * 4 + 1
+  const px = Buffer.alloc(w * h * 4)
+  for (let y = 0; y < h; y++) raw.copy(px, y * w * 4, y * stride + 1, (y + 1) * stride)
+  return { w, h, px }
+}
+function resize(src, size) {
+  const { w, h, px } = src
+  const out = Buffer.alloc(size * size * 4)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const fx = (x + 0.5) * w / size - 0.5
+      const fy = (y + 0.5) * h / size - 0.5
+      const x0 = Math.max(0, Math.floor(fx)), y0 = Math.max(0, Math.floor(fy))
+      const x1 = Math.min(w - 1, x0 + 1), y1 = Math.min(h - 1, y0 + 1)
+      const ax = fx - x0, ay = fy - y0
+      const o = (y * size + x) * 4
+      for (let c = 0; c < 4; c++) {
+        const v =
+          px[(y0 * w + x0) * 4 + c] * (1 - ax) * (1 - ay) +
+          px[(y0 * w + x1) * 4 + c] * ax * (1 - ay) +
+          px[(y1 * w + x0) * 4 + c] * (1 - ax) * ay +
+          px[(y1 * w + x1) * 4 + c] * ax * ay
+        out[o + c] = Math.round(v)
+      }
+    }
+  }
+  return out
 }
 
-for (const v of [1, 2, 3, 4]) {
-  writeFileSync(join(varDir, `v${v}.png`), encodePng(512, variant(512, v)))
-}
-writeFileSync(join(outDir, 'icon-192.png'), encodePng(192, variant(192, 2)))
-writeFileSync(join(outDir, 'icon-512.png'), encodePng(512, variant(512, 2)))
-writeFileSync(join(outDir, 'icon-512-maskable.png'), encodePng(512, variant(512, 2)))
-console.log('icons v1-v4 variants + default v2 (lapin teal) generated')
+const src = decodePng(readFileSync(join(root, 'public', 'logo-source.png')))
+const r512 = resize(src, 512)
+writeFileSync(join(outDir, 'icon-512.png'), encodePng(512, r512))
+writeFileSync(join(outDir, 'icon-512-maskable.png'), encodePng(512, r512))
+writeFileSync(join(outDir, 'icon-192.png'), encodePng(192, resize(src, 192)))
+writeFileSync(join(varDir, 'v1.png'), encodePng(384, resize(src, 384)))
+writeFileSync(join(varDir, 'v2.png'), encodePng(512, r512))
+writeFileSync(join(varDir, 'v3.png'), encodePng(256, resize(src, 256)))
+writeFileSync(join(varDir, 'v4.png'), encodePng(512, r512))
+console.log('icons générés depuis public/logo-source.png (visuel 18 embarqué tel quel)')

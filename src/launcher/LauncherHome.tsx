@@ -11,7 +11,7 @@ export default function LauncherHome() {
       <header className="launcher-header">
         <img
           className="launcher-logo-img launcher-mark"
-          src={`${import.meta.env.BASE_URL}icon.svg`}
+          src={`${import.meta.env.BASE_URL}icons/icon-512.png`}
           alt="Skouar"
         />
         <div>
