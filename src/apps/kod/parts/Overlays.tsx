@@ -13,8 +13,6 @@ export default function Overlays() {
     setDirHandle,
     realTree,
     setRealTree,
-    sideW,
-    setSideW,
     newItem,
     setNewItem,
     renameId,

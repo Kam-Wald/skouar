@@ -16,9 +16,9 @@ import type { DbRef } from './fields'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { QRCodeSVG } from 'qrcode.react'
-import { useDismiss } from './useDismiss'
+import { useDismiss } from '../../shared/useDismiss'
 import { highlightCode } from './highlight'
-import { notify } from './notify'
+import { notify } from '../../shared/notify'
 
 export interface Heading {
   id: string

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import AppTile from '../shared/AppTile'
 import { apps } from '../apps/registry'
 import ThemeButton from '../ThemeButton'
 import SettingsButton from '../Settings'
@@ -44,33 +44,9 @@ export default function LauncherHome() {
         onChange={(e) => setQ(e.target.value)}
       />
       <main className="launcher-grid" id="launcher-main">
-        {visible.map((app, i) => {
-          const idx = String(apps.indexOf(app) + 1).padStart(2, '0')
-          return app.soon ? (
-            <div key={app.id} className="app-tile soon" aria-disabled="true">
-              <span className="app-tile-index">{idx}</span>
-              <span className="app-tile-icon" aria-hidden>
-                {app.icon}
-              </span>
-              <span className="app-tile-name">{app.name}</span>
-              <span className="app-tile-desc">{app.description}</span>
-              <span className="app-tile-badge">Bientôt</span>
-            </div>
-          ) : (
-            <Link key={app.id} to={`/app/${app.id}`} className="app-tile">
-              <span className="app-tile-index">{idx}</span>
-              {app.logo ? (
-                <img className="app-tile-logo" src={app.logo} alt="" />
-              ) : (
-                <span className="app-tile-icon" aria-hidden>
-                  {app.icon}
-                </span>
-              )}
-              <span className="app-tile-name">{app.name}</span>
-              <span className="app-tile-desc">{app.description}</span>
-            </Link>
-          )
-        })}
+        {visible.map((app) => (
+          <AppTile key={app.id} app={app} idx={String(apps.indexOf(app) + 1).padStart(2, '0')} />
+        ))}
         {visible.length === 0 && <p className="launcher-subtitle">Aucune app ne correspond à « {q} ».</p>}
       </main>
       <footer className="launcher-footer">

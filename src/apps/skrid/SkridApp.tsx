@@ -1,8 +1,9 @@
+import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import SettingsButton from '../../Settings'
 import ThemeButton from '../../ThemeButton'
-import { useDismiss } from '../blocs/useDismiss'
+import { useDismiss } from '../../shared/useDismiss'
 import { stripHtml } from '../blocs/tree'
 import { buildPdf, downloadPdf, wrap, type PdfLine, type PdfOpts } from '../blocs/pdf'
 import { exportFile } from '../blocs/markdown'
@@ -208,10 +209,6 @@ export default function SkridApp() {
   const [tablePop, setTablePop] = useState(false)
   const [tRows, setTRows] = useState('3')
   const [tCols, setTCols] = useState('3')
-  const [sideW, setSideW] = useState(() => {
-    const v = Number(localStorage.getItem('skouar:sidebarW'))
-    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
-  })
   const [findOpen, setFindOpen] = useState(false)
   const [findQ, setFindQ] = useState('')
   const [repl, setRepl] = useState('')
@@ -900,33 +897,19 @@ export default function SkridApp() {
   }
 
   if (!state || !current) {
-    return (
-      <div className="blocs-app">
-        <main className="blocs-main">
-          <div className="skel skel-title" />
-          <div className="skel skel-line" />
-          <div className="skel skel-line short" />
-        </main>
-      </div>
-    )
+    return <AppSkeleton />
   }
 
   return (
-    <div
-      className={`blocs-app skrid-app${focus ? ' focus' : ''}${read ? ' reading' : ''}${view !== 'doc' ? ' altview' : ''}`}
-      style={{ '--side-w': `${sideW}px` } as CSSProperties}
-    >
-      {!focus && (
-        <aside className="blocs-sidebar skrid-side">
-          <div className="blocs-app-head">
-            <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
-              <img className="blocs-app-logo" src={`${import.meta.env.BASE_URL}app-icons/skrid.svg`} alt="Skrid" />
-              <span className="blocs-app-name">Skrid</span>
-            </Link>
-            <Link to="/" className="blocs-back" title="Retour au launcher">
-              ←
-            </Link>
-          </div>
+    <AppShell
+      appId="skrid"
+      appName="Skrid"
+      logo={`${import.meta.env.BASE_URL}app-icons/skrid.svg`}
+      className={`skrid-app${focus ? ' focus' : ''}${read ? ' reading' : ''}${view !== 'doc' ? ' altview' : ''}`}
+      hideChrome={focus}
+      mainClass="blocs-main skrid-main"
+      sidebar={
+        <>
           <div className="skrid-views">
             <button className={view === 'doc' ? 'active' : ''} onClick={() => setView('doc')} title="Vue Document — édition de texte">
               ✍️ Document
@@ -1040,37 +1023,9 @@ export default function SkridApp() {
             <span className={`saved-check${savedAt ? ' on' : ''}`}>✓</span> enregistré
             {savedAt && <span className="saved-time">{relTime(savedAt)}</span>}
           </div>
-          <div className="blocs-sidebar-foot">
-            <ThemeButton />
-          <SettingsButton appId="skrid" appName="Skrid" />
-          </div>
-        </aside>
-      )}
-      {!focus && (
-        <div
-          className="sidebar-resizer"
-          title="Redimensionner le menu"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            const startX = e.clientX
-            const startW = sideW
-            const onMove = (ev: MouseEvent) => {
-              const w = Math.min(440, Math.max(180, startW + ev.clientX - startX))
-              setSideW(w)
-              localStorage.setItem('skouar:sidebarW', String(w))
-            }
-            const onUp = () => {
-              window.removeEventListener('mousemove', onMove)
-              window.removeEventListener('mouseup', onUp)
-            }
-            window.addEventListener('mousemove', onMove)
-            window.addEventListener('mouseup', onUp)
-          }}
-        >
-          <span className="resizer-arrow">⇆</span>
-        </div>
-      )}
-      <main className="blocs-main skrid-main">
+        </>
+      }
+      >
         {read && view === 'doc' && (
           <div className="skrid-read-bar" data-pop="skread">
             <button className="db-btn" title="Police plus petite" onClick={() => setReadSize((s) => Math.max(0.9, Math.round((s - 0.1) * 10) / 10))}>
@@ -1773,7 +1728,6 @@ export default function SkridApp() {
             {toast.action && <button onClick={() => { setToast(null); toast.action?.() }}>Annuler</button>}
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

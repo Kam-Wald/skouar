@@ -14,8 +14,6 @@ export default function TabsBar() {
     setDirHandle,
     realTree,
     setRealTree,
-    sideW,
-    setSideW,
     newItem,
     setNewItem,
     renameId,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type * as React from 'react'
-import { useDismiss } from '../blocs/useDismiss'
-import { notify } from '../blocs/notify'
+import { useDismiss } from '../../shared/useDismiss'
+import { notify } from '../../shared/notify'
 import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../Settings'
 import {
   loadNodes,
@@ -64,10 +64,6 @@ export function useKodApp() {
   const [buffers, setBuffers] = useState<Record<string, Buffer>>({})
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
   const [realTree, setRealTree] = useState<RealEntry[]>([])
-  const [sideW, setSideW] = useState(() => {
-    const v = Number(localStorage.getItem('skouar:sidebarW'))
-    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 260
-  })
   const [newItem, setNewItem] = useState<{ parentId: string | null; kind: 'file' | 'dir'; value: string } | null>(null)
   const [renameId, setRenameId] = useState<string | null>(null)
   const [renameVal, setRenameVal] = useState('')
@@ -2186,8 +2182,6 @@ export function useKodApp() {
     setDirHandle,
     realTree,
     setRealTree,
-    sideW,
-    setSideW,
     newItem,
     setNewItem,
     renameId,

@@ -1,4 +1,6 @@
-import Dexie, { type Table } from 'dexie'
+import { createAppDb, uid } from '../../shared/db'
+export { uid }
+import type { Table } from 'dexie'
 
 export interface LerFile {
   id: string
@@ -32,49 +34,41 @@ export interface LerAnnot {
   at: number
 }
 
-class LerDb extends Dexie {
-  pdfs!: Table<LerFile, string>
-  annots!: Table<LerAnnot, string>
-  constructor() {
-    super('skouar-ler')
-    this.version(1).stores({ pdfs: 'id,title,updatedAt', annots: 'id,fileId,page' })
-  }
-}
+export const db = createAppDb('skouar-ler', [{ version: 1, stores: { pdfs: 'id,title,updatedAt', annots: 'id,fileId,page' } }])
+export const pdfs = db.table<LerFile, string>('pdfs')
+export const annotsT = db.table<LerAnnot, string>('annots')
 
-export const db = new LerDb()
-
-export const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
 export async function listFiles(): Promise<LerFile[]> {
-  return db.pdfs.orderBy('updatedAt').reverse().toArray()
+  return pdfs.orderBy('updatedAt').reverse().toArray()
 }
 
 export async function addFile(f: LerFile): Promise<void> {
-  await db.pdfs.put(f)
+  await pdfs.put(f)
 }
 
 export async function updateFile(id: string, patch: Partial<LerFile>): Promise<void> {
-  await db.pdfs.update(id, patch)
+  await pdfs.update(id, patch)
 }
 
 export async function restoreFile(f: LerFile, annots: LerAnnot[]): Promise<void> {
-  await db.pdfs.put(f)
-  await db.annots.bulkPut(annots)
+  await pdfs.put(f)
+  await annotsT.bulkPut(annots)
 }
 
 export async function deleteFile(id: string): Promise<void> {
-  await db.annots.where('fileId').equals(id).delete()
-  await db.pdfs.delete(id)
+  await annotsT.where('fileId').equals(id).delete()
+  await pdfs.delete(id)
 }
 
 export async function listAnnots(fileId: string): Promise<LerAnnot[]> {
-  return db.annots.where('fileId').equals(fileId).toArray()
+  return annotsT.where('fileId').equals(fileId).toArray()
 }
 
 export async function putAnnot(a: LerAnnot): Promise<void> {
-  await db.annots.put(a)
+  await annotsT.put(a)
 }
 
 export async function deleteAnnot(id: string): Promise<void> {
-  await db.annots.delete(id)
+  await annotsT.delete(id)
 }

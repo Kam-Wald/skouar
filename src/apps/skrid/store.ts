@@ -1,3 +1,5 @@
+import { uid } from '../../shared/db'
+export { uid }
 import Dexie, { type Table } from 'dexie'
 
 export interface SkridDoc {
@@ -76,7 +78,6 @@ class SkridDb extends Dexie {
 
 const db = new SkridDb()
 
-export const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
 export function createDoc(title: string, parentId: string | null = null): SkridDoc {
   return { id: uid(), title, content: '', parentId, updatedAt: Date.now() }

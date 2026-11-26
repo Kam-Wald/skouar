@@ -17,8 +17,6 @@ export default function EditorPane() {
     setDirHandle,
     realTree,
     setRealTree,
-    sideW,
-    setSideW,
     newItem,
     setNewItem,
     renameId,

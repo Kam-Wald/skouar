@@ -1,3 +1,4 @@
+import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -5,7 +6,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, rgb } from 'pdf-lib'
 import SettingsButton from '../../Settings'
 import ThemeButton from '../../ThemeButton'
-import { useDismiss } from '../blocs/useDismiss'
+import { useDismiss } from '../../shared/useDismiss'
 import {
   addFile,
   deleteAnnot,
@@ -16,7 +17,8 @@ import {
   restoreFile,
   updateFile,
   uid,
-  db,
+  pdfs,
+  annotsT,
   type LerAnnot,
   type LerFile
 } from './store'
@@ -150,10 +152,6 @@ export default function LerApp() {
   const [splitDraft, setSplitDraft] = useState('')
   const [signOpen, setSignOpen] = useState(false)
   const [sign, setSign] = useState<string | null>(() => localStorage.getItem('skouar:ler-sign'))
-  const [sideW, setSideW] = useState(() => {
-    const v = Number(localStorage.getItem('skouar:sidebarW'))
-    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
-  })
   const [dragOver, setDragOver] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -202,7 +200,7 @@ export default function LerApp() {
   useEffect(() => {
     if (!cur || view !== 'view') return
     const t = setTimeout(() => {
-      void db.pdfs.update(cur.id, { lastPage: page, updatedAt: Date.now() })
+      void pdfs.update(cur.id, { lastPage: page, updatedAt: Date.now() })
     }, 800)
     return () => clearTimeout(t)
   }, [page, cur, view])
@@ -896,26 +894,21 @@ export default function LerApp() {
     a.type === 'hl' ? '🖍️' : a.type === 'ink' ? '✏️' : a.type === 'note' ? '📝' : a.type === 'text' ? '🔤' : a.type === 'sign' ? '✍️' : a.type === 'arrow' ? '➡️' : a.type === 'circle' ? '⭕' : '✅'
 
   return (
-    <div
-      className={`blocs-app ler-app${dragOver ? ' drag-over' : ''}${night ? ' night' : ''}`}
-      style={{ '--side-w': `${sideW}px` } as CSSProperties}
+    <AppShell
+      appId="ler"
+      appName="Ler"
+      logo={`${BASE}app-icons/ler.svg`}
+      className={`ler-app${dragOver ? ' drag-over' : ''}${night ? ' night' : ''}`}
+      mainClass="blocs-main ler-main"
+      mainRef={mainRef}
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
-    >
-      <aside className="blocs-sidebar ler-side">
-        <div className="blocs-app-head">
-          <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
-            <img className="blocs-app-logo" src={`${BASE}app-icons/ler.svg`} alt="Ler" />
-            <span className="blocs-app-name">Ler</span>
-          </Link>
-          <Link to="/" className="blocs-back" title="Retour au launcher">
-            ←
-          </Link>
-        </div>
+      sidebar={
+        <>
         {view === 'view' && cur ? (
           <>
             <button className="blocs-side-link" onClick={closeFile}>
@@ -1147,34 +1140,9 @@ export default function LerApp() {
         <div className="saved-line">
           <span className="saved-check on">✓</span> 100 % local
         </div>
-        <div className="blocs-sidebar-foot">
-          <ThemeButton />
-          <SettingsButton appId="ler" appName="Ler" />
-        </div>
-      </aside>
-      <div
-        className="sidebar-resizer"
-        title="Redimensionner le menu"
-        onMouseDown={(e) => {
-          e.preventDefault()
-          const startX = e.clientX
-          const startW = sideW
-          const onMove = (ev: MouseEvent) => {
-            const w = Math.min(440, Math.max(180, startW + ev.clientX - startX))
-            setSideW(w)
-            localStorage.setItem('skouar:sidebarW', String(w))
-          }
-          const onUp = () => {
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-          }
-          window.addEventListener('mousemove', onMove)
-          window.addEventListener('mouseup', onUp)
-        }}
+        </>
+      }
       >
-        <span className="resizer-arrow">⇆</span>
-      </div>
-      <main ref={mainRef} className="blocs-main ler-main">
         {view === 'lib' ? (
           <div className="ler-lib">
             <div className="page-top">
@@ -1493,7 +1461,6 @@ export default function LerApp() {
             )}
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }
