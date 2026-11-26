@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CkCtx } from '../CockpitApp'
-import { BREATH, breathPos, dueChip, fmt, pomodoroPlan, type PomSegment } from '../logic'
+import { BREATH, breathPos, checkState, dueChip, fmt, pomodoroPlan, type PomSegment } from '../logic'
 import { notify } from '../../../shared/notify'
 import { useDismiss } from '../../../shared/useDismiss'
 import { beep, notifyOS, askNotifPermission } from '../fx'
@@ -46,6 +46,7 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
   const [newRoutine, setNewRoutine] = useState('')
   const [newIcon, setNewIcon] = useState('🧘')
   const [newItem, setNewItem] = useState('')
+  const [newTarget, setNewTarget] = useState(0)
   const [blanks, setBlanks] = useState(0)
   const [showShutdown, setShowShutdown] = useState(false)
   const [shChecks, setShChecks] = useState([false, false, false])
@@ -165,10 +166,28 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
     }
   }, [t.running, display, t.label])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.code !== 'Space' || e.ctrlKey || e.metaKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName ?? ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      e.preventDefault()
+      const cur = tRef.current
+      if (cur.running) void stopTimer()
+      else if (mode === 'pomodoro') startPomodoro()
+      else if (mode === 'countdown') startCountdown(cdMin)
+      else if (mode === 'chrono') doStartChrono()
+      else startBreath()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mode, cdMin])
+
   const openTasks = ctx.tasks.filter((x) => x.col === 'todo' || x.col === 'doing')
   const dueToday = openTasks.filter((x) => x.due && dueChip(x, ctx.today) !== 'future').sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
   const todayTaskObj = ctx.tasks.find((x) => x.id === ctx.todayTask)
-  const checkOf = (rid: string): boolean => !!ctx.checks.find((c) => c.day === ctx.today && c.routineId === rid && c.done)
+  const stateOf = (rid: string) => checkState(ctx.routines.find((r) => r.id === rid) ?? { target: 0 }, ctx.checks.find((c) => c.day === ctx.today && c.routineId === rid))
   const focusRunning = t.running && t.mode === 'pomodoro' && t.plan[t.segIdx]?.kind === 'focus'
   const upcoming = ctx.reminders.filter((r) => !r.done && r.at > Date.now()).slice(0, 6)
   const todayInt = ctx.sessions.filter((s) => s.kind === 'interrupt' && new Date(s.at).toDateString() === new Date().toDateString()).length
@@ -253,10 +272,19 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
         <label className="ck-task-pick">
           Tâche liée au minuteur
           <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-            <option value="">{ctx.todayTask ? '— tâche du jour auto —' : '— aucune —'}</option>
-            {openTasks.map((x) => (
-              <option key={x.id} value={x.id}>{x.col === 'doing' ? '▶ ' : ''}{x.title}</option>
-            ))}
+            <option value="">{ctx.todayTask ? '— tâche du jour auto —' : openTasks.length ? '— aucune —' : '— crée d’abord une tâche dans le Kanban —'}</option>
+            {dueToday.length > 0 && (
+              <optgroup label="📅 Aujourd’hui / en retard">
+                {dueToday.map((x) => (
+                  <option key={x.id} value={x.id}>{x.title}</option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Toutes les tâches">
+              {openTasks.filter((x) => !x.due || dueChip(x, ctx.today) === 'future').map((x) => (
+                <option key={x.id} value={x.id}>{x.col === 'doing' ? '▶ ' : ''}{x.title}</option>
+              ))}
+            </optgroup>
           </select>
         </label>
 
@@ -273,9 +301,16 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
         )}
 
         <button className="ck-btn ghost ck-notif" onClick={() => void askNotifPermission()}>🔔 Activer les notifications</button>
+        <p className="ck-hint ck-kbd-hint"><span className="ck-kbd">Espace</span> démarrer / arrêter · <span className="ck-kbd">N</span> tâche rapide</p>
       </section>
 
       <div className="ck-today-side">
+        {ctx.yesterdayShutdown?.done && ctx.yesterdayShutdown.note && (
+          <section className="ck-card ck-yesterday">
+            <h3 className="ck-card-title">🌙 Hier soir, tu avais noté</h3>
+            <p className="ck-yesterday-note">« {ctx.yesterdayShutdown.note} »</p>
+          </section>
+        )}
         {todayTaskObj && (
           <section className="ck-card ck-today-task">
             <h3 className="ck-card-title">🎯 Tâche du jour</h3>
@@ -327,20 +362,35 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
             <div>
               <p className="ck-col-sub">Routines</p>
               <ul className="ck-checks">
-                {ctx.routines.map((r) => (
-                  <li key={r.id} className="ck-check-row">
-                    <label>
-                      <input type="checkbox" checked={checkOf(r.id)} onChange={(e) => void ctx.toggleCheck(r.id, e.target.checked)} />
-                      <span>{r.icon} {r.label}</span>
-                    </label>
-                    <button className="ck-mini" title="Supprimer la routine" onClick={() => void ctx.removeRoutine(r.id)}>✕</button>
-                  </li>
-                ))}
+                {ctx.routines.map((r) => {
+                  const st = stateOf(r.id)
+                  return (
+                    <li key={r.id} className="ck-check-row">
+                      {st.mode === 'count' ? (
+                        <span className="ck-count-row">
+                          <span className={st.done ? 'ck-done' : ''}>{r.icon} {r.label}</span>
+                          <span className="ck-count-ctl">
+                            <button className="ck-mini" onClick={() => void ctx.bumpCheck(r.id, -1)}>−</button>
+                            <span className={`ck-count-num${st.done ? ' ok' : ''}`}>{st.count}/{st.target}</span>
+                            <button className="ck-mini" onClick={() => void ctx.bumpCheck(r.id, 1)}>+</button>
+                          </span>
+                        </span>
+                      ) : (
+                        <label>
+                          <input type="checkbox" checked={st.done} onChange={(e) => void ctx.toggleCheck(r.id, e.target.checked)} />
+                          <span className={st.done ? 'ck-done' : ''}>{r.icon} {r.label}</span>
+                        </label>
+                      )}
+                      <button className="ck-mini" title="Supprimer la routine" onClick={() => void ctx.removeRoutine(r.id)}>✕</button>
+                    </li>
+                  )
+                })}
               </ul>
               <div className="ck-add-row">
-                <input className="ck-input" placeholder="Nouvelle routine…" value={newRoutine} onChange={(e) => setNewRoutine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon); setNewRoutine('') } }} />
+                <input className="ck-input" placeholder="Nouvelle routine…" value={newRoutine} onChange={(e) => setNewRoutine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon, newTarget); setNewRoutine(''); setNewTarget(0) } }} />
                 <input className="ck-input ck-icon-input" value={newIcon} maxLength={4} onChange={(e) => setNewIcon(e.target.value)} title="Picto" />
-                <button className="ck-btn" onClick={() => { if (newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon); setNewRoutine('') } }}>+</button>
+                <input className="ck-input ck-target-input" type="number" min={0} max={99} value={newTarget} onChange={(e) => setNewTarget(Number(e.target.value))} title="Objectif (compteur, 0 = simple case à cocher)" />
+                <button className="ck-btn" onClick={() => { if (newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon, newTarget); setNewRoutine(''); setNewTarget(0) } }}>+</button>
               </div>
             </div>
             <div>

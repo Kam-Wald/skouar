@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
+import { useDismiss } from '../../shared/useDismiss'
 import { dayKey, focusByDay, lastDays, spawnRecurring, weekStartOf, WIP_LIMIT, wipExceeded } from './logic'
 import { notifyOS } from './fx'
 import {
@@ -66,6 +67,7 @@ export interface CkCtx {
   checks: CkDayCheck[]
   dayItems: CkDayItem[]
   shutdown: CkShutdown | undefined
+  yesterdayShutdown: CkShutdown | undefined
   shutdownDays: string[]
   goals: CkGoal[]
   reminders: CkReminder[]
@@ -79,12 +81,13 @@ export interface CkCtx {
   putSess: (s: CkSession) => Promise<void>
   delSess: (id: string) => Promise<void>
   toggleCheck: (routineId: string, done: boolean) => Promise<void>
+  bumpCheck: (routineId: string, delta: number) => Promise<void>
   toggleDayItem: (id: string, done: boolean) => Promise<void>
   addDayItem: (label: string) => Promise<void>
   removeDayItem: (id: string) => Promise<void>
   resetToday: () => Promise<void>
   saveShutdown: (done: boolean, note: string) => Promise<void>
-  addRoutine: (label: string, icon: string) => Promise<void>
+  addRoutine: (label: string, icon: string, target: number) => Promise<void>
   removeRoutine: (id: string) => Promise<void>
   addSubtask: (taskId: string, label: string) => Promise<void>
   toggleSubtask: (st: CkSubtask, done: boolean) => Promise<void>
@@ -116,6 +119,9 @@ export default function CockpitApp(): JSX.Element {
   const [checks, setChecks] = useState<CkDayCheck[]>([])
   const [dayItems, setDayItems] = useState<CkDayItem[]>([])
   const [shutdown, setShutdown] = useState<CkShutdown | undefined>(undefined)
+  const [yesterdayShutdown, setYesterdayShutdown] = useState<CkShutdown | undefined>(undefined)
+  const [showQuick, setShowQuick] = useState(false)
+  const [quickTitle, setQuickTitle] = useState('')
   const [shutdownDays, setShutdownDays] = useState<string[]>([])
   const [goals, setGoals] = useState<CkGoal[]>([])
   const [reminders, setReminders] = useState<CkReminder[]>([])
@@ -123,10 +129,13 @@ export default function CockpitApp(): JSX.Element {
   const [today, setToday] = useState(dayKey(new Date()))
   const todayRef = useRef(today)
   todayRef.current = today
+  useDismiss('ck-quick', showQuick, () => setShowQuick(false))
 
   const reload = useCallback(async () => {
     const t = dayKey(new Date())
-    const [s, ta, st, r, c, di, sh, shs, gl, rm, tt] = await Promise.all([
+    const y = new Date()
+    y.setDate(y.getDate() - 1)
+    const [s, ta, st, r, c, di, sh, shs, gl, rm, tt, ysh] = await Promise.all([
       listSessions(),
       listTasks(),
       listSubtasks(),
@@ -137,7 +146,8 @@ export default function CockpitApp(): JSX.Element {
       listShutdowns(),
       listGoals(),
       listReminders(),
-      loadKV<string>('todayTask')
+      loadKV<string>('todayTask'),
+      getShutdown(dayKey(y))
     ])
     const spawned = spawnRecurring(ta, Date.now(), uid)
     for (const sp of spawned) await putTask(sp)
@@ -149,6 +159,7 @@ export default function CockpitApp(): JSX.Element {
     setChecks(c)
     setDayItems(di)
     setShutdown(sh)
+    setYesterdayShutdown(ysh)
     setShutdownDays(shs.filter((x) => x.done).map((x) => x.day))
     setGoals(gl)
     setReminders(rm)
@@ -159,6 +170,15 @@ export default function CockpitApp(): JSX.Element {
 
   useEffect(() => {
     void reload()
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'n' || e.ctrlKey || e.metaKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName ?? ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      e.preventDefault()
+      setShowQuick(true)
+    }
+    document.addEventListener('keydown', onKey)
     const ivDay = setInterval(() => {
       if (dayKey(new Date()) !== todayRef.current) void reload()
     }, 30000)
@@ -172,6 +192,7 @@ export default function CockpitApp(): JSX.Element {
       if (due.length) void reload()
     }, 15000)
     return () => {
+      document.removeEventListener('keydown', onKey)
       clearInterval(ivDay)
       clearInterval(ivRem)
     }
@@ -207,7 +228,7 @@ export default function CockpitApp(): JSX.Element {
     async (routineId: string, done: boolean) => {
       const t = dayKey(new Date())
       const existing = checks.find((c) => c.day === t && c.routineId === routineId)
-      const row: CkDayCheck = existing ? { ...existing, done } : { id: uid(), day: t, routineId, done }
+      const row: CkDayCheck = existing ? { ...existing, done } : { id: uid(), day: t, routineId, done, count: done ? 1 : 0 }
       await putCheck(row)
       setChecks((prev) => {
         const i = prev.findIndex((c) => c.id === row.id)
@@ -248,8 +269,27 @@ export default function CockpitApp(): JSX.Element {
     setShutdownDays((prev) => (done && !prev.includes(t) ? [...prev, t] : prev.filter((d) => d !== t || done)))
     notify(done ? 'Rituel de fermeture noté 🌙' : 'Rituel annulé')
   }, [])
-  const addRoutine = useCallback(async (label: string, icon: string) => {
-    const r: CkRoutine = { id: uid(), label, icon }
+  const bumpCheck = useCallback(
+    async (routineId: string, delta: number) => {
+      const t = dayKey(new Date())
+      const existing = checks.find((c) => c.day === t && c.routineId === routineId)
+      const routine = routines.find((r) => r.id === routineId)
+      const target = routine?.target ?? 0
+      const prevCount = existing?.count ?? 0
+      const count = Math.max(0, prevCount + delta)
+      const done = target > 0 ? count >= target : count > 0
+      const row: CkDayCheck = existing ? { ...existing, done, count } : { id: uid(), day: t, routineId, done, count }
+      await putCheck(row)
+      setChecks((prev) => {
+        const i = prev.findIndex((c) => c.id === row.id)
+        if (i >= 0) return prev.map((c) => (c.id === row.id ? row : c))
+        return [...prev, row]
+      })
+    },
+    [checks, routines]
+  )
+  const addRoutine = useCallback(async (label: string, icon: string, target: number) => {
+    const r: CkRoutine = { id: uid(), label, icon, target: Math.max(0, Math.round(target)) }
     await putRoutine(r)
     setRoutines((prev) => [...prev, r])
   }, [])
@@ -319,8 +359,8 @@ export default function CockpitApp(): JSX.Element {
   const doing = tasks.filter((t) => t.col === 'doing').length
 
   const ctx: CkCtx = {
-    sessions, tasks, subtasks, routines, checks, dayItems, shutdown, shutdownDays, goals, reminders, todayTask,
-    today, days, reload, saveTask, deleteTask, addSess, putSess, delSess, toggleCheck, toggleDayItem, addDayItem,
+    sessions, tasks, subtasks, routines, checks, dayItems, shutdown, yesterdayShutdown, shutdownDays, goals, reminders, todayTask,
+    today, days, reload, saveTask, deleteTask, addSess, putSess, delSess, toggleCheck, bumpCheck, toggleDayItem, addDayItem,
     removeDayItem, resetToday, saveShutdown, addRoutine, removeRoutine, addSubtask, toggleSubtask, removeSubtask,
     addGoal, removeGoal, addReminder, removeReminder, setTodayTask, exportData, importData
   }
@@ -361,6 +401,34 @@ export default function CockpitApp(): JSX.Element {
       {view === 'matrix' && <MatrixView ctx={ctx} />}
       {view === 'review' && <ReviewView ctx={ctx} />}
       {view === 'advice' && <AdviceView ctx={ctx} />}
+      {showQuick && (
+        <div className="ck-pop-backdrop">
+          <div className="ck-pop" data-pop="ck-quick">
+            <h3>⚡ Tâche rapide <span className="ck-kbd">N</span></h3>
+            <input
+              className="ck-input"
+              autoFocus
+              placeholder="Titre de la tâche…"
+              value={quickTitle}
+              onChange={(e) => setQuickTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && quickTitle.trim()) {
+                  void saveTask({
+                    id: uid(), title: quickTitle.trim(), col: 'todo', estMin: 30, urgent: false, important: false,
+                    color: '#64748b', value: 3, createdAt: Date.now(), doneAt: null, actualMin: 0,
+                    due: null, tags: [], goalId: null, recur: null
+                  }).then(() => notify('Tâche ajoutée ⚡'))
+                  setQuickTitle('')
+                  setShowQuick(false)
+                }
+              }}
+            />
+            <div className="ck-pop-actions">
+              <button className="ck-btn ghost" onClick={() => setShowQuick(false)}>Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }

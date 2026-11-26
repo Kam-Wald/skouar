@@ -24,7 +24,12 @@ import {
   goalProgress,
   breathPos,
   parseTaskLines,
-  allTags
+  allTags,
+  checkState,
+  weekTrend,
+  sortTasks,
+  filterTasks,
+  reviewMarkdown
 } from '../src/apps/cockpit/logic'
 
 const at = (y: number, m: number, d: number, h = 10): number => new Date(y, m - 1, d, h, 0, 0).getTime()
@@ -284,5 +289,70 @@ describe('v2 : semaine, récurrences, échéances', () => {
     const sessions = [1, 2, 3].map((h) => ({ kind: 'interrupt', actualSec: 0, at: at(2025, 6, 10, 8 + h) }))
     const advices = adviceFor({ tasks: [], sessions, days, today, shutdownDays: [today, days[5]] })
     expect(advices.some((a) => a.text.includes('3 interruptions'))).toBe(true)
+  })
+})
+
+describe('v3 : compteurs, tendance, tri, markdown', () => {
+  it('checkState mode bool vs compteur', () => {
+    expect(checkState({ target: 0 }, { done: true }).mode).toBe('bool')
+    expect(checkState({ target: 0 }, { done: true }).done).toBe(true)
+    const c = checkState({ target: 8 }, { done: false, count: 3 })
+    expect(c).toEqual({ mode: 'count', done: false, count: 3, target: 8 })
+    expect(checkState({ target: 8 }, { done: true, count: 8 }).done).toBe(true)
+    expect(checkState({ target: 8 }, undefined).count).toBe(0)
+    expect(checkState({ target: 8 }, { done: false, count: -2 }).count).toBe(0)
+  })
+  it('weekTrend compare 7 jours vs 7 précédents', () => {
+    const now = new Date(2025, 5, 16, 12)
+    const sessions = [
+      { kind: 'focus', actualSec: 6000, at: at(2025, 6, 10, 9) },
+      { kind: 'focus', actualSec: 12000, at: at(2025, 6, 12, 9) }
+    ]
+    const t = weekTrend(sessions, now)
+    expect(t).toEqual({ thisMin: 300, prevMin: 0, pct: null })
+    const sessions2 = [
+      { kind: 'focus', actualSec: 6000, at: at(2025, 6, 3, 9) },
+      { kind: 'focus', actualSec: 6000, at: at(2025, 6, 12, 9) }
+    ]
+    const t2 = weekTrend(sessions2, now)
+    expect(t2).toEqual({ thisMin: 100, prevMin: 100, pct: 0 })
+  })
+  it('sortTasks', () => {
+    const tasks = [
+      { title: 'b', createdAt: 2, due: '2025-06-20', value: 1, estMin: 10 },
+      { title: 'a', createdAt: 1, due: '2025-06-10', value: 5, estMin: 60 },
+      { title: 'c', createdAt: 3, due: null, value: 3, estMin: 30 }
+    ]
+    expect(sortTasks(tasks, 'created', '2025-06-10').map((t) => t.title)).toEqual(['a', 'b', 'c'])
+    expect(sortTasks(tasks, 'due', '2025-06-10').map((t) => t.title)).toEqual(['a', 'b', 'c'])
+    expect(sortTasks(tasks, 'value', '2025-06-10').map((t) => t.title)).toEqual(['a', 'c', 'b'])
+    expect(sortTasks(tasks, 'est', '2025-06-10').map((t) => t.title)).toEqual(['a', 'c', 'b'])
+  })
+  it('filterTasks titre et tags', () => {
+    const tasks = [{ title: 'Rapport Q3', tags: ['pro'] }, { title: 'Courses', tags: ['perso'] }]
+    expect(filterTasks(tasks, 'rapport').map((t) => t.title)).toEqual(['Rapport Q3'])
+    expect(filterTasks(tasks, '#perso').length).toBe(0)
+    expect(filterTasks(tasks, 'perso').map((t) => t.title)).toEqual(['Courses'])
+    expect(filterTasks(tasks, '').length).toBe(2)
+  })
+  it('reviewMarkdown produit un texte structuré', () => {
+    const md = reviewMarkdown({
+      weekStart: '2025-06-09',
+      days: ['2025-06-09'],
+      fb: [{ day: '2025-06-09', min: 45 }],
+      eb: [{ day: '2025-06-09', avg: 4 }],
+      ib: [{ day: '2025-06-09', n: 2 }],
+      eva: { est: 60, act: 45 },
+      paretoRows: [{ title: 'Rapport', value: 5, cum: 0.8 }],
+      lines: ['Cette semaine : 45 min.'],
+      trend: { thisMin: 45, prevMin: 90, pct: -50 }
+    })
+    expect(md).toContain('# Revue Cockpit — semaine du 2025-06-09')
+    expect(md).toContain('-50 %')
+    expect(md).toContain('45 min')
+    expect(md).toContain('énergie 4/5')
+    expect(md).toContain('2 interruption(s)')
+    expect(md).toContain('Rapport — ★5 (80 % cumulé)')
+    expect(md).toContain('45 min réelles pour 60 min prévus')
   })
 })

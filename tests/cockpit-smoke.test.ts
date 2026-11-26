@@ -48,6 +48,9 @@ describe('Cockpit (smoke jsdom)', () => {
       'Rappels',
       'Tout effacer',
       'Routines',
+      'Verres',
+      'ck-count-num',
+      'Espace',
       'min de focus aujourd’hui',
       'tâches en cours'
     ]) {
