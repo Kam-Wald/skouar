@@ -1,4 +1,15 @@
 import { stripHtml } from '../blocs/tree'
+import { ficheTypeOf, type SkridDoc } from './store'
+
+const escF = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+export function ficheHtml(d: SkridDoc): string {
+  const ft = ficheTypeOf(d)
+  const rows = ft.fields
+    .map((f) => `<tr><th>${escF(f)}</th><td>${escF(d.fields?.[f] ?? '') || '<br>'}</td></tr>`)
+    .join('')
+  return `<h2>${ft.icon} ${escF(d.title.trim() || 'Sans titre')}</h2><p><em>${escF(ft.label)}</em></p><table class="skrid-table"><tbody>${rows}</tbody></table>`
+}
 
 const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

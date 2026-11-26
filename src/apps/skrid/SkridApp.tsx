@@ -46,7 +46,7 @@ import {
   Search,
   X
 } from 'lucide-react'
-import { htmlToMarkdown, lastNDays, standaloneHtml, streakOf, todayKey, wordHtml } from './extra'
+import { ficheHtml, htmlToMarkdown, lastNDays, standaloneHtml, streakOf, todayKey, wordHtml } from './extra'
 
 type SkridView = 'doc' | 'writer' | 'stats'
 
@@ -799,20 +799,21 @@ export default function SkridApp() {
     if (!current || !state) return
     const title = current.title.trim() || 'Sans titre'
     const fname = title.replace(/[\\/:*?"<>|]/g, '-')
+    const body = current.kind === 'fiche' ? ficheHtml(current) : current.content
     if (format === 'pdf') {
       const lines: PdfLine[] = [
         { text: title, size: 20, font: 2, indent: 0, gapBefore: 0 },
         { text: `${state.bookTitle || 'Livre'} — Skrid · ${new Date().toLocaleDateString('fr-FR')}`, size: 9, font: 1, indent: 0, gapBefore: 4 },
         { text: '', size: 6, font: 1, indent: 0, gapBefore: 8 }
       ]
-      htmlToLines(current.content, lines)
+      htmlToLines(body, lines)
       downloadPdf(buildPdf(lines, { ...pdfOpts(), toc: false, titlePage: false }), `${fname}.pdf`)
     } else if (format === 'html') {
-      exportFile(`${fname}.html`, standaloneHtml(title, state.bookTitle || 'Livre', current.content), 'text/html')
+      exportFile(`${fname}.html`, standaloneHtml(title, state.bookTitle || 'Livre', body), 'text/html')
     } else if (format === 'md') {
-      exportFile(`${fname}.md`, `# ${title}\n\n${htmlToMarkdown(current.content)}`, 'text/markdown')
+      exportFile(`${fname}.md`, `# ${title}\n\n${htmlToMarkdown(body)}`, 'text/markdown')
     } else {
-      exportFile(`${fname}.doc`, wordHtml(title, current.content), 'application/msword')
+      exportFile(`${fname}.doc`, wordHtml(title, body), 'application/msword')
     }
     setToast({ key: Date.now(), msg: `${kindLabel} exporté (${format.toUpperCase()}) ⬇` })
     setExpOpen(false)
@@ -1000,7 +1001,7 @@ export default function SkridApp() {
                       className={`blocs-page-item${d.id === current.id ? ' selected' : ''}`}
                       onClick={() => setState((s) => (s ? { ...s, currentId: d.id } : s))}
                     >
-                      <span className="skrid-doc-count">{wordCount(d.content)}</span>
+                      <span className="skrid-doc-count">{d.kind === 'fiche' ? `${Object.values(d.fields ?? {}).filter((v) => v.trim()).length}/${ficheTypeOf(d).fields.length}` : wordCount(d.content)}</span>
                       <span style={{ marginRight: 5 }}>{docIcon(d)}</span>
                       {d.title.trim() || 'Sans titre'}
                     </button>
@@ -1339,36 +1340,7 @@ export default function SkridApp() {
                   </button>
                 </div>
               </div>
-              {current.kind === 'fiche' && (
-                <div className="skrid-fiche">
-                  <select
-                    className="skrid-select"
-                    title="Type de fiche"
-                    value={current.ficheType ?? 'perso'}
-                    onChange={(e) => updateDoc(current.id, { ficheType: e.target.value, fields: {} })}
-                  >
-                    {FICHE_TYPES.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.icon} {t.label}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="skrid-dot-btn" title="Couleur de la fiche">
-                    <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
-                    <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
-                  </label>
-                  {ficheTypeOf(current).fields.map((f) => (
-                    <label className="skrid-fiche-field" key={f}>
-                      <span>{f}</span>
-                      <input
-                        className="db-input"
-                        value={current.fields?.[f] ?? ''}
-                        onChange={(e) => updateDoc(current.id, { fields: { ...(current.fields ?? {}), [f]: e.target.value } })}
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
+              {current.kind !== 'fiche' && (
               <div className="skrid-toolbar-wrap">
                 <div className="skrid-toolbar">
                   <button className="tool" title="Annuler (Ctrl+Z)" onMouseDown={(e) => e.preventDefault()} onClick={undo}>
@@ -1547,8 +1519,47 @@ export default function SkridApp() {
                 )}
                 <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImgFile} />
               </div>
+              )}
             </div>
             )}
+            {current.kind === 'fiche' ? (
+              <div className="skrid-fiche-form">
+                <div className="skrid-fiche-top">
+                  <select
+                    className="skrid-select"
+                    title="Type de fiche"
+                    value={current.ficheType ?? 'perso'}
+                    onChange={(e) => updateDoc(current.id, { ficheType: e.target.value, fields: {} })}
+                  >
+                    {FICHE_TYPES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.icon} {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="skrid-dot-btn" title="Couleur de la fiche">
+                    <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
+                    <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                  </label>
+                  <span className="mono skrid-fiche-hint">une fiche = ces champs uniquement, pas de texte libre</span>
+                </div>
+                {ficheTypeOf(current).fields.map((f) => {
+                  const big = ['Notes', 'Histoire', 'Description', 'Texte', 'Résumé', 'Définition', 'Accroche', 'Conflit', 'Enjeu', 'Résolution possible', 'Exemples', 'Membres', 'Pouvoirs', 'Ambiance', 'But', 'Origine', 'Traits', 'Rôle', 'Source', 'Contexte'].includes(f)
+                  const val = current.fields?.[f] ?? ''
+                  const set = (v: string) => updateDoc(current.id, { fields: { ...(current.fields ?? {}), [f]: v } })
+                  return (
+                    <div className="skrid-fiche-row" key={f}>
+                      <label className="skrid-fiche-lbl">{f}</label>
+                      {big ? (
+                        <textarea className="db-input skrid-fiche-ta" rows={3} value={val} onChange={(e) => set(e.target.value)} />
+                      ) : (
+                        <input className="db-input skrid-fiche-in" value={val} onChange={(e) => set(e.target.value)} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
             <div className="skrid-sheet-col">
               <div className="skrid-ruler-h">
                 {Array.from({ length: 22 }, (_, i) => (
@@ -1572,7 +1583,7 @@ export default function SkridApp() {
               spellCheck
               lang="fr"
               style={read ? { fontSize: `${readSize}rem` } : undefined}
-              data-placeholder="Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…"
+              data-placeholder={current.kind === 'memo' ? 'Écris ton mémo ici…' : 'Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…'}
               onInput={() => {
                 saveContent()
                 openMentionAtCaret()
@@ -1601,20 +1612,24 @@ export default function SkridApp() {
                 </div>
               </div>
             </div>
+            )}
             {!read && (
             <div className="skrid-status">
               <span className="mono">
-                {words} mot{words > 1 ? 's' : ''}
-                {target > 0 && ` / ${target}`}
+                {current.kind === 'fiche'
+                  ? `${Object.values(current.fields ?? {}).filter((v) => v.trim()).length}/${ficheTypeOf(current).fields.length} champs remplis`
+                  : `${words} mot${words > 1 ? 's' : ''}${target > 0 ? ` / ${target}` : ''}`}
               </span>
               {target > 0 && (
                 <span className="page-progress-track" style={{ width: 120 }}>
                   <span className="page-progress-bar" style={{ width: `${Math.min(100, Math.round((words / target) * 100))}%`, display: 'block', height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
                 </span>
               )}
+              {current.kind !== 'fiche' && (
               <button className="db-btn skrid-target-btn" data-pop="target" onClick={() => { setTargetDraft(String(current.wordTarget ?? '')); setTargetPop((o) => !o) }}>
                 🎯 objectif
               </button>
+              )}
               {targetPop && (
                 <div className="sync-pop skrid-target-pop" data-pop="target">
                   <input
