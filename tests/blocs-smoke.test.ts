@@ -13,7 +13,7 @@ beforeAll(() => {
   ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 })
 
-describe('Calepin (smoke jsdom)', () => {
+describe('Karneto (smoke jsdom)', () => {
   it('rend via AppShell', async () => {
     const React = await import('react')
     const { createRoot } = await import('react-dom/client')
@@ -29,7 +29,7 @@ describe('Calepin (smoke jsdom)', () => {
       await new Promise((r) => setTimeout(r, 1200))
     })
     const html = div.innerHTML
-    for (const needle of ['blocs-app', 'blocs-sidebar', 'blocs-app-head', 'Calepin', 'sidebar-resizer', 'blocs-sidebar-foot', 'Réglages', 'blocs-main']) {
+    for (const needle of ['blocs-app', 'blocs-sidebar', 'blocs-app-head', 'Karneto', 'sidebar-resizer', 'blocs-sidebar-foot', 'Réglages', 'blocs-main']) {
       expect(html).toContain(needle)
     }
     root.unmount()

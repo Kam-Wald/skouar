@@ -341,7 +341,7 @@ export function exportPagePdf(page: Page): void {
   const title = stripHtml(page.title).trim() || 'Sans titre'
   const lines: Line[] = [
     { text: title, size: 20, font: 2, indent: 0, gapBefore: 0 },
-    { text: `Calepin — Skouar · ${new Date().toLocaleDateString('fr-FR')}`, size: 9, font: 1, indent: 0, gapBefore: 4 },
+    { text: `Karneto — Skouar · ${new Date().toLocaleDateString('fr-FR')}`, size: 9, font: 1, indent: 0, gapBefore: 4 },
     { text: '', size: 6, font: 1, indent: 0, gapBefore: 8 }
   ]
   const num = { n: 0 }

@@ -13,7 +13,7 @@ export interface AppMeta {
 export const apps: AppMeta[] = [
   {
     id: 'blocs',
-    name: 'Calepin',
+    name: 'Karneto',
     description: 'Pages et bases de données type Notion.',
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,

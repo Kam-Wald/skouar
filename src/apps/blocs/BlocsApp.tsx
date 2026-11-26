@@ -255,7 +255,7 @@ export default function BlocsApp() {
       if (!toNotify.length) return
       if (Notification.permission === 'granted') {
         for (const d of toNotify) {
-          new Notification('⏰ Calepin', {
+          new Notification('⏰ Karneto', {
             body: `${stripHtml(d.block.text) || 'Tâche'} — ${stripHtml(d.page.title).trim() || 'page'}`
           })
         }
@@ -734,7 +734,7 @@ export default function BlocsApp() {
         if (ok) setState(imported)
       }
     } catch {
-      notify('Fichier invalide : export JSON Skouar/Calepin ou .md attendu.')
+      notify('Fichier invalide : export JSON Skouar/Karneto ou .md attendu.')
     }
   }
 
@@ -854,7 +854,7 @@ export default function BlocsApp() {
   return (
     <AppShell
       appId="blocs"
-      appName="Calepin"
+      appName="Karneto"
       logo={`${import.meta.env.BASE_URL}app-icons/calepin.svg`}
       beforeSidebar={
         <div className={`sidebar-backdrop${sidebarOpen ? ' show' : ''}`} onClick={() => setSidebarOpen(false)} />

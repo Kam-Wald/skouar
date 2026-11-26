@@ -7,9 +7,11 @@ export interface FilterParams {
   hue: number
   blur: number
   invert: number
+  temp: number
+  sharpen: number
 }
 
-export const DEFAULT_FILTERS: FilterParams = { brightness: 1, contrast: 1, saturation: 1, sepia: 0, grayscale: 0, hue: 0, blur: 0, invert: 0 }
+export const DEFAULT_FILTERS: FilterParams = { brightness: 1, contrast: 1, saturation: 1, sepia: 0, grayscale: 0, hue: 0, blur: 0, invert: 0, temp: 0, sharpen: 0 }
 
 export function cssFilter(f: FilterParams): string {
   const parts: string[] = []
@@ -21,6 +23,13 @@ export function cssFilter(f: FilterParams): string {
   if (f.hue !== 0) parts.push(`hue-rotate(${Math.round(f.hue)}deg)`)
   if (f.blur > 0) parts.push(`blur(${round2(f.blur)}px)`)
   if (f.invert > 0) parts.push(`invert(${round2(f.invert)})`)
+  if (f.temp > 0) {
+    parts.push(`sepia(${round2((f.temp / 100) * 0.35)})`)
+    parts.push(`hue-rotate(${Math.round(-f.temp / 4)}deg)`)
+  } else if (f.temp < 0) {
+    parts.push(`hue-rotate(${Math.round(-f.temp / 3)}deg)`)
+    parts.push(`saturate(${round2(1 + f.temp / 250)})`)
+  }
   return parts.join(' ') || 'none'
 }
 
@@ -131,6 +140,34 @@ export function frameGeom(w: number, h: number, frame: FrameParams): FrameGeom {
   }
 }
 
+export interface TextLayer {
+  id: string
+  kind: 'text'
+  text: string
+  x: number
+  y: number
+  font: string
+  size: number
+  color: string
+  bg: string
+  bgOpacity: number
+  lineHeight: number
+  bold: boolean
+  italic: boolean
+  align: 'left' | 'center' | 'right'
+}
+
+export interface StickerLayer {
+  id: string
+  kind: 'sticker'
+  emoji: string
+  x: number
+  y: number
+  size: number
+}
+
+export type Layer = TextLayer | StickerLayer
+
 export interface EditState {
   filter: FilterParams
   frame: FrameParams
@@ -139,9 +176,10 @@ export interface EditState {
   flipV: boolean
   crop: Rect | null
   size: { w: number; h: number } | null
+  layers: Layer[]
 }
 
-export const DEFAULT_EDIT: EditState = { filter: { ...DEFAULT_FILTERS }, frame: { ...DEFAULT_FRAME }, rot: 0, flipH: false, flipV: false, crop: null, size: null }
+export const DEFAULT_EDIT: EditState = { filter: { ...DEFAULT_FILTERS }, frame: { ...DEFAULT_FRAME }, rot: 0, flipH: false, flipV: false, crop: null, size: null, layers: [] }
 
 export function outDims(imgW: number, imgH: number, st: EditState): { w: number; h: number } {
   const cw = st.crop ? st.crop.w : imgW
@@ -236,3 +274,53 @@ export const FRAME_PRESETS: FramePreset[] = [
 
 export const framePresetOf = (frame: FrameParams): FramePreset | undefined =>
   FRAME_PRESETS.find((p) => JSON.stringify(p.frame) === JSON.stringify(frame))
+
+export const FONTS: { label: string; value: string }[] = [
+  { label: 'Iowan / Georgia (serif)', value: "'Iowan Old Style', Georgia, serif" },
+  { label: 'Inter (sans)', value: 'Inter, system-ui, sans-serif' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Segoe UI', value: "'Segoe UI', system-ui, sans-serif" },
+  { label: 'Georgia (serif)', value: 'Georgia, serif' },
+  { label: 'Times New Roman', value: "'Times New Roman', serif" },
+  { label: 'Palatino', value: "'Palatino Linotype', Palatino, serif" },
+  { label: 'Book Antiqua', value: "'Book Antiqua', Palatino, serif" },
+  { label: 'Garamond', value: 'Garamond, serif' },
+  { label: 'Verdana', value: 'Verdana, sans-serif' },
+  { label: 'Tahoma', value: 'Tahoma, sans-serif' },
+  { label: 'Trebuchet MS', value: "'Trebuchet MS', sans-serif" },
+  { label: 'Courier New (mono)', value: "'Courier New', monospace" },
+  { label: 'Impact (display)', value: 'Impact, sans-serif' },
+  { label: 'Brush Script (cursive)', value: "'Brush Script MT', 'Segoe Script', cursive" },
+  { label: 'Comic Sans MS', value: "'Comic Sans MS', cursive" },
+  { label: 'Apple Color Emoji', value: "'Apple Color Emoji', 'Segoe UI Emoji', sans-serif" },
+  { label: 'Monospace système', value: "ui-monospace, Menlo, Consolas, monospace" },
+  { label: 'Serif système', value: 'serif' },
+  { label: 'Sans système', value: 'sans-serif' }
+]
+
+export const STICKERS: string[] = [
+  '😀','😂','😍','😎','🤔','😴','😭','😡','👍','👎','👏','🙏','💪','🤝','❤️','💔','💯','🔥','✨','⭐','🎉','🎁','🐰','🐱','🐶','🦊','🐼','🌸','🌈','☀️','🌙','⚡','☕','🍕','🎵','⚽','🏆','🚀','🧠','💡','📌','✅','❌','❓','🗨️','👀','🫶','🤯','😴','🫡','🤌','🍀'
+]
+
+export function newTextLayer(id: string): TextLayer {
+  return {
+    id, kind: 'text', text: 'Votre texte ici', x: 0.1, y: 0.1,
+    font: 'Inter, system-ui, sans-serif', size: 0.06, color: '#ffffff',
+    bg: '#000000', bgOpacity: 0.35, lineHeight: 1.25, bold: false, italic: false, align: 'left'
+  }
+}
+
+export function newStickerLayer(id: string, emoji: string): StickerLayer {
+  return { id, kind: 'sticker', emoji, x: 0.4, y: 0.4, size: 0.15 }
+}
+
+export const layerDims = (l: Layer, iw: number, measure: (text: string, px: number, font: string) => number): { w: number; h: number } => {
+  const px = l.size * iw
+  if (l.kind === 'sticker') return { w: px, h: px }
+  const lines = l.text.split('\n')
+  const w = Math.max(1, ...lines.map((ln) => measure(ln, px, layerFont(l, px))))
+  return { w, h: lines.length * px * l.lineHeight }
+}
+
+export const layerFont = (l: TextLayer, px: number): string =>
+  `${l.italic ? 'italic ' : ''}${l.bold ? '700 ' : ''}${Math.max(1, Math.round(px))}px ${l.font}`

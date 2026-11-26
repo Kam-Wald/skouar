@@ -15,7 +15,13 @@ import {
   EXPORT_FORMATS,
   FILTER_PRESETS,
   FRAME_PRESETS,
-  framePresetOf
+  framePresetOf,
+  FONTS,
+  STICKERS,
+  newTextLayer,
+  newStickerLayer,
+  layerDims,
+  layerFont
 } from '../src/apps/skeud/logic'
 
 describe('skeud logic', () => {
@@ -99,5 +105,34 @@ describe('skeud v2 : presets', () => {
     expect(framePresetOf(v.frame)?.id).toBe('vintage-frame')
     expect(framePresetOf({ ...DEFAULT_FRAME, border: true, borderWidth: 3 })).toBeUndefined()
     expect(v.filter && cssFilter(v.filter)).toContain('sepia')
+  })
+})
+
+describe('skeud v3 : calques, température, presets étendus', () => {
+  it('cssFilter température chaude/froide, sharpen exclu du css', () => {
+    expect(cssFilter({ ...DEFAULT_FILTERS, temp: 80 })).toBe('sepia(0.28) hue-rotate(-20deg)')
+    expect(cssFilter({ ...DEFAULT_FILTERS, temp: -60 })).toBe('hue-rotate(20deg) saturate(0.76)')
+    expect(cssFilter({ ...DEFAULT_FILTERS, sharpen: 0.8 })).toBe('none')
+  })
+  it('FONTS : 20 polices (plus que les 16 de Skrid), STICKERS : 48', () => {
+    expect(FONTS.length).toBe(20)
+    expect(STICKERS.length).toBe(52)
+    expect(FONTS.some((f) => f.label.includes('Impact'))).toBe(true)
+  })
+  it('newTextLayer/newStickerLayer + layerDims', () => {
+    const t = newTextLayer('a')
+    expect(t.kind).toBe('text')
+    expect(t.text.length).toBeGreaterThan(0)
+    const d = layerDims(t, 1000, (text) => text.length * 10)
+    expect(d.h).toBeCloseTo((0.06 * 1000) * 1.25)
+    expect(d.w).toBe('Votre texte ici'.length * 10)
+    const st = newStickerLayer('b', '🐰')
+    expect(layerDims(st, 1000, () => 0)).toEqual({ w: 150, h: 150 })
+  })
+  it('layerFont gras/italique', () => {
+    expect(layerFont({ ...newTextLayer('x'), bold: true, italic: true }, 50)).toBe('italic 700 50px Inter, system-ui, sans-serif')
+  })
+  it('DEFAULT_EDIT a layers vide', () => {
+    expect(DEFAULT_EDIT.layers).toEqual([])
   })
 })
