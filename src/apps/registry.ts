@@ -65,7 +65,7 @@ export const apps: AppMeta[] = [
     description: 'Éditeur de code léger et agréable : coloration, onglets, arbre de fichiers, recherche.',
     icon: '💻',
     logo: `${import.meta.env.BASE_URL}app-icons/kod.svg`,
-    soon: true
+    component: lazy(() => import('./kod/KodApp'))
   },
   {
     id: 'kemm',
