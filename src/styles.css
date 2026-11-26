@@ -3875,6 +3875,59 @@ th.drag-over {
   opacity: 1;
 }
 
+.skrid-fiche-form {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem 0 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skrid-fiche-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.skrid-fiche-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.skrid-fiche-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skrid-fiche-lbl {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.skrid-fiche-in {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 8px 12px;
+}
+
+.skrid-fiche-ta {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
 .skrid-sheet-col {
   width: min(820px, 100%);
   margin: 0 auto;
