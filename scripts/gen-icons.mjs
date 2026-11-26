@@ -89,7 +89,16 @@ function resize(src, size) {
 const src = decodePng(readFileSync(join(root, 'public', 'logo-source.png')))
 const r512 = resize(src, 512)
 writeFileSync(join(outDir, 'icon-512.png'), encodePng(512, r512))
-writeFileSync(join(outDir, 'icon-512-maskable.png'), encodePng(512, r512))
+const side = Math.round(512 * 0.78)
+const small = resize(src, side)
+const mask = Buffer.alloc(512 * 512 * 4)
+for (let i = 0; i < 512 * 512; i++) {
+  mask[i * 4] = 255; mask[i * 4 + 1] = 255; mask[i * 4 + 2] = 255; mask[i * 4 + 3] = 255
+}
+const ox = Math.round((512 - side) / 2)
+for (let y = 0; y < side; y++)
+  small.copy(mask, ((ox + y * 512) * 4), y * side * 4, (y + 1) * side * 4)
+writeFileSync(join(outDir, 'icon-512-maskable.png'), encodePng(512, mask))
 writeFileSync(join(outDir, 'icon-192.png'), encodePng(192, resize(src, 192)))
 writeFileSync(join(varDir, 'v1.png'), encodePng(384, resize(src, 384)))
 writeFileSync(join(varDir, 'v2.png'), encodePng(512, r512))

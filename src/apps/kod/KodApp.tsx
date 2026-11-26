@@ -13,10 +13,15 @@ import {
   loadKV,
   saveKV,
   uid,
+  pushVersion,
+  listVersions,
+  deleteVersionsFor,
   type KodNode,
-  type KodUI
+  type KodUI,
+  type KodVersion
 } from './store'
 import { highlight, langOf } from './highlight'
+import { renderPreview } from './preview'
 
 declare global {
   interface Window {
@@ -113,9 +118,23 @@ export default function KodApp() {
   const [toast, setToast] = useState<{ key: number; msg: string; action?: { label: string; fn: () => void } } | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [lineCol, setLineCol] = useState({ line: 1, col: 1 })
+  const [replOpen, setReplOpen] = useState(false)
+  const [replQ, setReplQ] = useState('')
+  const [gReplQ, setGReplQ] = useState('')
+  const [multi, setMulti] = useState<{ s: number; e: number }[]>([])
+  const [preview, setPreview] = useState(false)
+  const [mini, setMini] = useState(true)
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [histOpen, setHistOpen] = useState(false)
+  const [versions, setVersions] = useState<KodVersion[]>([])
+  const [palOpen, setPalOpen] = useState(false)
+  const [palQ, setPalQ] = useState('')
+  const [palArg, setPalArg] = useState<string | null>(null)
+  const [palVal, setPalVal] = useState('')
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const hlRef = useRef<HTMLPreElement | null>(null)
   const gutterRef = useRef<HTMLDivElement | null>(null)
+  const miniRef = useRef<HTMLDivElement | null>(null)
   const nodesRef = useRef<KodNode[]>([])
   const buffersRef = useRef<Record<string, Buffer>>({})
   const uiRef = useRef<KodUI | null>(null)
@@ -191,6 +210,7 @@ export default function KodApp() {
         const n = nodesRef.current.find((x) => x.id === active)
         if (!n) return
         await putNode({ ...n, content: buffersRef.current[active]?.content ?? '', updatedAt: Date.now() })
+        await pushVersion(active, buffersRef.current[active]?.content ?? '')
         setNodes((prev) => prev?.map((x) => (x.id === active ? { ...x, content: buffersRef.current[active]?.content ?? '', updatedAt: Date.now() } : x)) ?? prev)
         setBuffers((prev) => ({ ...prev, [active]: { ...prev[active], dirty: false } }))
         setSavedAt(Date.now())
@@ -206,6 +226,9 @@ export default function KodApp() {
   }, [toast])
 
   useDismiss('kfind', findOpen, () => setFindOpen(false))
+  useDismiss('kpal', palOpen, () => { setPalOpen(false); setPalArg(null) })
+  useDismiss('kout', outlineOpen, () => setOutlineOpen(false))
+  useDismiss('khist', histOpen, () => setHistOpen(false))
   useDismiss('kglob', gOpen, () => setGOpen(false))
 
   const syncScroll = (): void => {
@@ -216,6 +239,7 @@ export default function KodApp() {
       hlRef.current.scrollLeft = ta.scrollLeft
     }
     if (gutterRef.current) gutterRef.current.scrollTop = ta.scrollTop
+    if (miniRef.current) miniRef.current.scrollTop = ta.scrollTop * 0.25
   }
 
   const updateLineCol = (): void => {
@@ -315,6 +339,7 @@ export default function KodApp() {
 
   const removeNode = async (n: KodNode): Promise<void> => {
     const removed = await deleteNodeTree(n.id)
+    await deleteVersionsFor(n.id)
     setNodes((prev) => prev?.filter((x) => !removed.some((r) => r.id === x.id)) ?? prev)
     setBuffers((prev) => {
       const next = { ...prev }
@@ -494,8 +519,331 @@ export default function KodApp() {
     }, 120)
   }
 
+
+  const setBuf = (id: string, content: string): void => {
+    setBuffers((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], content, dirty: true } } : prev))
+  }
+
+  const replaceCurrent = (): void => {
+    if (!active || !findQ) return
+    const b = buffers[active]
+    if (!b) return
+    const pos = matches[findIdx] ?? matches[0]
+    if (pos === undefined) return
+    const nv = b.content.slice(0, pos) + replQ + b.content.slice(pos + findQ.length)
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      ta.setSelectionRange(pos + replQ.length, pos + replQ.length)
+      syncScroll()
+      updateLineCol()
+    }
+  }
+
+  const replaceAllFile = (): void => {
+    if (!active || !findQ) return
+    const b = buffers[active]
+    if (!b) return
+    const n = b.content.split(findQ).length - 1
+    if (!n) return
+    const nv = b.content.split(findQ).join(replQ)
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      syncScroll()
+    }
+    notify(`${n} remplacement(s) dans ${activeName}`)
+  }
+
+  const replaceAllProject = async (): Promise<void> => {
+    const q = gQ.trim()
+    if (!q) return
+    const keys = [...new Set(gResults.map((r) => r.key))]
+    let files = 0
+    let count = 0
+    for (const key of keys) {
+      let text: string | null = null
+      let handle: FileSystemFileHandle | undefined
+      if (key.startsWith('real:')) {
+        const e = flattenReal(realTree).find((x) => x.key === key)
+        if (!e?.handle) continue
+        try {
+          const f = await e.handle.getFile()
+          text = await f.text()
+          handle = e.handle
+        } catch {
+          continue
+        }
+      } else {
+        const n = nodesRef.current.find((x) => x.id === key)
+        if (!n || n.kind !== 'file') continue
+        text = buffersRef.current[key]?.content ?? n.content ?? ''
+      }
+      if (text == null || !text.includes(q)) continue
+      const c = text.split(q).length - 1
+      const nv = text.split(q).join(gReplQ)
+      count += c
+      files++
+      if (key.startsWith('real:') && handle) {
+        try {
+          const w = await handle.createWritable()
+          await w.write(nv)
+          await w.close()
+          setBuffers((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], content: nv, dirty: false } } : prev))
+        } catch {
+          continue
+        }
+      } else {
+        const n = nodesRef.current.find((x) => x.id === key)
+        if (n) {
+          await putNode({ ...n, content: nv, updatedAt: Date.now() })
+          await pushVersion(key, nv)
+          setNodes((prev) => prev?.map((x) => (x.id === key ? { ...x, content: nv, updatedAt: Date.now() } : x)) ?? prev)
+          setBuf(key, nv)
+        }
+      }
+    }
+    if (active && keys.includes(active)) {
+      const ta = taRef.current
+      if (ta) {
+        ta.value = buffersRef.current[active]?.content ?? ta.value
+        syncScroll()
+      }
+    }
+    await runGlobalSearch()
+    notify(`${count} remplacement(s) dans ${files} fichier(s)`)
+  }
+
+  const wordAt = (ta: HTMLTextAreaElement): { s: number; e: number; w: string } => {
+    const i = ta.selectionStart
+    const v = ta.value
+    const isW = (c: string): boolean => /[\w$]/.test(c)
+    let s = i
+    let e = ta.selectionEnd
+    if (s === e) {
+      while (s > 0 && isW(v[s - 1])) s--
+      while (e < v.length && isW(v[e])) e++
+    }
+    return { s, e, w: v.slice(s, e) }
+  }
+
+  const addNextOccurrence = (): void => {
+    const ta = taRef.current
+    if (!ta) return
+    const { e, w } = wordAt(ta)
+    if (!w) return
+    const v = ta.value
+    const from = multi.length ? multi[multi.length - 1].e : e
+    const idx = v.indexOf(w, from)
+    if (idx < 0) {
+      notify('Plus d\u2019occurrence')
+      return
+    }
+    const nm = [...multi.filter((m) => m.s !== idx), { s: idx, e: idx + w.length }].sort((a, b) => a.s - b.s)
+    setMulti(nm)
+    ta.focus()
+    ta.setSelectionRange(idx, idx + w.length)
+    updateLineCol()
+  }
+
+  const selectAllOccurrences = (): void => {
+    const ta = taRef.current
+    if (!ta) return
+    const { w } = wordAt(ta)
+    if (!w) return
+    const v = ta.value
+    const out: { s: number; e: number }[] = []
+    let i = v.indexOf(w)
+    while (i >= 0) {
+      out.push({ s: i, e: i + w.length })
+      i = v.indexOf(w, i + w.length)
+    }
+    setMulti(out)
+    if (out.length) {
+      ta.focus()
+      ta.setSelectionRange(out[out.length - 1].s, out[out.length - 1].e)
+    }
+    notify(`${out.length} occurrence(s) s\u00e9lectionn\u00e9e(s)`)
+  }
+
+  const applyMultiEdit = (key: string): void => {
+    if (!active || !multi.length) return
+    const b = buffers[active]
+    if (!b) return
+    let nv = b.content
+    const ranges = [...multi].sort((a, c) => c.s - a.s)
+    for (const r of ranges) {
+      if (key === 'Backspace') {
+        nv = r.s === r.e && r.s > 0 ? nv.slice(0, r.s - 1) + nv.slice(r.s) : nv.slice(0, r.s) + nv.slice(r.e)
+      } else if (key === 'Delete') {
+        nv = nv.slice(0, r.s) + nv.slice(r.s === r.e ? r.s + 1 : r.e)
+      } else {
+        nv = nv.slice(0, r.s) + key + nv.slice(r.e)
+      }
+    }
+    const last = [...multi].sort((a, c) => a.s - c.s)[multi.length - 1]
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      const off = key === 'Backspace' ? -1 : key === 'Delete' ? 0 : key.length
+      const pos = Math.max(0, last.s + off)
+      ta.setSelectionRange(pos, pos)
+      ta.focus()
+      syncScroll()
+    }
+    setMulti([])
+    updateLineCol()
+  }
+
+  const outline = useMemo(() => {
+    if (!content) return [] as { line: number; label: string }[]
+    const out: { line: number; label: string }[] = []
+    content.split('\n').forEach((l, i) => {
+      let m = l.match(/^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/)
+      if (m) {
+        out.push({ line: i + 1, label: `${m[1]} ${m[2]}` })
+        return
+      }
+      m = l.match(/^\s*(?:def|class)\s+([A-Za-z_]\w*)/)
+      if (m && (lang === 'python' || lang === 'ruby')) {
+        out.push({ line: i + 1, label: `${l.trim().split(/\s+/)[0]} ${m[1]}` })
+        return
+      }
+      const h = l.match(/^(#{1,6})\s+(.*)/)
+      if (h && lang === 'markdown') {
+        out.push({ line: i + 1, label: `${'#'.repeat(h[1].length)} ${h[2].slice(0, 40)}` })
+        return
+      }
+      const t = l.match(/^\s*<(\w+)[^>]*id=["']([\w-]+)/)
+      if (t && lang === 'html') out.push({ line: i + 1, label: `<${t[1]} #${t[2]}>` })
+    })
+    return out
+  }, [content, lang])
+
+  const jumpLine = (line: number): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const b = buffers[active]
+    if (!b) return
+    const arr = b.content.split('\n')
+    const off = arr.slice(0, line - 1).reduce((a, l) => a + l.length + 1, 0)
+    ta.focus()
+    ta.setSelectionRange(off, off + (arr[line - 1]?.length ?? 0))
+    ta.scrollTop = Math.max(0, (line - 1) * 20 - ta.clientHeight / 2)
+    syncScroll()
+    updateLineCol()
+  }
+
+  const miniJump = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const ta = taRef.current
+    if (!ta) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - rect.top) / 0.25
+    ta.scrollTop = Math.max(0, y - ta.clientHeight / 2)
+    syncScroll()
+  }
+
+  const SNIPPETS: Record<string, { label: string; body: string }[]> = {
+    javascript: [
+      { label: 'console.log', body: 'console.log($0)' },
+      { label: 'fonction', body: 'function $name($args) {\n\t$0\n}' },
+      { label: 'fl\u00e8che', body: 'const $name = ($args) => {\n\t$0\n}' },
+      { label: 'if / else', body: 'if ($cond) {\n\t$0\n} else {\n\t\n}' },
+      { label: 'for', body: 'for (let i = 0; i < $n; i++) {\n\t$0\n}' },
+      { label: 'try / catch', body: 'try {\n\t$0\n} catch (e) {\n\t\n}' }
+    ],
+    typescript: [
+      { label: 'interface', body: 'interface $Name {\n\t$0\n}' },
+      { label: 'fonction typ\u00e9e', body: 'function $name($args): $ret {\n\t$0\n}' },
+      { label: 'console.log', body: 'console.log($0)' }
+    ],
+    markdown: [
+      { label: 'titre H2', body: '## $0' },
+      { label: 'lien', body: '[$texte]($url)' },
+      { label: 'bloc de code', body: '```$lang\n$0\n```' },
+      { label: 'tableau', body: '| $a | $b |\n|---|---|\n| $0 |  |' }
+    ],
+    html: [
+      { label: 'div', body: '<div class="$cls">\n\t$0\n</div>' },
+      { label: 'bouton', body: '<button type="button">$0</button>' }
+    ],
+    css: [{ label: 'media query', body: '@media (max-width: 640px) {\n\t$0\n}' }],
+    python: [
+      { label: 'fonction', body: 'def $name($args):\n    $0' },
+      { label: 'if / else', body: 'if $cond:\n    $0\nelse:\n    pass' }
+    ]
+  }
+
+  const insertText = (text: string): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const b = buffers[active]
+    if (!b) return
+    const sel = ta.selectionStart
+    const end = ta.selectionEnd
+    const i0 = text.indexOf('$0')
+    const clean = text.replace('$0', '')
+    const nv = b.content.slice(0, sel) + clean + b.content.slice(end)
+    setBuf(active, nv)
+    ta.value = nv
+    const pos = sel + (i0 >= 0 ? i0 : clean.length)
+    ta.setSelectionRange(pos, pos)
+    ta.focus()
+    syncScroll()
+    updateLineCol()
+  }
+
+  interface PalCmd {
+    id: string
+    label: string
+    arg?: boolean
+    run: () => void
+  }
+
+  const paletteCmds = (): PalCmd[] => [
+    { id: 'find', label: '\U0001F50D Rechercher dans le fichier', run: () => { setPalOpen(false); setFindOpen(true) } },
+    { id: 'gfind', label: '\U0001F50E Rechercher dans tout le projet', run: () => { setPalOpen(false); setGOpen(true) } },
+    { id: 'repl', label: '\u21C4 Remplacer dans le fichier', run: () => { setPalOpen(false); setFindOpen(true); setReplOpen(true) } },
+    { id: 'save', label: '\U0001F4BE Enregistrer (Ctrl+S)', run: () => { setPalOpen(false); void saveActive() } },
+    { id: 'preview', label: `\U0001F441 ${preview ? 'Cacher' : 'Afficher'} l\u2019aper\u00e7u`, run: () => setPreview((x) => !x) },
+    { id: 'mini', label: `\U0001F5FA ${mini ? 'Cacher' : 'Afficher'} la minimap`, run: () => setMini((x) => !x) },
+    { id: 'outline', label: `\u2630 ${outlineOpen ? 'Cacher' : 'Afficher'} le plan`, run: () => { setOutlineOpen((o) => !o); setPalOpen(false) } },
+    { id: 'hist', label: '\U0001F558 Historique des versions', run: () => void openHist() },
+    { id: 'goto', label: '\u2C7C Aller \u00e0 la ligne\u2026', arg: true, run: () => {} },
+    ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
+  ]
+
+  const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
+
+  const openHist = async (): Promise<void> => {
+    if (!active) return
+    setPalOpen(false)
+    setHistOpen(true)
+    setVersions(await listVersions(active))
+  }
+
+  const restoreVersion = (v: KodVersion): void => {
+    if (!active) return
+    setBuf(active, v.content)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = v.content
+      syncScroll()
+    }
+    setHistOpen(false)
+    notify('Version restaur\u00e9e (Ctrl+S pour valider)')
+  }
+
   const onTaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (!active || !ui) return
+    if (multi.length > 0 && (e.key === 'Backspace' || e.key === 'Delete' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey))) {
+      e.preventDefault()
+      applyMultiEdit(e.key)
+      return
+    }
     const ta = e.currentTarget
     const sel = ta.selectionStart
     const val = ta.value
@@ -554,17 +902,36 @@ export default function KodApp() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && e.shiftKey) {
         e.preventDefault()
         setGOpen(true)
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault()
+        setFindOpen(true)
+        setReplOpen(true)
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setFindOpen(true)
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        addNextOccurrence()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && e.shiftKey) {
+        e.preventDefault()
+        selectAllOccurrences()
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalOpen(true)
+        setPalQ('')
+        setPalArg(null)
       } else if (e.key === 'Escape') {
         setFindOpen(false)
         setGOpen(false)
+        setPalOpen(false)
+        setOutlineOpen(false)
+        setHistOpen(false)
+        setMulti([])
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, buffers, nodes, ui])
+  }, [active, buffers, nodes, ui, multi])
 
   const childrenOf = (parentId: string | null): KodNode[] =>
     (nodes ?? [])
@@ -772,6 +1139,14 @@ export default function KodApp() {
               }}
             />
             <div className="kod-gcount">{gBusy ? '…' : `${gResults.length} résultat(s)`}</div>
+            {gResults.length > 0 && (
+              <div className="kod-grepl">
+                <input placeholder="Remplacer par…" value={gReplQ} onChange={(e) => setGReplQ(e.target.value)} />
+                <button className="db-btn" onClick={() => void replaceAllProject()}>
+                  Tout remplacer ({gResults.length})
+                </button>
+              </div>
+            )}
             <div className="kod-gresults">
               {gResults.map((r, i) => (
                 <button key={i} className="kod-gres" onClick={() => jumpTo(r)}>
@@ -862,16 +1237,22 @@ export default function KodApp() {
             <button className="db-btn" title="Enregistrer sous… (disque)" onClick={() => void saveAs()}>
               ⤓
             </button>
+            <button className="db-btn" aria-label="Aperçu" title="Aperçu rendu (md/html)" onClick={() => setPreview((x) => !x)}>👁</button>
+            <button className="db-btn" aria-label="Plan du fichier" title="Plan (symboles)" onClick={() => setOutlineOpen((o) => !o)}>☰</button>
+            <button className="db-btn" aria-label="Minimap" title="Minimap" onClick={() => setMini((x) => !x)}>🗺</button>
+            <button className="db-btn" aria-label="Historique des versions" title="Historique des versions" onClick={() => void openHist()}>🕘</button>
+            <button className="db-btn" aria-label="Palette de commandes" title="Palette de commandes (Ctrl+K)" onClick={() => { setPalOpen(true); setPalQ(''); setPalArg(null) }}>⌘K</button>
           </div>
         </div>
         {active ? (
           <>
-            <div className="kod-body">
+            <div className={`kod-body${preview && (lang === 'markdown' || lang === 'html') ? ' split' : ''}`}>
               <div className="kod-gutter" ref={gutterRef} aria-hidden>
                 {lines.map((_, i) => (
                   <div key={i}>{i + 1}</div>
                 ))}
               </div>
+              <div className="kod-edwrap">
               <div className={`kod-ed${ui.wrap ? ' wrap' : ''}`}>
                 <pre className="kod-hl" ref={hlRef} aria-hidden>
                   <code dangerouslySetInnerHTML={{ __html: highlight(content, lang) + '\n' }} />
@@ -905,6 +1286,13 @@ export default function KodApp() {
                         if (e.key === 'Escape') setFindOpen(false)
                       }}
                     />
+                    {replOpen && (
+                      <>
+                        <input className="kod-repl" placeholder="Remplacer par…" value={replQ} onChange={(e) => setReplQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') replaceCurrent() }} />
+                        <button className="db-btn" title="Remplacer l’occurrence courante" onClick={() => replaceCurrent()}>⇄</button>
+                        <button className="db-btn" title="Tout remplacer dans ce fichier" onClick={() => replaceAllFile()}>Tout ⇄</button>
+                      </>
+                    )}
                     <span className="kod-find-count">{matches.length ? `${Math.min(findIdx + 1, matches.length)}/${matches.length}` : '0'}</span>
                     <button className="db-btn" title="Précédent (Maj+Entrée)" onClick={() => goMatch(-1)}>
                       ↑
@@ -912,12 +1300,22 @@ export default function KodApp() {
                     <button className="db-btn" title="Suivant (Entrée)" onClick={() => goMatch(1)}>
                       ↓
                     </button>
+                    <button className="db-btn" title="Afficher le remplacement (Ctrl+H)" aria-label="Remplacer" onClick={() => setReplOpen((o) => !o)}>⇄</button>
                     <button className="db-btn" title="Fermer" onClick={() => setFindOpen(false)}>
                       ✕
                     </button>
                   </div>
                 )}
               </div>
+              {mini && lang !== 'text' && (
+                <div className="kod-minimap" ref={miniRef} onClick={miniJump} aria-hidden>
+                  <div className="kod-minimap-inner" style={{ width: 440 }} dangerouslySetInnerHTML={{ __html: highlight(content, lang) + '\n' }} />
+                </div>
+              )}
+              </div>
+              {preview && (lang === 'markdown' || lang === 'html') && (
+                <div className="kod-preview" dangerouslySetInnerHTML={{ __html: renderPreview(content, lang) }} />
+              )}
             </div>
             <div className="kod-status">
               <span>
@@ -941,6 +1339,64 @@ export default function KodApp() {
           </div>
         )}
       </main>
+      {palOpen && (
+        <div className="kod-pal" data-pop="kpal">
+          <input
+            autoFocus
+            aria-label="Palette de commandes"
+            placeholder={palArg === 'goto' ? 'Numéro de ligne…' : 'Commande ou extrait… (Ctrl+K)'}
+            value={palArg === 'goto' ? palVal : palQ}
+            onChange={(e) => (palArg === 'goto' ? setPalVal(e.target.value) : setPalQ(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (palArg === 'goto') {
+                  const ln = parseInt(palVal, 10)
+                  if (ln > 0) jumpLine(ln)
+                  setPalOpen(false)
+                  setPalArg(null)
+                } else {
+                  const c = filteredPal[0]
+                  if (c) c.run()
+                }
+              }
+              if (e.key === 'Escape') { setPalOpen(false); setPalArg(null) }
+            }}
+          />
+          {palArg !== 'goto' && (
+            <div className="kod-pal-list" role="listbox">
+              {filteredPal.map((c) => (
+                <button key={c.id} className="kod-pal-item" role="option" onClick={() => { if (c.arg) { setPalArg(c.id); setPalVal('') } else c.run() }}>
+                  {c.label}
+                </button>
+              ))}
+              {filteredPal.length === 0 && <div className="kod-pal-empty">Aucun résultat</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {outlineOpen && (
+        <div className="kod-panel kod-outline" data-pop="kout">
+          <div className="kod-panel-head">☰ Plan — {activeName}</div>
+          {outline.map((o) => (
+            <button key={o.line} className="kod-panel-item" onClick={() => { jumpLine(o.line); setOutlineOpen(false) }}>
+              <span className="kod-panel-line">L{o.line}</span> {o.label}
+            </button>
+          ))}
+          {outline.length === 0 && <div className="kod-pal-empty">Aucun symbole détecté</div>}
+        </div>
+      )}
+      {histOpen && (
+        <div className="kod-panel kod-hist" data-pop="khist">
+          <div className="kod-panel-head">🕘 Historique — {activeName}</div>
+          {versions.map((v) => (
+            <div key={v.id} className="kod-hist-row">
+              <span>{new Date(v.at).toLocaleString('fr-FR')} · {v.content.length} car.</span>
+              <button className="db-btn" onClick={() => restoreVersion(v)}>Restaurer</button>
+            </div>
+          ))}
+          {versions.length === 0 && <div className="kod-pal-empty">Aucune version enregistrée</div>}
+        </div>
+      )}
       {toast && (
         <div className="toast" key={toast.key} style={{ bottom: 16 }}>
           <span>{toast.msg}</span>
