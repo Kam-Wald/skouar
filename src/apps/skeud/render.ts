@@ -28,12 +28,19 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   canvas.width = g.W
   canvas.height = g.H
   const ctx = canvas.getContext('2d')!
-  if (st.frame.kind === 'mat') {
-    ctx.fillStyle = st.frame.color
+  if (st.frame.mat) {
+    ctx.fillStyle = st.frame.matColor
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.letterbox) {
+    ctx.fillStyle = '#000000'
     ctx.fillRect(0, 0, g.W, g.H)
   }
   ctx.save()
-  if (g.radius > 0) {
+  if (g.circle) {
+    ctx.beginPath()
+    ctx.arc(g.ix + g.iw / 2, g.iy + g.ih / 2, Math.min(g.iw, g.ih) / 2, 0, Math.PI * 2)
+    ctx.clip()
+  } else if (g.radius > 0) {
     ctx.beginPath()
     ctx.roundRect(g.ix, g.iy, g.iw, g.ih, g.radius * (g.iw / w))
     ctx.clip()
@@ -44,15 +51,16 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   ctx.scale(st.flipH ? -1 : 1, st.flipV ? -1 : 1)
   ctx.drawImage(bmp, crop.x, crop.y, crop.w, crop.h, -g.iw / 2, -g.ih / 2, g.iw, g.ih)
   ctx.restore()
-  if (st.frame.kind === 'border') {
-    ctx.strokeStyle = st.frame.color
-    ctx.lineWidth = st.frame.width * (g.W / w)
-    ctx.strokeRect(g.ix, g.iy, g.iw, g.ih)
+  if (st.frame.border) {
+    const bw = st.frame.borderWidth * (g.W / w)
+    ctx.strokeStyle = st.frame.borderColor
+    ctx.lineWidth = bw
+    ctx.strokeRect(g.ix + bw / 2, g.iy + bw / 2, g.iw - bw, g.ih - bw)
   }
-  if (st.frame.kind === 'vignette') {
+  if (g.vig > 0) {
     const grad = ctx.createRadialGradient(g.W / 2, g.H / 2, Math.min(g.W, g.H) * 0.35, g.W / 2, g.H / 2, Math.max(g.W, g.H) * 0.75)
     grad.addColorStop(0, 'rgba(0,0,0,0)')
-    grad.addColorStop(1, 'rgba(0,0,0,0.45)')
+    grad.addColorStop(1, `rgba(0,0,0,${g.vig})`)
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, g.W, g.H)
   }
