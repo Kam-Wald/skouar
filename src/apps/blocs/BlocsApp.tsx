@@ -1,3 +1,4 @@
+import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Block, BlockType, BlocsState, Page } from './types'
@@ -20,7 +21,7 @@ import {
 import BlockView, { type BlockHandlers } from './BlockView'
 import PageTree from './PageTree'
 import EmojiPicker from './EmojiPicker'
-import { useDismiss } from './useDismiss'
+import { useDismiss } from '../../shared/useDismiss'
 import CoverMenu from './CoverMenu'
 import { coverStyle } from './covers'
 import { TEMPLATES, type TemplateSpec } from './templates'
@@ -31,7 +32,7 @@ import GraphView from './GraphView'
 import DashboardView from './DashboardView'
 import { exportPageHtml } from './share'
 import AppIcon, { isEmojiIcon } from './Icon'
-import { notify } from './notify'
+import { notify } from '../../shared/notify'
 import { exportPagePdf } from './pdf'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
@@ -87,10 +88,6 @@ export default function BlocsApp() {
   const [showTrash, setShowTrash] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [dashOpen, setDashOpen] = useState(false)
-  const [sideW, setSideW] = useState(() => {
-    const v = Number(localStorage.getItem('skouar:sidebarW'))
-    return Number.isFinite(v) && v >= 180 && v <= 440 ? v : 240
-  })
   const [linksOpen, setLinksOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slashDismissed, setSlashDismissed] = useState(false)
@@ -788,16 +785,7 @@ export default function BlocsApp() {
   }
 
   if (!state || !current) {
-    return (
-      <div className="blocs-app">
-        <main className="blocs-main">
-          <div className="skel skel-title" />
-          <div className="skel skel-line" />
-          <div className="skel skel-line" />
-          <div className="skel skel-line short" />
-        </main>
-      </div>
-    )
+    return <AppSkeleton />
   }
 
   const handlers: BlockHandlers = {
@@ -864,24 +852,16 @@ export default function BlocsApp() {
   const allTags = [...new Set(livePages.flatMap((p) => p.tags ?? []))]
 
   return (
-    <div className="blocs-app">
-      <div
-        className={`sidebar-backdrop${sidebarOpen ? ' show' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-      <aside
-        className={`blocs-sidebar${sidebarOpen ? ' open' : ''}`}
-        style={{ '--side-w': `${sideW}px` } as CSSProperties}
-      >
-        <div className="blocs-app-head">
-          <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
-            <img className="blocs-app-logo" src={`${import.meta.env.BASE_URL}app-icons/calepin.svg`} alt="Calepin" />
-            <span className="blocs-app-name">Calepin</span>
-          </Link>
-          <Link to="/" className="blocs-back" title="Retour au launcher">
-            ←
-          </Link>
-        </div>
+    <AppShell
+      appId="blocs"
+      appName="Calepin"
+      logo={`${import.meta.env.BASE_URL}app-icons/calepin.svg`}
+      beforeSidebar={
+        <div className={`sidebar-backdrop${sidebarOpen ? ' show' : ''}`} onClick={() => setSidebarOpen(false)} />
+      }
+      sidebarClass={sidebarOpen ? ' open' : ''}
+      sidebar={
+        <>
         <input
           className="blocs-search"
           placeholder="Rechercher… (titre, texte, BDD)"
@@ -1061,9 +1041,10 @@ export default function BlocsApp() {
           <span className={`saved-check${savedAt ? ' on' : ''}`}>✓</span> enregistré
           {savedAt && <span className="saved-time">{relTime(savedAt)}</span>}
         </div>
-        <div className="blocs-sidebar-foot">
-          <ThemeButton />
-          <SettingsButton appId="blocs" appName="Calepin" />
+        </>
+      }
+        footExtra={
+          <>
           <div className="sync-wrap" data-pop="sync">
             <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P (code de salon)">
               {sync ? `⇄ ${sync.code}${syncPeers > 0 ? ` · ${syncPeers} app.` : ''}` : '⇄ Sync'}
@@ -1092,31 +1073,9 @@ export default function BlocsApp() {
             ↑ Import
           </button>
           <input ref={fileInput} type="file" accept="application/json,.json,.md,text/markdown" hidden onChange={handleImport} />
-        </div>
-      </aside>
-      <div
-        className="sidebar-resizer"
-        title="Redimensionner le menu"
-        onMouseDown={(e) => {
-          e.preventDefault()
-          const startX = e.clientX
-          const startW = sideW
-          const onMove = (ev: MouseEvent) => {
-            const w = Math.min(440, Math.max(180, startW + ev.clientX - startX))
-            setSideW(w)
-            localStorage.setItem('skouar:sidebarW', String(w))
-          }
-          const onUp = () => {
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-          }
-          window.addEventListener('mousemove', onMove)
-          window.addEventListener('mouseup', onUp)
-        }}
+          </>
+        }
       >
-        <span className="resizer-arrow">⇆</span>
-      </div>
-      <main className="blocs-main">
         <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Menu">
           ☰
         </button>
@@ -1426,7 +1385,6 @@ export default function BlocsApp() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

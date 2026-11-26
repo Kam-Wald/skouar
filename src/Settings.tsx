@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useDismiss } from './apps/blocs/useDismiss'
+import { useDismiss } from './shared/useDismiss'
 import { ACCENTS, applyTheme, getAccent, getTheme } from './ThemeButton'
 import { HL_THEMES } from './apps/kod/themes'
 import { KEYMAP_ACTIONS, keymapToText, parseKeymapText } from './apps/kod/keymap'

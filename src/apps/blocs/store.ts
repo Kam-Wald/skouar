@@ -1,3 +1,5 @@
+import { uid } from '../../shared/db'
+export { uid }
 import Dexie, { type Table } from 'dexie'
 import type {
   Block,
@@ -29,9 +31,6 @@ class BlocsDatabase extends Dexie {
 
 const db = new BlocsDatabase()
 
-export function uid(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36)
-}
 
 export function createBlock(type: BlockType = 'paragraph', text = ''): Block {
   return {

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { notify } from './notify'
+import { notify } from '../../shared/notify'
 import { COVER_COLORS, COVER_PATTERNS, coverStyle, type CoverDef } from './covers'
 
 export default function CoverMenu({

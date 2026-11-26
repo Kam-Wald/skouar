@@ -1,3 +1,5 @@
+import { kvOf, uid } from '../../shared/db'
+export { uid }
 import Dexie, { type Table } from 'dexie'
 
 export interface KodNode {
@@ -111,7 +113,6 @@ export async function deleteVersionsFor(fileId: string): Promise<void> {
   await db.versions.where('fileId').equals(fileId).delete()
 }
 
-export const uid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36)
 
 export const defaultUI = (): KodUI => ({
   id: 'ui',
@@ -213,11 +214,7 @@ export async function deleteNodeTree(id: string): Promise<KodNode[]> {
   return removed
 }
 
-export async function saveKV(id: string, value: unknown): Promise<void> {
-  await db.kv.put({ id, value })
-}
+const kv = kvOf(db)
 
-export async function loadKV<T>(id: string): Promise<T | undefined> {
-  const row = await db.kv.get(id)
-  return row?.value as T | undefined
-}
+export const saveKV = kv.saveKV
+export const loadKV = kv.loadKV

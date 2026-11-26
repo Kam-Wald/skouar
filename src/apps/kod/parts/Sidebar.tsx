@@ -1,7 +1,4 @@
 import type * as React from 'react'
-import { Link } from 'react-router-dom'
-import ThemeButton from '../../../ThemeButton'
-import SettingsButton from '../../../Settings'
 import { useKod } from '../ctx'
 import { KOD_TEMPLATES, templateGroups } from '../templates'
 import { fileGlyph } from '../lib'
@@ -19,8 +16,6 @@ export default function Sidebar() {
     setDirHandle,
     realTree,
     setRealTree,
-    sideW,
-    setSideW,
     newItem,
     setNewItem,
     renameId,
@@ -276,16 +271,6 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="blocs-sidebar kod-side">
-        <div className="blocs-app-head">
-          <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
-            <img className="blocs-app-logo" src={`${import.meta.env.BASE_URL}app-icons/kod.svg`} alt="Kod" />
-            <span className="blocs-app-name">Kod</span>
-          </Link>
-          <Link to="/" className="blocs-back" title="Retour au launcher">
-            ←
-          </Link>
-        </div>
         <div className="kod-projbar">
           <button className="db-btn" title="Changer de projet (multi-projets)" onClick={() => setProjOpen((o) => !o)}>
             🗂 {projects.find((p) => p.id === pid)?.name ?? '…'} ▾
@@ -586,11 +571,6 @@ export default function Sidebar() {
             if (f) void importSnippets(f)
           }}
         />
-        <div className="blocs-sidebar-foot">
-          <ThemeButton />
-          <SettingsButton appId="kod" appName="Kod" />
-        </div>
-      </aside>
     </>
   )
 }
