@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { notify } from './notify'
 import { COVER_COLORS, COVER_PATTERNS, coverStyle, type CoverDef } from './covers'
 
 export default function CoverMenu({
@@ -21,7 +22,7 @@ export default function CoverMenu({
     e.target.value = ''
     if (!f) return
     if (f.size > 2_000_000) {
-      window.alert('Image trop lourde (max 2 Mo).')
+      notify('Image trop lourde (max 2 Mo).')
       return
     }
     const reader = new FileReader()

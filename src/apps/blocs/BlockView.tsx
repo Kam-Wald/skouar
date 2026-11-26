@@ -18,6 +18,7 @@ import 'katex/dist/katex.min.css'
 import { QRCodeSVG } from 'qrcode.react'
 import { useDismiss } from './useDismiss'
 import { highlightCode } from './highlight'
+import { notify } from './notify'
 
 export interface Heading {
   id: string
@@ -115,7 +116,33 @@ export default function BlockView({ block, handlers }: Props) {
 
   useEffect(() => {
     const el = ref.current
-    if (el && el.innerHTML !== block.text) el.innerHTML = block.text
+    if (!el || el.innerHTML === block.text) return
+    const sel = window.getSelection()
+    let offset = 0
+    if (sel && sel.rangeCount > 0 && sel.anchorNode && el.contains(sel.anchorNode)) {
+      const r = sel.getRangeAt(0).cloneRange()
+      r.selectNodeContents(el)
+      r.setEnd(sel.anchorNode, sel.anchorOffset)
+      offset = r.toString().length
+    }
+    el.innerHTML = block.text
+    if (offset > 0 && sel) {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      let remaining = offset
+      let node = walker.nextNode() as Text | null
+      while (node) {
+        if (remaining <= node.length) {
+          const r2 = document.createRange()
+          r2.setStart(node, remaining)
+          r2.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(r2)
+          break
+        }
+        remaining -= node.length
+        node = walker.nextNode() as Text | null
+      }
+    }
   }, [block.text])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -157,7 +184,7 @@ export default function BlockView({ block, handlers }: Props) {
     e.target.value = ''
     if (!f) return
     if (f.size > 5_000_000) {
-      window.alert('Fichier trop lourd (max 5 Mo) : compresse-le ou utilise une URL.')
+      notify('Fichier trop lourd (max 5 Mo) : compresse-le ou utilise une URL.')
       return
     }
     const reader = new FileReader()

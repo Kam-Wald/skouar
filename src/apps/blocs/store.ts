@@ -16,7 +16,7 @@ const STATE_KEY = 'blocs'
 
 interface KvRow {
   key: string
-  value: BlocsState
+  value: BlocsState | BlocsState[]
 }
 
 class BlocsDatabase extends Dexie {
@@ -137,8 +137,8 @@ function isValidState(x: unknown): x is BlocsState {
 export async function loadState(): Promise<BlocsState> {
   try {
     const row = await db.kv.get(STATE_KEY)
-    if (row && isValidState(row.value)) return migrateState(row.value)
-    return purgeTrash(row?.value ?? seedState())
+    if (row && isValidState(row.value)) return migrateState(row.value as BlocsState)
+    return purgeTrash((row?.value ?? seedState()) as BlocsState)
   } catch {
     // IndexedDB indisponible : on tente la migration puis le seed
   }
@@ -169,4 +169,21 @@ export const TRASH_DAYS = 30
 
 export async function saveState(state: BlocsState): Promise<void> {
   await db.kv.put({ key: STATE_KEY, value: state })
+}
+
+const HIST_PAST = 'hist:past'
+const HIST_FUT = 'hist:future'
+
+export async function loadHistory(): Promise<{ past: BlocsState[]; future: BlocsState[] }> {
+  const [p, f] = await Promise.all([db.kv.get(HIST_PAST), db.kv.get(HIST_FUT)])
+  return {
+    past: Array.isArray(p?.value) ? (p.value as BlocsState[]) : [],
+    future: Array.isArray(f?.value) ? (f.value as BlocsState[]) : []
+  }
+
+}
+
+export async function saveHistory(past: BlocsState[], future: BlocsState[]): Promise<void> {
+  await db.kv.put({ key: HIST_PAST, value: past })
+  await db.kv.put({ key: HIST_FUT, value: future })
 }

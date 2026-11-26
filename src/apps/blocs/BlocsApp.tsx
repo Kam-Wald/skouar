@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Block, BlockType, BlocsState, Page } from './types'
-import { createBlock, createColumn, createDatabase, createPage, loadState, saveState, uid } from './store'
+import { createBlock, createColumn, createDatabase, createPage, loadHistory, loadState, saveHistory, saveState, uid } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
 import { BLOCK_CATS, BLOCK_CAT_ORDER, BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
@@ -30,6 +30,8 @@ import GraphView from './GraphView'
 import DashboardView from './DashboardView'
 import { exportPageHtml } from './share'
 import AppIcon from './Icon'
+import { notify } from './notify'
+import { exportPagePdf } from './pdf'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
@@ -95,6 +97,11 @@ export default function BlocsApp() {
   const [mentionDismissed, setMentionDismissed] = useState(false)
   const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
   const [ctx, setCtx] = useState<null | { x: number; y: number; items: { label: string; icon?: string; danger?: boolean; onClick: () => void }[] }>(null)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [syncPeers, setSyncPeers] = useState(0)
+  const [syncPop, setSyncPop] = useState(false)
+  const [syncCode, setSyncCode] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
   const [slashIndex, setSlashIndex] = useState(0)
   const [mentionIndex, setMentionIndex] = useState(0)
 
@@ -103,15 +110,24 @@ export default function BlocsApp() {
     loadState().then((s) => {
       if (alive) setState(s)
     })
+    loadHistory().then((h) => {
+      if (alive) {
+        pastRef.current = h.past
+        futureRef.current = h.future
+      }
+    })
+    const onToast = (e: Event) => setToast({ key: Date.now(), msg: (e as CustomEvent<string>).detail })
+    window.addEventListener('skouar:toast', onToast)
     return () => {
       alive = false
+      window.removeEventListener('skouar:toast', onToast)
     }
   }, [])
 
   useEffect(() => {
     if (!state) return
     const t = setTimeout(() => {
-      void saveState(state)
+      void saveState(state).then(() => setSavedAt(Date.now()))
     }, 200)
     return () => clearTimeout(t)
   }, [state])
@@ -128,6 +144,7 @@ export default function BlocsApp() {
         if (pastRef.current.length > 100) pastRef.current.shift()
         futureRef.current = []
         lastPush.current = now
+        void saveHistory(pastRef.current, futureRef.current)
       }
     }, 500)
     return () => clearTimeout(t)
@@ -139,6 +156,7 @@ export default function BlocsApp() {
     const prev = past[past.length - 1]
     pastRef.current = past.slice(0, -1)
     futureRef.current.push(state)
+    void saveHistory(pastRef.current, futureRef.current)
     setState(prev)
   }
   const redo = () => {
@@ -147,6 +165,7 @@ export default function BlocsApp() {
     const next = future[future.length - 1]
     futureRef.current = future.slice(0, -1)
     pastRef.current.push(state)
+    void saveHistory(pastRef.current, futureRef.current)
     setState(next)
   }
 
@@ -349,6 +368,32 @@ export default function BlocsApp() {
     cat,
     items: slashItems.map((t, i) => ({ t, i })).filter((x) => (BLOCK_CATS[x.t.type] ?? 'Avancé') === cat)
   })).filter((g) => g.items.length > 0)
+  const addGroups = BLOCK_CAT_ORDER.map((cat) => ({
+    cat,
+    items: BLOCK_TYPES.filter((t) => (BLOCK_CATS[t.type] ?? 'Avancé') === cat)
+  })).filter((g) => g.items.length > 0)
+
+  const applyType = (t: BlockTypeDef) => {
+    if (!current) return
+    if (activeId) {
+      const existing = findBlock(current.blocks, activeId)
+      updateBlock(activeId, {
+        type: t.type,
+        done: t.type === 'todo' ? false : undefined,
+        src: undefined, href: undefined, fileName: undefined, fileSize: undefined,
+        cols: t.type === 'columns' ? 2 : undefined,
+        db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
+        children:
+          t.type === 'toggle' ? (existing?.children ?? [])
+            : t.type === 'columns' ? [createBlock('column'), createBlock('column')]
+            : undefined
+      })
+    } else {
+      const last = current.blocks[current.blocks.length - 1]
+      if (last) insertBlockAfter(last.id, createBlock(t.type))
+    }
+    setAddOpen(false)
+  }
 
   const mentionMatch = allBlocks.map((b) => ({ b, m: plain(b).match(/\[\[([^\]\[]*)$/) })).find((x) => x.m)
   const mentionQuery = mentionMatch?.m?.[1]?.toLowerCase() ?? ''
@@ -363,6 +408,8 @@ export default function BlocsApp() {
   useDismiss('slash', slashOpen, () => setSlashDismissed(true))
   useDismiss('mention', mentionOpen, () => setMentionDismissed(true))
   useDismiss('ctx', !!ctx, () => setCtx(null))
+  useDismiss('add', addOpen, () => setAddOpen(false))
+  useDismiss('sync', syncPop, () => setSyncPop(false))
 
   useEffect(() => {
     if (!toast) return
@@ -648,16 +695,19 @@ export default function BlocsApp() {
     if (sync) {
       sync.leave()
       setSync(null)
+      setSyncPeers(0)
       return
     }
-    const input = window.prompt(
-      'Code de salon de synchro (jusqu’à 12 caractères). Laisse vide pour en générer un :',
-      ''
-    )
-    if (input === null) return
-    const code = (input.trim() || Math.random().toString(36).slice(2, 8)).slice(0, 12)
-    const handle = startSync(code)
+    setSyncPop((o) => !o)
+  }
+
+  const startSyncWithCode = () => {
+    const code = (syncCode.trim() || Math.random().toString(36).slice(2, 8)).slice(0, 12)
+    setSyncPop(false)
+    setSyncCode('')
+    const handle = startSync(code, setSyncPeers)
     setSync(handle)
+    notify(`Salon « ${code} » ouvert — sur l’autre appareil : ⇄ Sync, même code.`)
     setTimeout(() => {
       const remote = readRemoteState(handle.doc)
       if (remote && remote !== lastJson.current) {
@@ -670,7 +720,6 @@ export default function BlocsApp() {
         }
       }
     }, 1500)
-    window.alert(`Salon « ${code} » ouvert. Sur l’autre appareil, ouvre Calepin → ⇄ Sync et entre ce même code.`)
   }
 
   const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -689,7 +738,7 @@ export default function BlocsApp() {
         if (ok) setState(imported)
       }
     } catch {
-      window.alert('Fichier invalide : export JSON Skouar/Calepin ou .md attendu.')
+      notify('Fichier invalide : export JSON Skouar/Calepin ou .md attendu.')
     }
   }
 
@@ -700,7 +749,7 @@ export default function BlocsApp() {
     const f = item.getAsFile()
     if (!f) return
     if (f.size > 5_000_000) {
-      window.alert('Image trop lourde (max 5 Mo).')
+      notify('Image trop lourde (max 5 Mo).')
       return
     }
     const reader = new FileReader()
@@ -719,7 +768,7 @@ export default function BlocsApp() {
     if (!f || !state || !current) return
     e.preventDefault()
     if (f.size > 5_000_000) {
-      window.alert('Image trop lourde (max 5 Mo).')
+      notify('Image trop lourde (max 5 Mo).')
       return
     }
     const reader = new FileReader()
@@ -995,10 +1044,29 @@ export default function BlocsApp() {
           </>
         )}
         <div className="blocs-sidebar-foot">
+          <span className="saved-ind" title={savedAt ? `Dernier enregistrement : ${relTime(savedAt)}` : 'Enregistrement…'}>✓</span>
           <ThemeButton />
-          <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P">
-            {sync ? `⇄ ${sync.code}` : '⇄ Sync'}
-          </button>
+          <div className="sync-wrap" data-pop="sync">
+            <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P (code de salon)">
+              {sync ? `⇄ ${sync.code}${syncPeers > 0 ? ` · ${syncPeers} app.` : ''}` : '⇄ Sync'}
+            </button>
+            {syncPop && (
+              <div className="sync-pop">
+                <input
+                  className="db-input"
+                  autoFocus
+                  placeholder="Code du salon (vide = aléatoire)…"
+                  value={syncCode}
+                  onChange={(e) => setSyncCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') startSyncWithCode()
+                    if (e.key === 'Escape') setSyncPop(false)
+                  }}
+                />
+                <button className="db-btn" onClick={startSyncWithCode}>OK</button>
+              </div>
+            )}
+          </div>
           <button className="blocs-io" onClick={() => exportStateToFile(state)} title="Exporter toutes les données (JSON)">
             ↓ Exporter
           </button>
@@ -1137,8 +1205,8 @@ export default function BlocsApp() {
             <button className="page-cover-btn" title="Exporter cette page en Markdown" onClick={exportPageMd}>
               ⇩
             </button>
-            <button className="page-cover-btn" title="Exporter en PDF" onClick={() => window.print()}>
-              🖨
+            <button className="page-cover-btn" title="Exporter en PDF (fichier .pdf téléchargé)" onClick={() => exportPagePdf(current)}>
+              📄
             </button>
             <button className="page-cover-btn" title="Dupliquer la page" onClick={() => duplicatePage(current.id)}>
               ⧉
@@ -1175,37 +1243,36 @@ export default function BlocsApp() {
           />
         )}
         <div className="blocs-toolbar">
-          {BLOCK_TYPES.map((t) => (
-            <button
-              key={t.type}
-              title={t.title}
-              className={activeId && findBlock(current.blocks, activeId)?.type === t.type ? 'tool active' : 'tool'}
-              onClick={() => {
-                if (!activeId) return
-                const existing = findBlock(current.blocks, activeId)
-                updateBlock(activeId, {
-                  type: t.type,
-                  done: t.type === 'todo' ? false : undefined,
-                  src: undefined, href: undefined, fileName: undefined, fileSize: undefined,
-                  cols: t.type === 'columns' ? 2 : undefined,
-                  db: t.type === 'database' ? (existing?.db ?? createDatabase()) : undefined,
-                  children:
-                    t.type === 'toggle' ? (existing?.children ?? [])
-                      : t.type === 'columns' ? [createBlock('column'), createBlock('column')]
-                      : undefined
-                })
-              }}
-            >
-              {t.label}
+          <div className="add-wrap">
+            <button className="tool-add" data-pop="add" onClick={() => setAddOpen((o) => !o)}>
+              ＋ Ajouter un bloc
             </button>
-          ))}
+            {addOpen && (
+              <div className="slash-menu add-menu" data-pop="add">
+                {addGroups.map((g) => (
+                  <div key={g.cat}>
+                    <div className="slash-cat">{g.cat}</div>
+                    {g.items.map((t) => (
+                      <button
+                        key={t.type}
+                        className={`slash-item${activeId && findBlock(current.blocks, activeId)?.type === t.type ? ' active' : ''}`}
+                        onClick={() => applyType(t)}
+                      >
+                        <span className="slash-label">{t.label}</span> {t.title}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="blocs-editor" onPaste={onEditorPaste} onDrop={onEditorDrop}>
-          {current.blocks.length === 0 && (
+          {current.blocks.length > 0 && current.blocks.every((b) => !stripHtml(b.text).trim() && !b.db && !b.src && !b.srcs?.length && !b.children?.length && !b.pageId && !b.action) && (
             <div className="empty-state">
               <p><strong>Cette page est vide.</strong></p>
               <p className="empty-hint">Tape <kbd>/</kbd> pour ajouter un bloc, ou choisis un modèle :</p>
-              <button className="db-btn" onClick={() => setTplOpen(true)}>📋 Voir les 20 templates</button>
+              <button className="db-btn" onClick={() => setTplOpen(true)}>📋 Voir les 30 templates</button>
             </div>
           )}
           {current.blocks.map((b) => (
