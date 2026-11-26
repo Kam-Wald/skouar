@@ -24,10 +24,18 @@ export interface KodKV {
   value: unknown
 }
 
+export interface KodVersion {
+  id: string
+  fileId: string
+  at: number
+  content: string
+}
+
 class KodDB extends Dexie {
   nodes!: Table<KodNode, string>
   ui!: Table<KodUI, string>
   kv!: Table<KodKV, string>
+  versions!: Table<KodVersion, string>
 }
 
 export const db = new KodDB('skouar-kod')
@@ -36,6 +44,28 @@ db.version(1).stores({
   ui: 'id',
   kv: 'id'
 })
+db.version(2).stores({
+  versions: 'id, fileId, at'
+})
+
+export async function pushVersion(fileId: string, content: string): Promise<void> {
+  const last = await db.versions.where('fileId').equals(fileId).last()
+  if (last && last.content === content) return
+  await db.versions.add({ id: uid(), fileId, at: Date.now(), content })
+  const all = await db.versions.where('fileId').equals(fileId).sortBy('at')
+  if (all.length > 50) {
+    await db.versions.bulkDelete(all.slice(0, all.length - 50).map((v) => v.id))
+  }
+}
+
+export async function listVersions(fileId: string): Promise<KodVersion[]> {
+  const all = await db.versions.where('fileId').equals(fileId).sortBy('at')
+  return all.reverse()
+}
+
+export async function deleteVersionsFor(fileId: string): Promise<void> {
+  await db.versions.where('fileId').equals(fileId).delete()
+}
 
 export const uid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36)
 

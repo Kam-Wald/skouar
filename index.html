@@ -9,6 +9,15 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0d9488" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Skouar" />
+    <style>
+      html { background: #0b0f19; }
+      #boot { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: radial-gradient(900px 480px at 50% -10%, rgba(13,148,136,.28), transparent 60%), #0b0f19; }
+      #boot img { width: 108px; height: 108px; border-radius: 26px; box-shadow: 0 24px 70px rgba(0,0,0,.55); }
+    </style>
     <meta
       name="description"
       content="Skouar — lanceur d'apps local-first, installable en PWA"
@@ -17,6 +26,7 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" aria-hidden="true"><img src="/icons/icon-512.png" alt="" /></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
