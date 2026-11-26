@@ -7,9 +7,10 @@ export interface LerFile {
   pages: number
   updatedAt: number
   lastPage?: number
+  rotation?: number
 }
 
-export type AnnType = 'hl' | 'ink' | 'note'
+export type AnnType = 'hl' | 'ink' | 'note' | 'text' | 'sign' | 'arrow' | 'circle' | 'stamp'
 
 export interface LerAnnot {
   id: string
@@ -20,9 +21,14 @@ export interface LerAnnot {
   y?: number
   w?: number
   h?: number
+  x2?: number
+  y2?: number
+  rects?: [number, number, number, number][]
   points?: [number, number][]
   color: string
   text?: string
+  size?: number
+  dataUrl?: string
   at: number
 }
 
