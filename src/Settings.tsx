@@ -49,6 +49,7 @@ export default function SettingsButton({ appId, appName }: Props) {
   const [kod, setKod] = useState<AppSettings>(() => (appId === 'kod' ? loadAppSettings('kod') : {}))
   const [armed, setArmed] = useState(false)
   const [kmText, setKmText] = useState('')
+  const [tab, setTab] = useState<'global' | 'app'>('global')
 
   useDismiss('settings', open, () => setOpen(false))
 
@@ -62,6 +63,7 @@ export default function SettingsButton({ appId, appName }: Props) {
       setKmText(keymapToText((ks.keymap ?? {}) as Record<string, unknown>))
     }
     setArmed(false)
+    setTab('global')
   }, [open, appId])
 
   useEffect(() => {
@@ -121,7 +123,18 @@ export default function SettingsButton({ appId, appName }: Props) {
               ✕
             </button>
           </div>
+          <div className="settings-tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'global'} className={`settings-tab-btn${tab === 'global' ? ' active' : ''}`} onClick={() => setTab('global')}>
+              🌐 Général
+            </button>
+            {appId && (
+              <button role="tab" aria-selected={tab === 'app'} className={`settings-tab-btn${tab === 'app' ? ' active' : ''}`} onClick={() => setTab('app')}>
+                🧩 {appName ?? appId}
+              </button>
+            )}
+          </div>
           <div className="settings-body">
+            {tab === 'global' && (
             <section>
               <h3>🌐 Général — tout Skouar</h3>
               <div className="theme-row">
@@ -162,7 +175,8 @@ export default function SettingsButton({ appId, appName }: Props) {
                 🔄 Recharger l'application
               </button>
             </section>
-            {appId && (
+            )}
+            {tab === 'app' && appId && (
               <section>
                 <h3>🧩 {appName ?? appId}</h3>
                 {appId === 'kod' && (

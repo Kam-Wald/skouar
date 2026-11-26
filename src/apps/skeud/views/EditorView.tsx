@@ -308,6 +308,15 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
   const activeFrame = framePresetOf(st.frame)
   const layer = st.layers.find((l) => l.id === selLayer) ?? null
   const textLayer = layer?.kind === 'text' ? (layer as TextLayer) : null
+  const cropPreview = (() => {
+    if (!cropMode || !drag || !canvasRef.current || !bmp) return null
+    const r = normDrag(drag)
+    if (r.w < 2 || r.h < 2) return null
+    const c = canvasRef.current
+    const base: Rect = st.crop ?? { x: 0, y: 0, w: img.w, h: img.h }
+    const ir = toImageRect(r, c.width, c.height, base.w, base.h, aspect)
+    return `${Math.round(ir.w)}×${Math.round(ir.h)} px`
+  })()
 
   return (
     <div className="sk-editor">
@@ -631,7 +640,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
         ) : (
           <div className="sk-hint">Chargement de l'image…</div>
         )}
-        {cropMode && <p className="sk-hint sk-crop-hint">Glisse sur l'image pour définir le recadrage, choisis un ratio ci-dessus.</p>}
+        {cropMode && <p className="sk-hint sk-crop-hint">Glisse sur l’image pour définir le recadrage, choisis un ratio ci-dessus.{cropPreview ? ` — ${cropPreview}` : ''}</p>}
       </div>
 
       <div className="sk-zoombar">
