@@ -88,5 +88,6 @@ export function renderMd(src: string): string {
 export function renderPreview(src: string, lang: string): string {
   if (lang === 'html') return src
   if (lang === 'markdown') return renderMd(src)
+  if (lang === 'svg') return `<img class="kod-svgprev" alt="aperçu svg" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(src)}" />`
   return `<pre>${esc(src)}</pre>`
 }

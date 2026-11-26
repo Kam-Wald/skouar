@@ -25,6 +25,10 @@ import { renderPreview } from './preview'
 import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../Settings'
 import SettingsButton from '../../Settings'
 import { KOD_TEMPLATES, templateGroups } from './templates'
+import { syntaxIssues, type KodIssue } from './diagnostics'
+import { diffLines, type DiffRow } from './diff'
+import { expandEmmet } from './emmet'
+import { DEFAULT_KEYMAP, comboOf } from './keymap'
 
 declare global {
   interface Window {
@@ -40,6 +44,7 @@ interface RealEntry {
   kind: 'file' | 'dir'
   path: string
   handle?: FileSystemFileHandle
+  mtime?: number
   children?: RealEntry[]
 }
 
@@ -68,8 +73,19 @@ const fileGlyph = (name: string): string => {
   return map[lang] ?? '📄'
 }
 
+const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico'])
+const isImageName = (name: string): boolean => IMG_EXTS.has((name.split('.').pop() ?? '').toLowerCase())
+const fileToDataURL = (f: Blob): Promise<string> =>
+  new Promise((res, rej) => {
+    const rd = new FileReader()
+    rd.onload = () => res(String(rd.result))
+    rd.onerror = () => rej(rd.error)
+    rd.readAsDataURL(f)
+  })
+
 const isCodeName = (name: string): boolean => {
   if (TEXT_EXTS.has((name.split('.').pop() ?? '').toLowerCase())) return true
+  if (isImageName(name)) return true
   return ['Dockerfile', 'Makefile', '.gitignore', '.env', 'LICENSE', 'README'].includes(name)
 }
 
@@ -83,7 +99,11 @@ async function scanDir(dir: FileSystemDirectoryHandle, path: string): Promise<Re
       if (name === 'node_modules' || name === '.git') continue
       out.push({ key: `real:${p}`, name, kind: 'dir', path: p, children: await scanDir(h as FileSystemDirectoryHandle, p) })
     } else if (isCodeName(name)) {
-      out.push({ key: `real:${p}`, name, kind: 'file', path: p, handle: h as FileSystemFileHandle })
+      let mtime = 0
+      try {
+        mtime = (await (h as FileSystemFileHandle).getFile()).lastModified
+      } catch { /* mtime inconnu */ }
+      out.push({ key: `real:${p}`, name, kind: 'file', path: p, handle: h as FileSystemFileHandle, mtime })
     }
   }
   out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1))
@@ -147,6 +167,21 @@ export default function KodApp() {
   const [focus, setFocus] = useState(false)
   const [newTabOpen, setNewTabOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
+  const [findRe, setFindRe] = useState(false)
+  const [gRe, setGRe] = useState(false)
+  const [synIssues, setSynIssues] = useState<KodIssue[]>([])
+  const [rect, setRect] = useState<{ aLine: number; aCol: number; line: number; col: number } | null>(null)
+  const [bms, setBms] = useState<number[]>([])
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [diffV, setDiffV] = useState<KodVersion | null>(null)
+  const [splitId, setSplitId] = useState<string | null>(null)
+  const [dropZone, setDropZone] = useState(false)
+  const [dragTab, setDragTab] = useState<string | null>(null)
+  const [extChanged, setExtChanged] = useState<string[]>([])
+  const [keymap, setKeymap] = useState<Record<string, string>>({})
+  const mtimesRef = useRef<Record<string, number>>({})
+  const realTreeRef = useRef<RealEntry[]>([])
+  const extRef = useRef<string[]>([])
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const hlRef = useRef<HTMLPreElement | null>(null)
   const gutterRef = useRef<HTMLDivElement | null>(null)
@@ -159,6 +194,8 @@ export default function KodApp() {
   nodesRef.current = nodes ?? []
   buffersRef.current = buffers
   uiRef.current = ui
+  realTreeRef.current = realTree
+  extRef.current = extChanged
 
   const active = ui?.active ?? null
   const buf = active ? buffers[active] : undefined
@@ -167,11 +204,17 @@ export default function KodApp() {
   const activeName = activeNode?.name ?? activeReal?.name ?? ''
   const lang = langOf(activeName)
   const content = buf?.content ?? ''
+  const km = (id: string): string => keymap[id] ?? DEFAULT_KEYMAP[id] ?? ''
+  const isImgActive = isImageName(activeName)
+  const isSvgActive = /\.svg$/i.test(activeName)
+  const nodeName = (id: string): string =>
+    nodes?.find((x) => x.id === id)?.name ?? flattenReal(realTree).find((x) => x.key === id)?.name ?? id
 
   useEffect(() => {
     const apply = (): void => {
       const s = loadAppSettings('kod')
       if (s.mini !== undefined) setMini(s.mini !== false)
+      if (s.keymap && typeof s.keymap === 'object') setKeymap(s.keymap as Record<string, string>)
       setUi((prev) =>
         prev
           ? {
@@ -226,7 +269,11 @@ export default function KodApp() {
           const perm = await (h as unknown as { queryPermission?: (o: { mode: string }) => Promise<string> }).queryPermission?.({ mode: 'readwrite' })
           if (perm === 'granted') {
             setDirHandle(h)
-            setRealTree(await scanDir(h, ''))
+            const tree = await scanDir(h, '')
+            setRealTree(tree)
+            const mt: Record<string, number> = {}
+            for (const e of flattenReal(tree)) if (e.mtime) mt[e.path] = e.mtime
+            mtimesRef.current = mt
           }
         } catch { /* dossier plus disponible */ }
       }
@@ -246,27 +293,102 @@ export default function KodApp() {
   }, [ui])
 
   useEffect(() => {
-    if (!nodes || !active || !buffers[active]) return
-    if (active.startsWith('real:')) return
+    if (!nodes) return
     const t = setTimeout(() => {
       void (async () => {
-        const n = nodesRef.current.find((x) => x.id === active)
-        if (!n) return
-        await putNode({ ...n, content: buffersRef.current[active]?.content ?? '', updatedAt: Date.now() })
-        await pushVersion(active, buffersRef.current[active]?.content ?? '')
-        setNodes((prev) => prev?.map((x) => (x.id === active ? { ...x, content: buffersRef.current[active]?.content ?? '', updatedAt: Date.now() } : x)) ?? prev)
-        setBuffers((prev) => ({ ...prev, [active]: { ...prev[active], dirty: false } }))
-        setSavedAt(Date.now())
+        let savedActive = false
+        for (const [id, b] of Object.entries(buffersRef.current)) {
+          if (!b.dirty || id.startsWith('real:')) continue
+          const n = nodesRef.current.find((x) => x.id === id)
+          if (!n) continue
+          await putNode({ ...n, content: b.content, updatedAt: Date.now() })
+          await pushVersion(id, b.content)
+          setNodes((prev) => prev?.map((x) => (x.id === id ? { ...x, content: b.content, updatedAt: Date.now() } : x)) ?? prev)
+          setBuffers((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], dirty: false } } : prev))
+          if (id === uiRef.current?.active) savedActive = true
+        }
+        if (savedActive) setSavedAt(Date.now())
       })()
     }, 400)
     return () => clearTimeout(t)
-  }, [nodes, active, buffers])
+  }, [nodes, buffers, active])
 
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), toast.action ? 6000 : 4200)
     return () => clearTimeout(t)
   }, [toast])
+
+  const pollExternal = async (): Promise<void> => {
+    const changed: string[] = []
+    const mt: Record<string, number> = { ...mtimesRef.current }
+    for (const e of flattenReal(realTreeRef.current)) {
+      if (!e.handle) continue
+      try {
+        const f = await e.handle.getFile()
+        mt[e.path] = f.lastModified
+        if (mtimesRef.current[e.path] !== undefined && f.lastModified !== mtimesRef.current[e.path]) changed.push(e.path)
+      } catch { /* ignore */ }
+    }
+    mtimesRef.current = mt
+    extRef.current = changed
+    setExtChanged(changed)
+  }
+
+  useEffect(() => {
+    if (!dirHandle) return
+    void pollExternal()
+    const iv = setInterval(() => void pollExternal(), 4000)
+    return () => clearInterval(iv)
+  }, [dirHandle, realTree])
+
+  const reloadDisk = async (): Promise<void> => {
+    if (!dirHandle) return
+    const paths = extRef.current
+    let n = 0
+    let skipped = 0
+    for (const e of flattenReal(realTreeRef.current)) {
+      if (!e.handle) continue
+      let f: File
+      try {
+        f = await e.handle.getFile()
+      } catch {
+        continue
+      }
+      mtimesRef.current[e.path] = f.lastModified
+      if (!paths.includes(e.path)) continue
+      const cur = buffersRef.current[e.key]
+      if (cur?.dirty) {
+        skipped++
+        continue
+      }
+      try {
+        const text = isImageName(e.name) ? await fileToDataURL(f) : await f.text()
+        setBuffers((prev) => (prev[e.key] ? { ...prev, [e.key]: { content: text, dirty: false, real: e.handle } } : prev))
+        if (e.key === uiRef.current?.active && taRef.current) {
+          taRef.current.value = text
+          syncScroll()
+        }
+        n++
+      } catch { /* ignore */ }
+    }
+    extRef.current = []
+    setExtChanged([])
+    if (n) notify(`${n} fichier(s) rechargé(s) depuis le disque ⟳`)
+    if (skipped) notify(`${skipped} fichier(s) non rechargé(s) : modifiés localement en même temps`)
+  }
+
+  const rescanDisk = async (): Promise<void> => {
+    if (!dirHandle) return
+    const tree = await scanDir(dirHandle, '')
+    setRealTree(tree)
+    const mt: Record<string, number> = {}
+    for (const e of flattenReal(tree)) if (e.mtime) mt[e.path] = e.mtime
+    mtimesRef.current = mt
+    extRef.current = []
+    setExtChanged([])
+    notify('Dossier actualisé ⟳')
+  }
 
   useDismiss('kfind', findOpen, () => setFindOpen(false))
   useDismiss('kpal', palOpen, () => { setPalOpen(false); setPalArg(null) })
@@ -277,6 +399,8 @@ export default function KodApp() {
   useDismiss('knew', newTabOpen, () => setNewTabOpen(false))
   useDismiss('ktpl', tplOpen, () => setTplOpen(false))
   useDismiss('kglob', gOpen, () => setGOpen(false))
+  useDismiss('ktmenu', !!tabMenu, () => setTabMenu(null))
+  useDismiss('kdiff', !!diffV, () => setDiffV(null))
 
   const syncScroll = (): void => {
     const ta = taRef.current
@@ -313,7 +437,7 @@ export default function KodApp() {
     if (!buffers[key]) {
       try {
         const f = await e.handle.getFile()
-        const text = await f.text()
+        const text = isImageName(e.name) ? await fileToDataURL(f) : await f.text()
         setBuffers((prev) => ({ ...prev, [key]: { content: text, dirty: false, real: e.handle } }))
       } catch {
         notify('Fichier illisible')
@@ -324,37 +448,79 @@ export default function KodApp() {
     setTimeout(() => taRef.current?.focus(), 30)
   }
 
+  const orderedTabs = (): string[] => {
+    if (!ui) return []
+    return [...ui.pinned.filter((p) => ui.tabs.includes(p)), ...ui.tabs.filter((t) => !ui.pinned.includes(t))]
+  }
+
   const closeTab = (id: string): void => {
     if (!ui) return
     const tabs = ui.tabs.filter((t) => t !== id)
     const active = ui.active === id ? (tabs[tabs.length - 1] ?? null) : ui.active
-    setUi({ ...ui, tabs, active })
+    const closed = [id, ...ui.closed.filter((c) => c !== id)].slice(0, 20)
+    const pinned = ui.pinned.filter((p) => p !== id)
+    if (splitId === id) setSplitId(null)
+    setUi({ ...ui, tabs, active, closed, pinned })
   }
 
-  const saveActive = async (): Promise<void> => {
-    if (!ui || !active) return
-    const b = buffers[active]
+  const reopenClosedTab = (): void => {
+    if (!ui || !ui.closed.length) return
+    const id = ui.closed[0]
+    setUi({ ...ui, tabs: ui.tabs.includes(id) ? ui.tabs : [...ui.tabs, id], active: id, closed: ui.closed.slice(1) })
+    setTimeout(() => taRef.current?.focus(), 30)
+  }
+
+  const togglePin = (id: string): void => {
+    if (!ui) return
+    const pinned = ui.pinned.includes(id) ? ui.pinned.filter((p) => p !== id) : [...ui.pinned, id]
+    setUi({ ...ui, pinned })
+  }
+
+  const closeOthers = (id: string): void => {
+    if (!ui) return
+    const tabs = [id, ...ui.pinned.filter((p) => p !== id && ui.tabs.includes(p))]
+    const removed = ui.tabs.filter((t) => !tabs.includes(t))
+    setUi({ ...ui, tabs, active: id, closed: [...removed, ...ui.closed].slice(0, 20) })
+  }
+
+  const closeRight = (id: string): void => {
+    if (!ui) return
+    const ordered = orderedTabs()
+    const idx = ordered.indexOf(id)
+    const removed = ordered.slice(idx + 1).filter((t) => !ui.pinned.includes(t))
+    const tabs = ui.tabs.filter((t) => !removed.includes(t))
+    const active = ui.active && removed.includes(ui.active) ? id : ui.active
+    setUi({ ...ui, tabs, active, closed: [...removed, ...ui.closed].slice(0, 20) })
+  }
+
+  const saveActive = async (id?: string): Promise<void> => {
+    const aid = id ?? active
+    if (!ui || !aid) return
+    const b = buffers[aid]
     if (!b) return
-    if (active.startsWith('real:')) {
+    if (aid.startsWith('real:')) {
       if (!b.real) return
       try {
         const w = await b.real.createWritable()
         await w.write(b.content)
         await w.close()
-        setBuffers((prev) => ({ ...prev, [active]: { ...prev[active], dirty: false } }))
-        setSavedAt(Date.now())
+        const e = flattenReal(realTreeRef.current).find((x) => x.handle === b.real)
+        if (e) mtimesRef.current[e.path] = Date.now()
+        setBuffers((prev) => ({ ...prev, [aid]: { ...prev[aid], dirty: false } }))
+        if (aid === ui.active) setSavedAt(Date.now())
         notify('Enregistré sur le disque 💾')
       } catch {
         notify('Écriture impossible (permission refusée ?)')
       }
       return
     }
-    const n = nodes?.find((x) => x.id === active)
+    const n = nodes?.find((x) => x.id === aid)
     if (!n) return
     await putNode({ ...n, content: b.content, updatedAt: Date.now() })
-    setNodes((prev) => prev?.map((x) => (x.id === active ? { ...x, content: b.content, updatedAt: Date.now() } : x)) ?? prev)
-    setBuffers((prev) => ({ ...prev, [active]: { ...prev[active], dirty: false } }))
-    setSavedAt(Date.now())
+    await pushVersion(aid, b.content)
+    setNodes((prev) => prev?.map((x) => (x.id === aid ? { ...x, content: b.content, updatedAt: Date.now() } : x)) ?? prev)
+    setBuffers((prev) => ({ ...prev, [aid]: { ...prev[aid], dirty: false } }))
+    if (aid === ui.active) setSavedAt(Date.now())
     notify('Enregistré ✓')
   }
 
@@ -441,7 +607,11 @@ export default function KodApp() {
       if (req.requestPermission) await req.requestPermission({ mode: 'readwrite' })
       await saveKV('dirHandle', h)
       setDirHandle(h)
-      setRealTree(await scanDir(h, ''))
+      const tree = await scanDir(h, '')
+      setRealTree(tree)
+      const mt: Record<string, number> = {}
+      for (const e of flattenReal(tree)) if (e.mtime) mt[e.path] = e.mtime
+      mtimesRef.current = mt
       notify(`Dossier « ${h.name} » ouvert`)
     } catch { /* annulé */ }
   }
@@ -479,24 +649,36 @@ export default function KodApp() {
   }
 
   const matches = useMemo(() => {
-    if (!findQ || !content) return [] as number[]
-    const out: number[] = []
-    let i = content.indexOf(findQ)
-    while (i >= 0 && out.length < 500) {
-      out.push(i)
-      i = content.indexOf(findQ, i + findQ.length)
-    }
+    if (!findQ || !content) return [] as { i: number; len: number }[]
+    const out: { i: number; len: number }[] = []
+    try {
+      if (findRe) {
+        const re = new RegExp(findQ, 'gi')
+        let m: RegExpExecArray | null
+        while ((m = re.exec(content)) && out.length < 500) {
+          out.push({ i: m.index, len: Math.max(1, m[0].length) })
+          if (m[0].length === 0) re.lastIndex++
+        }
+      } else {
+        let i = content.indexOf(findQ)
+        while (i >= 0 && out.length < 500) {
+          out.push({ i, len: findQ.length })
+          i = content.indexOf(findQ, i + findQ.length)
+        }
+      }
+    } catch { /* regex invalide */ }
     return out
-  }, [findQ, content])
+  }, [findQ, content, findRe])
 
   const goMatch = (dir: 1 | -1): void => {
     if (!matches.length || !taRef.current) return
     const next = (findIdx + dir + matches.length) % matches.length
     setFindIdx(next)
-    const pos = matches[next]
+    const pos = matches[next].i
+    const len = matches[next].len
     const ta = taRef.current
     ta.focus()
-    ta.setSelectionRange(pos, pos + findQ.length)
+    ta.setSelectionRange(pos, pos + len)
     const line = ta.value.slice(0, pos).split('\n').length
     ta.scrollTop = Math.max(0, (line - 1) * 20 - ta.clientHeight / 2)
     syncScroll()
@@ -508,32 +690,50 @@ export default function KodApp() {
     setFindIdx(0)
   }, [findOpen, findQ])
 
-  const runGlobalSearch = async (): Promise<void> => {
+  const runGlobalSearch = async (reFlag?: boolean): Promise<void> => {
     const q = gQ.trim()
     if (q.length < 2) {
       setGResults([])
       return
     }
+    const useRe = reFlag ?? gRe
+    let re: RegExp | null = null
+    if (useRe) {
+      try {
+        re = new RegExp(q, 'gi')
+      } catch {
+        setGResults([])
+        setGBusy(false)
+        return
+      }
+    }
     setGBusy(true)
     const res: GResult[] = []
     const lower = q.toLowerCase()
+    const lineHit = (t: string): boolean => {
+      if (re) {
+        re.lastIndex = 0
+        return re.test(t)
+      }
+      return t.toLowerCase().includes(lower)
+    }
     for (const n of nodesRef.current) {
       if (n.kind !== 'file' || n.content == null) continue
       const lines = n.content.split('\n')
       lines.forEach((text, i) => {
-        if (text.toLowerCase().includes(lower) && res.length < 200) {
+        if (lineHit(text) && res.length < 200) {
           res.push({ key: n.id, name: n.name, path: n.name, line: i + 1, text: text.trim().slice(0, 120) })
         }
       })
     }
     for (const e of flattenReal(realTree)) {
-      if (!e.handle) continue
+      if (!e.handle || isImageName(e.name)) continue
       try {
         const f = await e.handle.getFile()
         if (f.size > 300_000) continue
         const text = await f.text()
         text.split('\n').forEach((line, i) => {
-          if (line.toLowerCase().includes(lower) && res.length < 200) {
+          if (lineHit(line) && res.length < 200) {
             res.push({ key: e.key, name: e.name, path: e.path, line: i + 1, text: line.trim().slice(0, 120) })
           }
         })
@@ -572,18 +772,39 @@ export default function KodApp() {
     setBuffers((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], content, dirty: true } } : prev))
   }
 
+  const replForMatch = (m: RegExpExecArray): string =>
+    replQ.replace(/\$(\d+)/g, (s, d) => m[Number(d)] ?? s).replace(/\$&/g, m[0])
+
   const replaceCurrent = (): void => {
     if (!active || !findQ) return
     const b = buffers[active]
     if (!b) return
-    const pos = matches[findIdx] ?? matches[0]
-    if (pos === undefined) return
-    const nv = b.content.slice(0, pos) + replQ + b.content.slice(pos + findQ.length)
+    const hit = matches[findIdx] ?? matches[0]
+    if (!hit) return
+    let rep = replQ
+    let mlen = findQ.length
+    if (findRe) {
+      try {
+        const re = new RegExp(findQ, 'g')
+        let m: RegExpExecArray | null
+        while ((m = re.exec(b.content))) {
+          if (m.index === hit.i) {
+            rep = replForMatch(m)
+            mlen = m[0].length
+            break
+          }
+          if (m[0].length === 0) re.lastIndex++
+        }
+      } catch {
+        return
+      }
+    }
+    const nv = b.content.slice(0, hit.i) + rep + b.content.slice(hit.i + mlen)
     setBuf(active, nv)
     const ta = taRef.current
     if (ta) {
       ta.value = nv
-      ta.setSelectionRange(pos + replQ.length, pos + replQ.length)
+      ta.setSelectionRange(hit.i + rep.length, hit.i + rep.length)
       syncScroll()
       updateLineCol()
     }
@@ -593,9 +814,19 @@ export default function KodApp() {
     if (!active || !findQ) return
     const b = buffers[active]
     if (!b) return
-    const n = b.content.split(findQ).length - 1
+    const n = matches.length
     if (!n) return
-    const nv = b.content.split(findQ).join(replQ)
+    let nv: string
+    if (findRe) {
+      try {
+        nv = b.content.replace(new RegExp(findQ, 'g'), replQ)
+      } catch {
+        notify('Regex invalide')
+        return
+      }
+    } else {
+      nv = b.content.split(findQ).join(replQ)
+    }
     setBuf(active, nv)
     const ta = taRef.current
     if (ta) {
@@ -629,9 +860,24 @@ export default function KodApp() {
         if (!n || n.kind !== 'file') continue
         text = buffersRef.current[key]?.content ?? n.content ?? ''
       }
-      if (text == null || !text.includes(q)) continue
-      const c = text.split(q).length - 1
-      const nv = text.split(q).join(gReplQ)
+      if (text == null) continue
+      let nv: string
+      let c = 0
+      if (gRe) {
+        let re: RegExp
+        try {
+          re = new RegExp(q, 'g')
+        } catch {
+          continue
+        }
+        c = (text.match(re) ?? []).length
+        if (!c) continue
+        nv = text.replace(re, gReplQ)
+      } else {
+        if (!text.includes(q)) continue
+        c = text.split(q).length - 1
+        nv = text.split(q).join(gReplQ)
+      }
       count += c
       files++
       if (key.startsWith('real:') && handle) {
@@ -746,6 +992,55 @@ export default function KodApp() {
     updateLineCol()
   }
 
+  const rectApply = (key: string): void => {
+    if (!rect || !active) return
+    const b = buffers[active]
+    if (!b) return
+    const arr = b.content.split('\n')
+    const l0 = Math.min(rect.aLine, rect.line)
+    const l1 = Math.max(rect.aLine, rect.line)
+    const c0 = Math.min(rect.aCol, rect.col)
+    const c1 = Math.max(rect.aCol, rect.col)
+    for (let i = l0; i <= l1 && i < arr.length; i++) {
+      let l = arr[i]
+      if (l.length < c0) l = l + ' '.repeat(c0 - l.length)
+      if (key === 'Backspace') {
+        if (c0 === c1) {
+          if (c0 > 0) arr[i] = l.slice(0, c0 - 1) + l.slice(c0)
+        } else arr[i] = l.slice(0, c0) + l.slice(Math.min(c1, l.length))
+      } else if (key === 'Delete') {
+        if (c0 === c1) arr[i] = l.slice(0, c0) + l.slice(c0 + 1)
+        else arr[i] = l.slice(0, c0) + l.slice(Math.min(c1, l.length))
+      } else {
+        arr[i] = l.slice(0, c0) + key + l.slice(Math.min(c1, l.length))
+      }
+    }
+    const nv = arr.join('\n')
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      const nl = nv.split('\n')
+      const off = nl.slice(0, l1).reduce((a, l) => a + l.length + 1, 0) + Math.min(c1, nl[l1]?.length ?? 0)
+      ta.setSelectionRange(off, off)
+      ta.focus()
+      syncScroll()
+      updateLineCol()
+    }
+  }
+
+  const rectExtend = (key: string): void => {
+    setRect((r) => {
+      if (!r) return r
+      const nr = { ...r }
+      if (key === 'ArrowUp') nr.line = Math.max(0, nr.line - 1)
+      if (key === 'ArrowDown') nr.line = nr.line + 1
+      if (key === 'ArrowLeft') nr.col = Math.max(0, nr.col - 1)
+      if (key === 'ArrowRight') nr.col = nr.col + 1
+      return nr
+    })
+  }
+
   const outline = useMemo(() => {
     if (!content) return [] as { line: number; label: string }[]
     const out: { line: number; label: string }[] = []
@@ -852,19 +1147,23 @@ export default function KodApp() {
   }
 
   const paletteCmds = (): PalCmd[] => [
-    { id: 'find', label: '\U0001F50D Rechercher dans le fichier', run: () => { setPalOpen(false); setFindOpen(true) } },
-    { id: 'gfind', label: '\U0001F50E Rechercher dans tout le projet', run: () => { setPalOpen(false); setGOpen(true) } },
+    { id: 'find', label: '🔍 Rechercher dans le fichier', run: () => { setPalOpen(false); setFindOpen(true) } },
+    { id: 'gfind', label: '🔎 Rechercher dans tout le projet', run: () => { setPalOpen(false); setGOpen(true) } },
     { id: 'repl', label: '\u21C4 Remplacer dans le fichier', run: () => { setPalOpen(false); setFindOpen(true); setReplOpen(true) } },
-    { id: 'save', label: '\U0001F4BE Enregistrer (Ctrl+S)', run: () => { setPalOpen(false); void saveActive() } },
-    { id: 'preview', label: `\U0001F441 ${preview ? 'Cacher' : 'Afficher'} l\u2019aper\u00e7u`, run: () => setPreview((x) => !x) },
-    { id: 'mini', label: `\U0001F5FA ${mini ? 'Cacher' : 'Afficher'} la minimap`, run: () => setMini((x) => !x) },
+    { id: 'save', label: '💾 Enregistrer (Ctrl+S)', run: () => { setPalOpen(false); void saveActive() } },
+    { id: 'preview', label: `👁 ${preview ? 'Cacher' : 'Afficher'} l\u2019aper\u00e7u`, run: () => setPreview((x) => !x) },
+    { id: 'mini', label: `🗺 ${mini ? 'Cacher' : 'Afficher'} la minimap`, run: () => setMini((x) => !x) },
     { id: 'outline', label: `\u2630 ${outlineOpen ? 'Cacher' : 'Afficher'} le plan`, run: () => { setOutlineOpen((o) => !o); setPalOpen(false) } },
-    { id: 'hist', label: '\U0001F558 Historique des versions', run: () => void openHist() },
+    { id: 'hist', label: '🕘 Historique des versions', run: () => void openHist() },
     { id: 'goto', label: '\u2C7C Aller \u00e0 la ligne\u2026', arg: true, run: () => {} },
-    { id: 'fp', label: '\U0001F4C4 Aller au fichier\u2026 (Ctrl+P)', run: () => { setPalOpen(false); setFpOpen(true); setFpQ('') } },
+    { id: 'fp', label: '📄 Aller au fichier\u2026 (Ctrl+P)', run: () => { setPalOpen(false); setFpOpen(true); setFpQ('') } },
     { id: 'probs', label: `\u26A0\uFE0F Probl\u00e8mes (${probs.length})`, run: () => { setProbsOpen(true); setPalOpen(false) } },
-    { id: 'focus', label: `\U0001F9D8 ${focus ? 'Quitter' : 'Activer'} le mode focus`, run: () => setFocus((z) => !z) },
-    ...HL_THEMES.map((t) => ({ id: 'hl:' + t.id, label: `\U0001F3A8 Th\u00e8me de coloration : ${t.label}`, run: () => setUi((p) => (p ? { ...p, hlTheme: t.id } : p)) })),
+    { id: 'focus', label: `🧘 ${focus ? 'Quitter' : 'Activer'} le mode focus`, run: () => setFocus((z) => !z) },
+    { id: 'foldall', label: '⤓ Replier tous les blocs', run: () => { setPalOpen(false); foldAll() } },
+    { id: 'unfoldall', label: '⤒ Déplier tous les blocs', run: () => { setPalOpen(false); unfoldAll() } },
+    { id: 'reopen', label: '↩ Rouvrir l’onglet fermé', run: () => { setPalOpen(false); reopenClosedTab() } },
+    { id: 'splitclose', label: '↔ Fermer le volet droit', run: () => { setPalOpen(false); setSplitId(null) } },
+    ...HL_THEMES.map((t) => ({ id: 'hl:' + t.id, label: `🎨 Th\u00e8me de coloration : ${t.label}`, run: () => setUi((p) => (p ? { ...p, hlTheme: t.id } : p)) })),
     ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
   ]
 
@@ -1115,16 +1414,50 @@ export default function KodApp() {
     }
   }
 
-  const unfoldAll = (): string => {
-    let arr = content.split('\n')
+  const applyContent = (nv: string): void => {
+    if (!active) return
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      syncScroll()
+      updateLineCol()
+    }
+  }
+
+  const foldAll = (): void => {
+    const arr = content.split('\n')
+    const next: { start: number; saved: string[] }[] = []
+    for (const start of [...foldable].sort((a, b) => b - a)) {
+      if (foldedStarts.has(start)) continue
+      const end = foldEnd(arr, start)
+      if (end <= start + 1) continue
+      next.push({ start, saved: arr.slice(start, end + 1) })
+    }
+    if (!next.length) return
+    let nv = arr.join('\n')
+    for (const f of next) {
+      const lines = nv.split('\n')
+      const ph = (lines[f.start]?.match(/^\s*/)?.[0] ?? '') + '⋯ ' + (f.saved.length - 1) + ' lignes'
+      lines.splice(f.start + 1, f.saved.length - 1, ph)
+      nv = lines.join('\n')
+    }
+    setFolds(next)
+    applyContent(nv)
+    notify(`${next.length} bloc(s) replié(s)`)
+  }
+
+  const unfoldAll = (): void => {
+    if (!folds.length) return
+    const arr = content.split('\n')
     for (const f of [...folds].sort((a, b) => b.start - a.start)) {
       arr.splice(f.start + 1, 1, ...f.saved.slice(1))
     }
     setFolds([])
-    return arr.join('\n')
+    applyContent(arr.join('\n'))
   }
 
-  const probs = useMemo(() => {
+  const probsStatic = useMemo(() => {
     const out: { line: number; label: string }[] = []
     content.split('\n').forEach((l, i) => {
       const t = l.match(/\b(TODO|FIXME|HACK|XXX)\b/)
@@ -1134,6 +1467,41 @@ export default function KodApp() {
     })
     return out
   }, [content])
+
+  const probs = useMemo(
+    () => [...probsStatic, ...synIssues.map((s) => ({ line: s.line, label: `⛔ ${s.msg}${s.col > 1 ? ` (col ${s.col})` : ''}` }))],
+    [probsStatic, synIssues]
+  )
+
+  useEffect(() => {
+    let alive = true
+    const t = setTimeout(() => {
+      void syntaxIssues(content, lang).then((r) => {
+        if (alive) setSynIssues(r)
+      })
+    }, 350)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [content, lang])
+
+  useEffect(() => {
+    try {
+      setBms(JSON.parse(localStorage.getItem(`skouar:kod:bm:${active}`) ?? '[]'))
+    } catch {
+      setBms([])
+    }
+  }, [active])
+
+  const toggleBm = (line: number): void => {
+    if (!active) return
+    setBms((prev) => {
+      const next = prev.includes(line) ? prev.filter((x) => x !== line) : [...prev, line].sort((a, b) => a - b)
+      localStorage.setItem(`skouar:kod:bm:${active}`, JSON.stringify(next))
+      return next
+    })
+  }
 
   const fpList = useMemo(() => {
     const q = fpQ.trim().toLowerCase()
@@ -1172,7 +1540,8 @@ export default function KodApp() {
         name = name0.replace(/(\.[^.]+)?$/, ` (${k})$1`)
         k++
       }
-      const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content: await f.text(), updatedAt: Date.now() }
+      const content = isImageName(name) ? await fileToDataURL(f) : await f.text()
+      const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content, updatedAt: Date.now() }
       await putNode(node)
       setNodes((prev) => [...(prev ?? []), node])
       setBuffers((prev) => ({ ...prev, [node.id]: { content: node.content ?? '', dirty: false } }))
@@ -1188,6 +1557,8 @@ export default function KodApp() {
   }
 
   const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
+
+  const diffRows = useMemo<DiffRow[]>(() => (diffV ? diffLines(diffV.content, content) : []), [diffV, content])
 
 
   const createQuickFile = async (ext: string): Promise<void> => {
@@ -1242,24 +1613,39 @@ export default function KodApp() {
 
   const onTaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (!active || !ui) return
+    if (rect && e.altKey && e.shiftKey && e.key.startsWith('Arrow')) {
+      e.preventDefault()
+      rectExtend(e.key)
+      return
+    }
+    if (rect && (e.key === 'Backspace' || e.key === 'Delete' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey))) {
+      e.preventDefault()
+      rectApply(e.key)
+      return
+    }
     if (multi.length > 0 && (e.key === 'Backspace' || e.key === 'Delete' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey))) {
       e.preventDefault()
       applyMultiEdit(e.key)
       return
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+    if (comboOf(e) === km('comment')) {
       e.preventDefault()
       toggleComment()
       return
     }
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+    if (comboOf(e) === km('dupLine')) {
       e.preventDefault()
       duplicateSel()
       return
     }
-    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    if (comboOf(e) === km('moveUp')) {
       e.preventDefault()
-      moveLines(e.key === 'ArrowUp' ? -1 : 1)
+      moveLines(-1)
+      return
+    }
+    if (comboOf(e) === km('moveDown')) {
+      e.preventDefault()
+      moveLines(1)
       return
     }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && PAIRS[e.key]) {
@@ -1272,6 +1658,30 @@ export default function KodApp() {
     const val = ta.value
     if (e.key === 'Tab') {
       e.preventDefault()
+      if (!e.shiftKey) {
+        const lineStart = val.lastIndexOf('\n', sel - 1) + 1
+        const prefix = val.slice(lineStart, sel)
+        const stripped = prefix.replace(/\{[^}]*\}/g, '').replace(/\[[^\]]*\]/g, '')
+        if (['html', 'css', 'vue', 'svelte', 'xml'].includes(lang) && prefix.trim() && !/\s/.test(stripped)) {
+          const exp = expandEmmet(prefix, lang)
+          if (exp) {
+            const lineEnd = val.indexOf('\n', sel)
+            const le = lineEnd < 0 ? val.length : lineEnd
+            const indent = val.slice(lineStart).match(/^\s*/)?.[0] ?? ''
+            const body = exp.split('\n').map((l, i) => (i === 0 ? l : indent + l)).join('\n')
+            const ci = body.indexOf('\u0001')
+            const clean = ci >= 0 ? body.replace('\u0001', '') : body
+            const nv = val.slice(0, lineStart) + clean + val.slice(le)
+            setBuf(active, nv)
+            ta.value = nv
+            const pos = lineStart + (ci >= 0 ? ci : clean.length)
+            ta.setSelectionRange(pos, pos)
+            syncScroll()
+            updateLineCol()
+            return
+          }
+        }
+      }
       const spaces = ' '.repeat(ui.tabSize)
       if (ta.selectionEnd > sel) {
         const block = val.slice(sel, ta.selectionEnd)
@@ -1319,34 +1729,43 @@ export default function KodApp() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      const c = comboOf(e)
+      if (c === km('save')) {
         e.preventDefault()
         void saveActive()
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && e.shiftKey) {
+      } else if (c === km('gfind')) {
         e.preventDefault()
         setGOpen(true)
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+      } else if (c === km('replace')) {
         e.preventDefault()
         setFindOpen(true)
         setReplOpen(true)
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      } else if (c === km('find')) {
         e.preventDefault()
         setFindOpen(true)
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+      } else if (c === km('quickopen')) {
         e.preventDefault()
         setFpOpen(true)
         setFpQ('')
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !e.shiftKey) {
+      } else if (c === km('dupOcc')) {
         e.preventDefault()
         addNextOccurrence()
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && e.shiftKey) {
+      } else if (c === km('selAllOcc')) {
         e.preventDefault()
         selectAllOccurrences()
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      } else if (c === km('palette')) {
         e.preventDefault()
         setPalOpen(true)
         setPalQ('')
         setPalArg(null)
+      } else if (c === km('goto')) {
+        e.preventDefault()
+        setPalOpen(true)
+        setPalArg('goto')
+        setPalVal('')
+      } else if (c === km('reopenTab')) {
+        e.preventDefault()
+        reopenClosedTab()
       } else if (e.key === 'Escape') {
         setFindOpen(false)
         setGOpen(false)
@@ -1354,11 +1773,14 @@ export default function KodApp() {
         setOutlineOpen(false)
         setHistOpen(false)
         setMulti([])
+        setRect(null)
+        setTabMenu(null)
+        setDiffV(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, buffers, nodes, ui, multi])
+  }, [active, buffers, nodes, ui, multi, keymap])
 
   const childrenOf = (parentId: string | null): KodNode[] =>
     (nodes ?? [])
@@ -1553,7 +1975,18 @@ export default function KodApp() {
           {nodes.length === 0 && <div className="kod-empty">Projet vide — crée un fichier 📄</div>}
           {dirHandle && (
             <>
-              <div className="kod-tree-head" title="Dossier réel du disque">🗂 {dirHandle.name} (disque)</div>
+              <div className="kod-tree-head" title="Dossier réel du disque">
+                🗂 {dirHandle.name} (disque)
+                <button className="db-btn kod-rescan" title="Actualiser depuis le disque" onClick={() => void rescanDisk()}>
+                  ⟳
+                </button>
+              </div>
+              {extChanged.length > 0 && (
+                <div className="kod-extwarn">
+                  <span>⚠ {extChanged.length} modifié(s) sur le disque</span>
+                  <button className="db-btn" onClick={() => void reloadDisk()}>Recharger</button>
+                </div>
+              )}
               <div className="kod-row dir" style={{ paddingLeft: 8 }} onClick={() => toggleDir('root:' + dirHandle.name)}>
                 <span className="kod-row-ico">{ui.expanded.includes('root:' + dirHandle.name) ? '📂' : '📁'}</span>
                 <span className="kod-row-name">{dirHandle.name}</span>
@@ -1576,7 +2009,12 @@ export default function KodApp() {
                 if (e.key === 'Enter') void runGlobalSearch()
               }}
             />
-            <div className="kod-gcount">{gBusy ? '…' : `${gResults.length} résultat(s)`}</div>
+            <div className="kod-gcount">
+              <button className={`db-btn${gRe ? ' active' : ''}`} title="Expression régulière (.*)" aria-label="Recherche regex" onClick={() => { setGRe((v) => !v); void runGlobalSearch(!gRe) }}>
+                .*
+              </button>
+              {gBusy ? '…' : `${gResults.length} résultat(s)`}
+            </div>
             {gResults.length > 0 && (
               <div className="kod-grepl">
                 <input placeholder="Remplacer par…" value={gReplQ} onChange={(e) => setGReplQ(e.target.value)} />
@@ -1641,12 +2079,33 @@ export default function KodApp() {
       </div>
       <main className="blocs-main kod-main">
         <div className="kod-tabs">
-          {ui.tabs.map((id) => {
+          {orderedTabs().map((id) => {
             const n = nodes.find((x) => x.id === id)
             const r = id.startsWith('real:') ? flattenReal(realTree).find((x) => x.key === id) : undefined
             const name = n?.name ?? r?.name ?? id
+            const pinned = ui.pinned.includes(id)
             return (
-              <div key={id} className={`kod-tab${active === id ? ' active' : ''}`} onClick={() => setUi({ ...ui, active: id })}>
+              <div
+                key={id}
+                className={`kod-tab${active === id ? ' active' : ''}${pinned ? ' pinned' : ''}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/kod-tab', id)
+                  e.dataTransfer.effectAllowed = 'move'
+                  setDragTab(id)
+                }}
+                onDragEnd={() => {
+                  setDragTab(null)
+                  setDropZone(false)
+                }}
+                onClick={() => setUi({ ...ui, active: id })}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setTabMenu({ id, x: e.clientX, y: e.clientY })
+                }}
+                title="Clic : ouvrir · clic droit : menu · glisser à droite : volet split"
+              >
+                {pinned && <span className="kod-tab-pin">📌</span>}
                 <span className="kod-tab-ico">{n ? fileGlyph(n.name) : '📄'}</span>
                 <span className="kod-tab-name">{name}</span>
                 {buffers[id]?.dirty && <span className="kod-dot">●</span>}
@@ -1674,6 +2133,25 @@ export default function KodApp() {
                   📄 sans-titre.{ext}
                 </button>
               ))}
+            </div>
+          )}
+          {tabMenu && (
+            <div className="kod-tabmenu" data-pop="ktmenu" style={{ left: tabMenu.x, top: tabMenu.y }}>
+              <button className="kod-panel-item" onClick={() => { togglePin(tabMenu.id); setTabMenu(null) }}>
+                {ui.pinned.includes(tabMenu.id) ? '📌 Désépingler' : '📌 Épingler'}
+              </button>
+              <button className="kod-panel-item" onClick={() => { setSplitId(tabMenu.id); setTabMenu(null) }}>
+                ➡ Ouvrir dans le volet droit
+              </button>
+              <button className="kod-panel-item" onClick={() => { closeTab(tabMenu.id); setTabMenu(null) }}>
+                ✕ Fermer
+              </button>
+              <button className="kod-panel-item" onClick={() => { closeOthers(tabMenu.id); setTabMenu(null) }}>
+                Fermer les autres
+              </button>
+              <button className="kod-panel-item" onClick={() => { closeRight(tabMenu.id); setTabMenu(null) }}>
+                Fermer à droite
+              </button>
             </div>
           )}
           <div className="kod-tabs-tools">
@@ -1717,12 +2195,52 @@ export default function KodApp() {
         </div>
         {active ? (
           <>
-            <div className={`kod-body${preview && (lang === 'markdown' || lang === 'html') ? ' split' : ''}`}>
-              <div className="kod-gutter" ref={gutterRef} aria-hidden>
+            <div
+              className={`kod-body${preview && (lang === 'markdown' || lang === 'html' || isSvgActive) ? ' split' : ''}${splitId ? ' has-split' : ''}`}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes('text/kod-tab')) {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  if (e.clientX > r.right - 140) {
+                    e.preventDefault()
+                    setDropZone(true)
+                  }
+                }
+              }}
+              onDragLeave={() => setDropZone(false)}
+              onDrop={(e) => {
+                const id = e.dataTransfer.getData('text/kod-tab')
+                if (id) {
+                  e.preventDefault()
+                  setSplitId(id)
+                  setDropZone(false)
+                }
+              }}
+            >
+              {dropZone && <div className="kod-dropzone">Déposer « {dragTab ? nodeName(dragTab) : ''} » à droite ➡</div>}
+              <div className="kod-gutter" ref={gutterRef}>
+                <div className="kod-ghead">
+                  <button title="Replier tous les blocs" onClick={foldAll}>⤓</button>
+                  <button title="Déplier tous les blocs" onClick={unfoldAll}>⤒</button>
+                </div>
                 {lines.map((_, i) => (
-                  <div key={i}>{i + 1}</div>
+                  <div
+                    key={i}
+                    className={`kod-gline${foldable.has(i) ? ' foldable' : ''}${foldedStarts.has(i) ? ' folded' : ''}${bms.includes(i) ? ' bm' : ''}`}
+                    onClick={() => (foldable.has(i) ? toggleFold(i) : toggleBm(i))}
+                    title={foldable.has(i) ? 'Clic : replier/déplier ce bloc' : 'Clic : poser/retirer un signet 🔖'}
+                  >
+                    <span className="kod-garrow">{foldedStarts.has(i) ? '▸' : foldable.has(i) ? '▾' : ''}</span>
+                    <span className="kod-gnum">{i + 1}</span>
+                    {bms.includes(i) && <span className="kod-gbm">🔖</span>}
+                  </div>
                 ))}
               </div>
+              {isImgActive && content.startsWith('data:') ? (
+                <div className="kod-imgprev">
+                  <img src={content} alt={activeName} />
+                  <div className="kod-imgprev-name">{activeName} — aperçu image</div>
+                </div>
+              ) : (
               <div className="kod-edwrap">
               <div className={`kod-ed${ui.wrap ? ' wrap' : ''}`}>
                 <pre className="kod-hl" ref={hlRef} aria-hidden>
@@ -1742,7 +2260,17 @@ export default function KodApp() {
                   onScroll={syncScroll}
                   onSelect={updateLineCol}
                   onKeyUp={updateLineCol}
-                  onClick={updateLineCol}
+                  onClick={(e) => {
+                    const ta = taRef.current
+                    if (e.altKey && ta) {
+                      const off = ta.selectionStart
+                      const lc = offToLC(ta.value, off)
+                      setRect({ aLine: lc.line - 1, aCol: lc.col, line: lc.line - 1, col: lc.col })
+                    } else {
+                      setRect(null)
+                    }
+                    updateLineCol()
+                  }}
                   onKeyDown={onTaKeyDown}
                 />
                 {pair && (
@@ -1751,6 +2279,22 @@ export default function KodApp() {
                     <div className="kod-bracket" style={{ left: 14 + pair.b.col * charW, top: 10 + pair.b.line * (ui.fontSize * 1.55) }} />
                   </>
                 )}
+                {rect &&
+                  (() => {
+                    const l0 = Math.min(rect.aLine, rect.line)
+                    const l1 = Math.max(rect.aLine, rect.line)
+                    const c0 = Math.min(rect.aCol, rect.col)
+                    const c1 = Math.max(rect.aCol, rect.col)
+                    const lh = ui.fontSize * 1.55
+                    const out: React.ReactNode[] = []
+                    for (let i = l0; i <= l1; i++) {
+                      const len = Math.max(c1, lines[i]?.length ?? 0) - c0
+                      out.push(
+                        <div key={i} className="kod-rect" style={{ left: 14 + c0 * charW, top: 10 + i * lh, width: Math.max(2, len * charW), height: lh }} />
+                      )
+                    }
+                    return out
+                  })()}
                 {findOpen && (
                   <div className="kod-find" data-pop="kfind">
                     <input
@@ -1770,6 +2314,9 @@ export default function KodApp() {
                         <button className="db-btn" title="Tout remplacer dans ce fichier" onClick={() => replaceAllFile()}>Tout ⇄</button>
                       </>
                     )}
+                    <button className={`db-btn${findRe ? ' active' : ''}`} title="Recherche par expression régulière (.*)" aria-label="Regex" onClick={() => setFindRe((v) => !v)}>
+                      .*
+                    </button>
                     <span className="kod-find-count">{matches.length ? `${Math.min(findIdx + 1, matches.length)}/${matches.length}` : '0'}</span>
                     <button className="db-btn" title="Précédent (Maj+Entrée)" onClick={() => goMatch(-1)}>
                       ↑
@@ -1790,8 +2337,21 @@ export default function KodApp() {
                 </div>
               )}
               </div>
-              {preview && (lang === 'markdown' || lang === 'html') && (
-                <div className="kod-preview" dangerouslySetInnerHTML={{ __html: renderPreview(content, lang) }} />
+              )}
+              {splitId && splitId !== active && (
+                <MiniEditor
+                  id={splitId}
+                  name={nodeName(splitId)}
+                  lang={langOf(nodeName(splitId))}
+                  content={buffers[splitId]?.content ?? ''}
+                  dirty={!!buffers[splitId]?.dirty}
+                  onChange={(c) => setBuf(splitId, c)}
+                  onSave={() => void saveActive(splitId)}
+                  onClose={() => setSplitId(null)}
+                />
+              )}
+              {preview && (lang === 'markdown' || lang === 'html' || isSvgActive) && (
+                <div className="kod-preview" dangerouslySetInnerHTML={{ __html: renderPreview(content, isSvgActive ? 'svg' : lang) }} />
               )}
             </div>
             <div className="kod-status">
@@ -1901,15 +2461,112 @@ export default function KodApp() {
             <div key={v.id} className="kod-hist-row">
               <span>{new Date(v.at).toLocaleString('fr-FR')} · {v.content.length} car.</span>
               <button className="db-btn" onClick={() => restoreVersion(v)}>Restaurer</button>
+              <button className="db-btn" onClick={() => setDiffV(v)}>Comparer</button>
             </div>
           ))}
           {versions.length === 0 && <div className="kod-pal-empty">Aucune version enregistrée</div>}
+        </div>
+      )}
+      {diffV && (
+        <div className="kod-panel kod-diff" data-pop="kdiff">
+          <div className="kod-panel-head">
+            <span>⇄ Diff — {activeName} · {new Date(diffV.at).toLocaleString('fr-FR')} → courant</span>
+            <button className="db-btn" aria-label="Fermer le diff" onClick={() => setDiffV(null)}>✕</button>
+          </div>
+          <div className="kod-diff-body">
+            {diffRows.slice(0, 800).map((r, i) => (
+              <div key={i} className={`kod-diff-row ${r.type}`}>
+                <span className="kod-diff-ln">{r.type === 'add' ? '' : r.a}{r.type === 'del' ? '' : r.b ? `/${r.b}` : ''}</span>
+                <span className="kod-diff-txt">{r.text === '' ? ' ' : r.text}</span>
+              </div>
+            ))}
+            {diffRows.length > 800 && <div className="kod-pal-empty">… {diffRows.length - 800} lignes de plus</div>}
+          </div>
         </div>
       )}
       {toast && (
         <div className="toast" key={toast.key} style={{ bottom: 16 }}>
           <span>{toast.msg}</span>
           {toast.action && <button onClick={() => toast.action?.fn()}>{toast.action.label}</button>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MiniEditor(props: {
+  id: string
+  name: string
+  lang: string
+  content: string
+  dirty: boolean
+  onChange: (c: string) => void
+  onSave: () => void
+  onClose: () => void
+}) {
+  const taRef = useRef<HTMLTextAreaElement | null>(null)
+  const hlRef = useRef<HTMLPreElement | null>(null)
+  const gutRef = useRef<HTMLDivElement | null>(null)
+  const isImg = isImageName(props.name)
+  const sync = (): void => {
+    const ta = taRef.current
+    if (!ta) return
+    if (hlRef.current) {
+      hlRef.current.scrollTop = ta.scrollTop
+      hlRef.current.scrollLeft = ta.scrollLeft
+    }
+    if (gutRef.current) gutRef.current.scrollTop = ta.scrollTop
+  }
+  const lines = props.content.split('\n')
+  return (
+    <div className="kod-edwrap split-pane">
+      <div className="kod-split-head">
+        <span className="kod-tab-ico">{fileGlyph(props.name)}</span>
+        <span className="kod-tab-name">{props.name}</span>
+        {props.dirty && <span className="kod-dot">●</span>}
+        <button className="db-btn" title="Enregistrer (Ctrl+S)" onClick={props.onSave}>
+          💾
+        </button>
+        <button className="db-btn" title="Fermer le volet droit" onClick={props.onClose}>
+          ✕
+        </button>
+      </div>
+      {isImg && props.content.startsWith('data:') ? (
+        <div className="kod-imgprev">
+          <img src={props.content} alt={props.name} />
+        </div>
+      ) : (
+        <div className="kod-split-body">
+          <div className="kod-gutter" ref={gutRef} aria-hidden>
+            {lines.map((_, i) => (
+              <div key={i} className="kod-gline">
+                <span className="kod-garrow" />
+                <span className="kod-gnum">{i + 1}</span>
+              </div>
+            ))}
+          </div>
+          <div className="kod-edwrap mini-ed">
+            <div className="kod-ed">
+              <pre className="kod-hl" ref={hlRef} aria-hidden>
+                <code dangerouslySetInnerHTML={{ __html: highlight(props.content, props.lang) + '\n' }} />
+              </pre>
+              <textarea
+                ref={taRef}
+                className="kod-ta"
+                wrap="off"
+                spellCheck={false}
+                value={props.content}
+                onChange={(e) => props.onChange(e.target.value)}
+                onScroll={sync}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                    e.preventDefault()
+                    props.onSave()
+                  }
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

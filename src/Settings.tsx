@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useDismiss } from './apps/blocs/useDismiss'
 import { ACCENTS, applyTheme, getAccent, getTheme } from './ThemeButton'
 import { HL_THEMES } from './apps/kod/themes'
+import { KEYMAP_ACTIONS, keymapToText, parseKeymapText } from './apps/kod/keymap'
 
 export const SETTINGS_EVENT = 'skouar:settings'
 const KEY = 'skouar:settings'
@@ -47,6 +48,7 @@ export default function SettingsButton({ appId, appName }: Props) {
   })
   const [kod, setKod] = useState<AppSettings>(() => (appId === 'kod' ? loadAppSettings('kod') : {}))
   const [armed, setArmed] = useState(false)
+  const [kmText, setKmText] = useState('')
 
   useDismiss('settings', open, () => setOpen(false))
 
@@ -54,7 +56,11 @@ export default function SettingsButton({ appId, appName }: Props) {
     if (!open) return
     setTheme(getTheme())
     setAccent(getAccent())
-    if (appId === 'kod') setKod(loadAppSettings('kod'))
+    if (appId === 'kod') {
+      const ks = loadAppSettings('kod')
+      setKod(ks)
+      setKmText(keymapToText((ks.keymap ?? {}) as Record<string, unknown>))
+    }
     setArmed(false)
   }, [open, appId])
 
@@ -204,6 +210,20 @@ export default function SettingsButton({ appId, appName }: Props) {
                         onChange={(e) => setKodField('mini', e.target.checked)}
                       />
                       <span>Afficher la minimap</span>
+                    </label>
+                    <label className="settings-field">
+                      <span>
+                        Raccourcis clavier (un par ligne : <code>action: raccourci</code>, ex. <code>find: C-F</code>)
+                      </span>
+                      <textarea
+                        className="set-keymap"
+                        rows={5}
+                        value={kmText}
+                        placeholder={'save: C-S\nfind: C-F\ngfind: C-S-F\ngoto: C-G'}
+                        onChange={(e) => setKmText(e.target.value)}
+                        onBlur={() => setKodField('keymap', parseKeymapText(kmText))}
+                      />
+                      <small className="settings-muted">{KEYMAP_ACTIONS.map((a) => `${a.id} = ${a.label}`).join(' · ')}</small>
                     </label>
                   </>
                 )}
