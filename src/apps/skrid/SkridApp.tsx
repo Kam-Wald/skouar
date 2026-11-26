@@ -1,3 +1,5 @@
+import ColorSwatches from '../../shared/ColorSwatches'
+import { EMBEDDED_FONTS } from '../../shared/fonts'
 import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -991,7 +993,7 @@ export default function SkridApp() {
                     </button>
                     <label className="skrid-dot-btn" title="Couleur">
                       <span className="skrid-dot" style={{ background: d.color ?? 'transparent', borderColor: d.color ?? 'var(--muted)' }} />
-                      <input type="color" className="skrid-dot-in" defaultValue={d.color ?? '#e8b93e'} onChange={(e) => updateDoc(d.id, { color: e.target.value })} />
+                      <ColorSwatches value={d.color ?? '#e8b93e'} onChange={(c) => updateDoc(d.id, { color: c })} />
                     </label>
                     <button
                       className={`blocs-page-act skrid-pin${d.pinned ? ' on' : ''}`}
@@ -1273,7 +1275,7 @@ export default function SkridApp() {
                     <>
                       <label className="skrid-dot-btn" title="Couleur">
                         <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
-                        <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                        <ColorSwatches value={current.color ?? '#e8b93e'} onChange={(c) => updateDoc(current.id, { color: c })} />
                       </label>
                       <span className="mono skrid-chap-num">{current.kind === 'memo' ? '🗒️ mémo' : `fiche ${ficheTypeOf(current).icon} ${ficheTypeOf(current).label.toLowerCase()}`}</span>
                     </>
@@ -1309,6 +1311,9 @@ export default function SkridApp() {
                   <span className="sel-sep" />
                   <select className="skrid-select skrid-font-sel" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
                     <option value="" disabled>Police…</option>
+                    {EMBEDDED_FONTS.map((f) => (
+                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label} (embarquée)</option>
+                    ))}
                     <option value="'Iowan Old Style', Georgia, serif" style={{ fontFamily: "'Iowan Old Style', Georgia, serif" }}>Iowan (défaut)</option>
                     <option value="Inter, system-ui, sans-serif" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Inter</option>
                     <option value="Arial, sans-serif" style={{ fontFamily: 'Arial, sans-serif' }}>Arial</option>
@@ -1359,11 +1364,11 @@ export default function SkridApp() {
                   </button>
                   <label className="tool skrid-color-btn" title="Couleur de la police">
                     <span className="skrid-color-a">A</span>
-                    <input type="color" className="skrid-color" defaultValue="#e8e6e3" onChange={(e) => setForeColor(e.target.value)} />
+                    <ColorSwatches value="#e8e6e3" title="Couleur du texte" onChange={(c) => setForeColor(c)} />
                   </label>
                   <label className="tool skrid-color-btn" title="Couleur de fond du texte (surlignage)">
                     <span className="skrid-color-a skrid-hl">A</span>
-                    <input type="color" className="skrid-color" defaultValue="#ffd54a" onChange={(e) => setHiliteColor(e.target.value)} />
+                    <ColorSwatches value="#ffd54a" title="Surlignage" onChange={(c) => setHiliteColor(c)} />
                   </label>
                   <span className="sel-sep" />
                   <button className="tool" title="Liste à puces" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('insertUnorderedList')}>
@@ -1496,7 +1501,7 @@ export default function SkridApp() {
                   </select>
                   <label className="skrid-dot-btn" title="Couleur de la fiche">
                     <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
-                    <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                    <ColorSwatches value={current.color ?? '#e8b93e'} onChange={(c) => updateDoc(current.id, { color: c })} />
                   </label>
                   <span className="mono skrid-fiche-hint">une fiche = ces champs uniquement, pas de texte libre</span>
                 </div>

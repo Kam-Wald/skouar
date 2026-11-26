@@ -1,3 +1,4 @@
+import { EMBEDDED_FONTS } from '../../shared/fonts'
 export interface FilterParams {
   brightness: number
   contrast: number
@@ -356,7 +357,7 @@ export const FRAME_PRESETS: FramePreset[] = [
 export const framePresetOf = (frame: FrameParams): FramePreset | undefined =>
   FRAME_PRESETS.find((p) => JSON.stringify(p.frame) === JSON.stringify(frame))
 
-export const FONTS: { label: string; value: string }[] = [
+const SYSTEM_FONTS_LOCAL: { label: string; value: string }[] = [
   { label: 'Iowan / Georgia (serif)', value: "'Iowan Old Style', Georgia, serif" },
   { label: 'Inter (sans)', value: 'Inter, system-ui, sans-serif' },
   { label: 'Arial', value: 'Arial, sans-serif' },
@@ -377,6 +378,84 @@ export const FONTS: { label: string; value: string }[] = [
   { label: 'Monospace système', value: "ui-monospace, Menlo, Consolas, monospace" },
   { label: 'Serif système', value: 'serif' },
   { label: 'Sans système', value: 'sans-serif' }
+]
+
+export const FONTS: { label: string; value: string }[] = [...EMBEDDED_FONTS, ...SYSTEM_FONTS_LOCAL]
+
+
+export interface TemplateDef {
+  id: string
+  label: string
+  icon: string
+  aspect: number
+  sizeW: number
+  frameId: string
+  text?: string
+  hint: string
+}
+
+export const TEMPLATES: TemplateDef[] = [
+  { id: 'insta-11', label: 'Post Insta 1:1', icon: '⬜', aspect: 1, sizeW: 1080, frameId: 'none', hint: 'Carré 1080×1080' },
+  { id: 'insta-45', label: 'Post Insta 4:5', icon: '▭', aspect: 4 / 5, sizeW: 1080, frameId: 'none', hint: 'Portrait 1080×1350' },
+  { id: 'story', label: 'Story 9:16', icon: '📱', aspect: 9 / 16, sizeW: 1080, frameId: 'none', hint: '1080×1920 plein écran' },
+  { id: 'reel', label: 'Réel 9:16', icon: '🎬', aspect: 9 / 16, sizeW: 1080, frameId: 'rounded', hint: '1080×1920 + coins arrondis' },
+  { id: 'carte', label: 'Carte postale', icon: '💌', aspect: 3 / 2, sizeW: 1500, frameId: 'polaroid', text: 'Bons baisers !', hint: '3:2 + polaroid + légende' },
+  { id: 'citation', label: 'Citation', icon: '💬', aspect: 1, sizeW: 1080, frameId: 'mat', text: '« … »', hint: 'Carré + passe-partout + texte' }
+]
+
+export function applyTemplate(st: EditState, imgW: number, imgH: number, t: TemplateDef, layerId: string): EditState {
+  let cw = imgW
+  let ch = imgW / t.aspect
+  if (ch > imgH) {
+    ch = imgH
+    cw = imgH * t.aspect
+  }
+  const crop: Rect = { x: Math.round((imgW - cw) / 2), y: Math.round((imgH - ch) / 2), w: Math.round(cw), h: Math.round(ch) }
+  const preset = FRAME_PRESETS.find((p) => p.id === t.frameId)
+  const frame = { ...(preset ? preset.frame : DEFAULT_FRAME) }
+  const size = { w: t.sizeW, h: Math.max(1, Math.round(t.sizeW / t.aspect)) }
+  const layers = [...st.layers]
+  if (t.text) {
+    layers.push({ ...newTextLayer(layerId), text: t.text, x: 0.08, y: 0.86, size: 0.05, align: 'left' })
+  }
+  return { ...st, crop, frame, size, layers }
+}
+
+export function extractPalette(px: Uint8ClampedArray, w: number, h: number, n = 5): string[] {
+  const buckets = new Map<number, { r: number; g: number; b: number; c: number }>()
+  for (let i = 0; i < w * h; i++) {
+    if (px[i * 4 + 3] < 128) continue
+    const r = px[i * 4]
+    const g = px[i * 4 + 1]
+    const b = px[i * 4 + 2]
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)
+    const e = buckets.get(key)
+    if (e) {
+      e.r += r
+      e.g += g
+      e.b += b
+      e.c++
+    } else buckets.set(key, { r, g, b, c: 1 })
+  }
+  return [...buckets.values()]
+    .sort((a, b) => b.c - a.c)
+    .slice(0, n)
+    .map((e) => '#' + [e.r / e.c, e.g / e.c, e.b / e.c].map((v) => Math.round(v).toString(16).padStart(2, '0')).join(''))
+}
+
+export interface MontageLayout {
+  id: string
+  label: string
+  cols: number
+  rows: number
+}
+
+export const MONTAGE_LAYOUTS: MontageLayout[] = [
+  { id: 'h2', label: '2 horizontal', cols: 2, rows: 1 },
+  { id: 'v2', label: '2 vertical', cols: 1, rows: 2 },
+  { id: 'g4', label: 'Grille 2×2', cols: 2, rows: 2 },
+  { id: 'g6', label: 'Grille 3×2', cols: 3, rows: 2 },
+  { id: 'g6v', label: 'Grille 2×3', cols: 2, rows: 3 }
 ]
 
 export const STICKERS: string[] = [

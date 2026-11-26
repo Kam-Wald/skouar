@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { applyTheme, getAccent, getTheme } from './ThemeButton'
+import './fonts.css'
 import './styles.css'
 
 applyTheme(getTheme(), getAccent())

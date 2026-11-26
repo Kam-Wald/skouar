@@ -1,3 +1,4 @@
+import ColorSwatches from '../../../shared/ColorSwatches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SkCtx } from '../SkeudApp'
 import {
@@ -9,6 +10,8 @@ import {
   FONTS,
   FRAME_PRESETS,
   STICKERS,
+  TEMPLATES,
+  applyTemplate,
   aspectLabel,
   exportName,
   framePresetOf,
@@ -23,7 +26,7 @@ import {
   type Rect,
   type TextLayer
 } from '../logic'
-import { canvasToBlob, downloadBlob, loadBitmap, measureLayer, renderEdit } from '../render'
+import { canvasToBlob, downloadBlob, exportAnimated, loadBitmap, measureLayer, paletteOf, renderEdit } from '../render'
 import { uid, type SkImage } from '../store'
 import { notify } from '../../../shared/notify'
 
@@ -67,6 +70,9 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
   const [dragLayer, setDragLayer] = useState<{ id: string; offX: number; offY: number } | null>(null)
   const [estSize, setEstSize] = useState('')
   const [tab, setTab] = useState<TabId>('ajuster')
+  const [palette, setPalette] = useState<string[] | null>(null)
+  const [animSec, setAnimSec] = useState(3)
+  const [animBusy, setAnimBusy] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const geomRef = useRef<{ g: FrameGeom; s: number; fit: number } | null>(null)
@@ -430,6 +436,25 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
           {st.size && (
             <button className="sk-btn ghost" onClick={() => push({ ...st, size: null })}>Taille d'origine</button>
           )}
+          <div className="sk-tb-sep" />
+          <details className="sk-fine">
+            <summary className="sk-tb-label sk-fine-sum">Templates ▾</summary>
+            <span className="sk-preset-row sk-preset-wrap">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  className="sk-preset"
+                  title={`${t.label} — ${t.hint}`}
+                  onClick={() => {
+                    push(applyTemplate(st, img.w, img.h, t, uid()))
+                    notify(`Template ${t.label} appliqué`)
+                  }}
+                >
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </span>
+          </details>
         </div>
       )}
 
@@ -490,7 +515,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
             <span className="sk-frame-custom">
               {st.frame.border && (
                 <>
-                  <input type="color" className="sk-color" value={st.frame.borderColor} title="Couleur du filet" onChange={(e) => push({ ...st, frame: { ...st.frame, borderColor: e.target.value } })} />
+                  <ColorSwatches value={st.frame.borderColor} title="Couleur du filet" onChange={(c) => push({ ...st, frame: { ...st.frame, borderColor: c } })} />
                   <label className="sk-num">ép. <input type="number" min={1} max={200} value={st.frame.borderWidth} onChange={(e) => push({ ...st, frame: { ...st.frame, borderWidth: Number(e.target.value) } })} /></label>
                 </>
               )}
@@ -502,7 +527,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
               )}
               {st.frame.mat && (
                 <>
-                  <input type="color" className="sk-color" value={st.frame.matColor} title="Couleur de la marge" onChange={(e) => push({ ...st, frame: { ...st.frame, matColor: e.target.value } })} />
+                  <ColorSwatches value={st.frame.matColor} title="Couleur de la marge" onChange={(c) => push({ ...st, frame: { ...st.frame, matColor: c } })} />
                   <label className="sk-num">marge <input type="number" min={0} max={800} value={st.frame.matSize} onChange={(e) => push({ ...st, frame: { ...st.frame, matSize: Number(e.target.value) } })} /></label>
                   <label className="sk-check"><input type="checkbox" checked={st.frame.polaroid} onChange={(e) => push({ ...st, frame: { ...st.frame, polaroid: e.target.checked } })} /> polaroid</label>
                 </>
@@ -548,6 +573,53 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
           <button className="sk-btn" title="Remplacer l'image dans la bibliothèque (l'original est conservé)" onClick={() => void exportCurrent(true)}>
             💾 Enregistrer
           </button>
+          <div className="sk-tb-sep" />
+          <button className="sk-btn" disabled={!bmp} title="Extraire les 5 couleurs dominantes (clic = copier le hex)" onClick={() => bmp && setPalette(paletteOf(bmp))}>
+            🎨 Palette
+          </button>
+          {palette && (
+            <span className="sk-palette">
+              {palette.map((c) => (
+                <button
+                  key={c}
+                  className="sk-pal-swatch"
+                  style={{ background: c }}
+                  title={`${c} — cliquer pour copier`}
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(c)
+                    notify(`${c} copié 📋`)
+                  }}
+                >
+                  {c}
+                </button>
+              ))}
+            </span>
+          )}
+          <div className="sk-tb-sep" />
+          <select className="sk-input" value={animSec} onChange={(e) => setAnimSec(Number(e.target.value))} title="Durée de l'animation">
+            <option value={2}>2 s</option>
+            <option value={3}>3 s</option>
+            <option value={5}>5 s</option>
+          </select>
+          <button
+            className="sk-btn"
+            disabled={animBusy || !bmp}
+            title="Export animé (WebM) : le filtre ondule pendant la durée choisie"
+            onClick={async () => {
+              if (!bmp) return
+              setAnimBusy(true)
+              try {
+                const blob = await exportAnimated(bmp, st, animSec)
+                await downloadBlob(blob, exportName(img.name, 'webm'))
+                notify(`Animation exportée (${fmtBytes(blob.size)}) 🎬`)
+              } catch {
+                notify('Export animé non supporté sur ce navigateur')
+              }
+              setAnimBusy(false)
+            }}
+          >
+            {animBusy ? '…' : '🎬 Animé WebM'}
+          </button>
         </div>
       )}
       {layer && (
@@ -578,12 +650,12 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
                 </label>
                 <label className="sk-field">
                   Couleur
-                  <input type="color" className="sk-color" value={textLayer.color} onChange={(e) => patchLayer(layer.id, { color: e.target.value } as Partial<Layer>)} />
+                  <ColorSwatches value={textLayer.color} title="Couleur du texte" onChange={(c) => patchLayer(layer.id, { color: c } as Partial<Layer>)} />
                 </label>
                 <label className="sk-field">
                   Fond
                   <span className="sk-tb-group">
-                    <input type="color" className="sk-color" value={textLayer.bg} onChange={(e) => patchLayer(layer.id, { bg: e.target.value } as Partial<Layer>)} />
+                    <ColorSwatches value={textLayer.bg} title="Couleur de fond du texte" onChange={(c) => patchLayer(layer.id, { bg: c } as Partial<Layer>)} />
                     <input type="range" min={0} max={1} step={0.05} value={textLayer.bgOpacity} title="Opacité du fond" onChange={(e) => patchLayer(layer.id, { bgOpacity: Number(e.target.value) } as Partial<Layer>)} />
                   </span>
                 </label>
