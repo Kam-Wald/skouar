@@ -841,7 +841,6 @@ export default function KodApp() {
     ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
   ]
 
-  const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
 
   const openHist = async (): Promise<void> => {
     if (!active) return
@@ -1160,6 +1159,8 @@ export default function KodApp() {
     e.target.value = ''
     if (files.length) void importFiles(files)
   }
+
+  const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
 
   const onTaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (!active || !ui) return
