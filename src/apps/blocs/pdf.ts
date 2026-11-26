@@ -6,7 +6,7 @@ const PAGE_W = 595
 const PAGE_H = 842
 const MARGIN = 50
 
-interface Line {
+export interface Line {
   text: string
   size: number
   font: 1 | 2 | 3
@@ -29,7 +29,7 @@ function escPdf(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
 }
 
-function wrap(text: string, size: number, indent: number): string[] {
+export function wrap(text: string, size: number, indent: number): string[] {
   const maxChars = Math.max(20, Math.floor((PAGE_W - 2 * MARGIN - indent * 8) / (size * 0.5)))
   const words = text.split(/\s+/).filter(Boolean)
   const out: string[] = []
@@ -158,7 +158,7 @@ function blockLines(b: Block, lines: Line[], depth: number, num: { n: number }):
   }
 }
 
-function buildPdf(lines: Line[]): Uint8Array {
+export function buildPdf(lines: Line[]): Uint8Array {
   const pages: string[] = []
   let cur = ''
   let y = PAGE_H - MARGIN
@@ -212,6 +212,18 @@ function buildPdf(lines: Line[]): Uint8Array {
   const bytes = new Uint8Array(out.length)
   for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 0xff
   return bytes
+}
+
+export type PdfLine = Line
+
+export function downloadPdf(bytes: Uint8Array, filename: string): void {
+  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function exportPagePdf(page: Page): void {

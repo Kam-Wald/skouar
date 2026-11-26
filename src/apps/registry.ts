@@ -25,7 +25,7 @@ export const apps: AppMeta[] = [
     description: 'Traitement de texte léger, pensé pour écrire un livre (chapitres, compteurs, export PDF).',
     icon: '✍️',
     logo: `${import.meta.env.BASE_URL}app-icons/skrid.svg`,
-    soon: true
+    component: lazy(() => import('./skrid/SkridApp'))
   },
   {
     id: 'ler',
