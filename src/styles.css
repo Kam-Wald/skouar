@@ -5671,3 +5671,106 @@ th.drag-over {
   padding: 6px 8px;
   resize: vertical;
 }
+
+/* ===== Kod v5 : multi-projets, mini-git local, extraits perso ===== */
+.kod-projbar {
+  padding: 6px 8px 2px;
+}
+.kod-projbar .db-btn {
+  width: 100%;
+  justify-content: flex-start;
+  font-weight: 600;
+}
+.kod-proj {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 34px;
+  z-index: 40;
+  max-height: 50vh;
+  overflow: auto;
+}
+.kod-proj-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.kod-proj-row.active {
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+.kod-proj-go {
+  flex: 1;
+  text-align: left;
+}
+.kod-git-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  flex-wrap: wrap;
+}
+.kod-git-actions input {
+  flex: 1;
+  min-width: 90px;
+}
+.kod-git-branch {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.kod-git-branches {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 0 8px 6px;
+}
+.kod-gres.active {
+  outline: 2px solid var(--accent);
+}
+.kod-commit {
+  border-top: 1px solid var(--border);
+  padding: 6px 8px;
+}
+.kod-commit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.kod-commit-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+.kod-commit-branch {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.kod-commit-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.kod-snip-body {
+  margin: 0 8px 6px;
+  width: calc(100% - 16px);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+.kod-git select,
+.kod-git-actions select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+}

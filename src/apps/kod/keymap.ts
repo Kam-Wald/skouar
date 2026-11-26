@@ -18,7 +18,8 @@ export const DEFAULT_KEYMAP: Record<string, string> = {
   comment: 'C-/',
   dupLine: 'C-S-D',
   moveUp: 'A-ArrowUp',
-  moveDown: 'A-ArrowDown'
+  moveDown: 'A-ArrowDown',
+  gotoDef: 'C-F12'
 }
 
 export const KEYMAP_ACTIONS: { id: string; label: string }[] = [
@@ -35,7 +36,8 @@ export const KEYMAP_ACTIONS: { id: string; label: string }[] = [
   { id: 'comment', label: 'Commenter / décommenter' },
   { id: 'dupLine', label: 'Dupliquer la ligne' },
   { id: 'moveUp', label: 'Monter la ligne' },
-  { id: 'moveDown', label: 'Descendre la ligne' }
+  { id: 'moveDown', label: 'Descendre la ligne' },
+  { id: 'gotoDef', label: 'Aller à la définition' }
 ]
 
 const normCombo = (raw: string): string | null => {
@@ -44,7 +46,7 @@ const normCombo = (raw: string): string | null => {
   const key = parts.pop() ?? ''
   const flags = parts.join('')
   if (!/^[CSA]*$/.test(flags)) return null
-  if (!/^[A-Z0-9]$/.test(key) && !['ARROWUP', 'ARROWDOWN', 'ARROWLEFT', 'ARROWRIGHT', 'ENTER', 'TAB', 'ESCAPE', 'BACKSPACE', 'DELETE', 'SPACE', '/', '\\', '`', ',', '.', ';', "'"].includes(key)) return null
+  if (!/^[A-Z0-9]$/.test(key) && !/^F([1-9]|1[0-2])$/.test(key) && !['ARROWUP', 'ARROWDOWN', 'ARROWLEFT', 'ARROWRIGHT', 'ENTER', 'TAB', 'ESCAPE', 'BACKSPACE', 'DELETE', 'SPACE', '/', '\\', '`', ',', '.', ';', "'"].includes(key)) return null
   return flags ? `${flags}-${key}` : key
 }
 

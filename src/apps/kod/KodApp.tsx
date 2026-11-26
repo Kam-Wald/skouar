@@ -16,9 +16,24 @@ import {
   pushVersion,
   listVersions,
   deleteVersionsFor,
+  loadProjects,
+  putProject,
+  deleteProject,
+  pushCommit,
+  listCommits,
+  deleteCommit,
+  putBranch,
+  loadBranches,
+  delBranch,
+  loadSnippets,
+  saveSnippets,
   type KodNode,
   type KodUI,
-  type KodVersion
+  type KodVersion,
+  type KodProject,
+  type KodCommit,
+  type KodBranch,
+  type KodSnippet
 } from './store'
 import { highlight, langOf } from './highlight'
 import { renderPreview } from './preview'
@@ -29,6 +44,8 @@ import { syntaxIssues, type KodIssue } from './diagnostics'
 import { diffLines, type DiffRow } from './diff'
 import { expandEmmet } from './emmet'
 import { DEFAULT_KEYMAP, comboOf } from './keymap'
+import { buildIndex, findDef, resolveImport, wordAtOffset, importSpecAtOffset, type DefFile } from './definitions'
+import { zipFiles, unzipFiles, entryText } from './zip'
 
 declare global {
   interface Window {
@@ -167,6 +184,25 @@ export default function KodApp() {
   const [focus, setFocus] = useState(false)
   const [newTabOpen, setNewTabOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
+  const [projects, setProjects] = useState<KodProject[]>([])
+  const [pid, setPid] = useState('default')
+  const [projOpen, setProjOpen] = useState(false)
+  const [newProjName, setNewProjName] = useState('')
+  const [renProj, setRenProj] = useState<string | null>(null)
+  const [renProjVal, setRenProjVal] = useState('')
+  const [gitOpen, setGitOpen] = useState(false)
+  const [commits, setCommits] = useState<KodCommit[]>([])
+  const [gitMsg, setGitMsg] = useState('')
+  const [branches, setBranches] = useState<KodBranch[]>([])
+  const [newBranch, setNewBranch] = useState('')
+  const [curBranch, setCurBranch] = useState('main')
+  const [snipOpen, setSnipOpen] = useState(false)
+  const [snips, setSnips] = useState<KodSnippet[]>([])
+  const [snipLang, setSnipLang] = useState('javascript')
+  const [snipLabel, setSnipLabel] = useState('')
+  const [snipBody, setSnipBody] = useState('')
+  const zipInputRef = useRef<HTMLInputElement | null>(null)
+  const snipInputRef = useRef<HTMLInputElement | null>(null)
   const [findRe, setFindRe] = useState(false)
   const [gRe, setGRe] = useState(false)
   const [synIssues, setSynIssues] = useState<KodIssue[]>([])
@@ -240,7 +276,17 @@ export default function KodApp() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const [ns, u] = await Promise.all([loadNodes(), loadUI()])
+      let projs = await loadProjects()
+      if (!projs.length) {
+        const p: KodProject = { id: 'default', name: 'Mon projet', createdAt: Date.now() }
+        await putProject(p)
+        projs = [p]
+      }
+      const [ns, u0] = await Promise.all([loadNodes('default'), loadUI()])
+      const sess0 = await loadKV<Partial<KodUI>>('sess:default')
+      const u = sess0
+        ? { ...u0, tabs: sess0.tabs ?? [], active: sess0.active ?? null, expanded: sess0.expanded ?? [], pinned: sess0.pinned ?? [], closed: sess0.closed ?? [] }
+        : u0
       let seeded = ns
       if (!ns.length) {
         const welcome: KodNode = {
@@ -251,13 +297,16 @@ export default function KodApp() {
           content: '# Bienvenue dans Kod 👋\n\nÉditeur de code 100 % local.\n\n- `Ctrl+F` : rechercher dans le fichier\n- `Ctrl+Shift+F` : rechercher dans tout le projet\n- `Ctrl+S` : enregistrer\n- Onglets, arbre de fichiers, coloration…\n',
           updatedAt: Date.now()
         }
-        await putNode(welcome)
-        seeded = [welcome]
+        await putNode({ ...welcome, projectId: 'default' })
+        seeded = [{ ...welcome, projectId: 'default' }]
         u.tabs = [welcome.id]
         u.active = welcome.id
         await saveUI(u)
       }
       if (!alive) return
+      setProjects(projs)
+      setSnips(await loadSnippets())
+      setCurBranch((await loadKV<string>('branch:default')) ?? 'main')
       setNodes(seeded)
       setUi(u)
       const b: Record<string, Buffer> = {}
@@ -288,9 +337,12 @@ export default function KodApp() {
 
   useEffect(() => {
     if (!ui) return
-    const t = setTimeout(() => void saveUI(ui), 250)
+    const t = setTimeout(() => {
+      void saveUI(ui)
+      void saveKV('sess:' + pid, { tabs: ui.tabs, active: ui.active, expanded: ui.expanded, pinned: ui.pinned, closed: ui.closed })
+    }, 250)
     return () => clearTimeout(t)
-  }, [ui])
+  }, [ui, pid])
 
   useEffect(() => {
     if (!nodes) return
@@ -390,6 +442,184 @@ export default function KodApp() {
     notify('Dossier actualisé ⟳')
   }
 
+  const openGit = async (): Promise<void> => {
+    setGitOpen(true)
+    setCommits(await listCommits(pid))
+    setBranches(await loadBranches())
+    setCurBranch((await loadKV<string>('branch:' + pid)) ?? 'main')
+  }
+
+  const commitCurrent = async (): Promise<void> => {
+    if (!active) return
+    const b = buffersRef.current[active]
+    if (!b) return
+    await pushCommit({
+      id: uid(),
+      projectId: pid,
+      scope: 'file',
+      fileId: active,
+      fileName: nodeName(active),
+      at: Date.now(),
+      message: gitMsg.trim() || 'commit',
+      branch: curBranch,
+      files: { [active]: b.content },
+      names: { [active]: nodeName(active) }
+    })
+    setGitMsg('')
+    setCommits(await listCommits(pid))
+    notify('Commit local créé 🌿')
+  }
+
+  const commitProject = async (): Promise<void> => {
+    const files: Record<string, string> = {}
+    const names: Record<string, string> = {}
+    for (const n of nodesRef.current) {
+      if (n.kind !== 'file') continue
+      files[n.id] = buffersRef.current[n.id]?.content ?? n.content ?? ''
+      names[n.id] = nodePath(n)
+    }
+    await pushCommit({ id: uid(), projectId: pid, scope: 'project', at: Date.now(), message: gitMsg.trim() || 'commit projet', branch: curBranch, files, names })
+    setGitMsg('')
+    setCommits(await listCommits(pid))
+    notify(`Commit projet (${Object.keys(files).length} fichiers) 🌿`)
+  }
+
+  const restoreCommit = async (c: KodCommit): Promise<void> => {
+    let n = 0
+    for (const [id, ct] of Object.entries(c.files)) {
+      if (id.startsWith('real:')) continue
+      const node = nodesRef.current.find((x) => x.id === id)
+      if (!node) continue
+      await putNode({ ...node, content: ct, updatedAt: Date.now() })
+      setNodes((prev) => prev?.map((x) => (x.id === id ? { ...x, content: ct } : x)) ?? prev)
+      setBuf(id, ct)
+      if (id === active && taRef.current) {
+        taRef.current.value = ct
+        syncScroll()
+      }
+      n++
+    }
+    setGitOpen(false)
+    notify(`Restauration : ${n} fichier(s) ↩ (Ctrl+S pour valider)`)
+  }
+
+  const diffCommit = (c: KodCommit): void => {
+    const fid = c.scope === 'file' && c.fileId ? c.fileId : Object.keys(c.files)[0]
+    if (fid) setDiffV({ id: c.id, fileId: fid, at: c.at, content: c.files[fid] ?? '' })
+  }
+
+  const createBranch = async (): Promise<void> => {
+    const name = newBranch.trim()
+    if (!name || !commits.length) return
+    await putBranch({ name, commitId: commits[0].id, at: Date.now() })
+    await saveKV('branch:' + pid, name)
+    setNewBranch('')
+    setCurBranch(name)
+    setBranches(await loadBranches())
+    notify(`Branche « ${name} » créée 🌿`)
+  }
+
+  const exportZip = async (): Promise<void> => {
+    const entries: { name: string; data: string }[] = []
+    for (const n of nodesRef.current) {
+      if (n.kind !== 'file') continue
+      const c = buffersRef.current[n.id]?.content ?? n.content ?? ''
+      entries.push({ name: nodePath(n), data: c })
+    }
+    if (!entries.length) {
+      notify('Projet vide')
+      return
+    }
+    const blob = await zipFiles(entries)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${(projects.find((p) => p.id === pid)?.name ?? 'projet').replace(/[^\w-]+/g, '-')}.zip`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+    notify(`Projet exporté en ZIP (${entries.length} fichiers) 📦`)
+  }
+
+  const importZip = async (file: File): Promise<void> => {
+    try {
+      const entries = await unzipFiles(file)
+      let count = 0
+      for (const e of entries) {
+        const parts = e.name.split('/').filter(Boolean)
+        if (!parts.length) continue
+        let parentId: string | null = null
+        for (let i = 0; i < parts.length - 1; i++) {
+          const dirName = parts[i]
+          let dir = nodesRef.current.find((n) => n.parentId === parentId && n.kind === 'dir' && n.name === dirName)
+          if (!dir) {
+            const dn: KodNode = { id: uid(), parentId, projectId: pid, name: dirName, kind: 'dir', updatedAt: Date.now() }
+            await putNode(dn)
+            setNodes((prev) => [...(prev ?? []), dn])
+            dir = dn
+          }
+          parentId = dir.id
+        }
+        let name = parts[parts.length - 1]
+        const base = name
+        let k = 1
+        while (nodesRef.current.some((n) => n.parentId === parentId && n.name === name)) {
+          name = base.replace(/(\.[^.]+)?$/, ` (${k})$1`)
+          k++
+        }
+        const content = entryText(e)
+        const node: KodNode = { id: uid(), parentId, projectId: pid, name, kind: 'file', content, updatedAt: Date.now() }
+        await putNode(node)
+        setNodes((prev) => [...(prev ?? []), node])
+        setBuffers((prev) => ({ ...prev, [node.id]: { content, dirty: false } }))
+        count++
+      }
+      notify(`${count} fichier(s) importé(s) depuis le ZIP 📦`)
+    } catch {
+      notify('ZIP illisible')
+    }
+  }
+
+  const mergedSnippets = (l: string): { label: string; body: string }[] => [...(SNIPPETS[l] ?? []), ...snips.filter((s) => s.lang === l)]
+
+  const addSnippet = async (): Promise<void> => {
+    const label = snipLabel.trim()
+    if (!label || !snipBody.trim()) return
+    const next = [...snips.filter((s) => !(s.lang === snipLang && s.label === label)), { lang: snipLang, label, body: snipBody }]
+    setSnips(next)
+    await saveSnippets(next)
+    setSnipLabel('')
+    setSnipBody('')
+    notify(`Extrait « ${label} » enregistré ✂️`)
+  }
+
+  const exportSnippets = (): void => {
+    const blob = new Blob([JSON.stringify(snips, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'skouar-extraits.json'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+  }
+
+  const importSnippets = async (file: File): Promise<void> => {
+    try {
+      const arr = JSON.parse(await file.text()) as KodSnippet[]
+      if (!Array.isArray(arr)) throw new Error('bad')
+      const next = [...snips]
+      for (const s of arr) {
+        if (s && typeof s.lang === 'string' && typeof s.label === 'string' && typeof s.body === 'string') {
+          const i = next.findIndex((x) => x.lang === s.lang && x.label === s.label)
+          if (i >= 0) next[i] = s
+          else next.push(s)
+        }
+      }
+      setSnips(next)
+      await saveSnippets(next)
+      notify(`${arr.length} extrait(s) importé(s) ✂️`)
+    } catch {
+      notify('Fichier d’extraits invalide')
+    }
+  }
+
   useDismiss('kfind', findOpen, () => setFindOpen(false))
   useDismiss('kpal', palOpen, () => { setPalOpen(false); setPalArg(null) })
   useDismiss('kout', outlineOpen, () => setOutlineOpen(false))
@@ -401,6 +631,9 @@ export default function KodApp() {
   useDismiss('kglob', gOpen, () => setGOpen(false))
   useDismiss('ktmenu', !!tabMenu, () => setTabMenu(null))
   useDismiss('kdiff', !!diffV, () => setDiffV(null))
+  useDismiss('kproj', projOpen, () => setProjOpen(false))
+  useDismiss('kgit', gitOpen, () => setGitOpen(false))
+  useDismiss('ksnip', snipOpen, () => setSnipOpen(false))
 
   const syncScroll = (): void => {
     const ta = taRef.current
@@ -493,6 +726,62 @@ export default function KodApp() {
     setUi({ ...ui, tabs, active, closed: [...removed, ...ui.closed].slice(0, 20) })
   }
 
+  const sessOf = (u: KodUI): Partial<KodUI> => ({ tabs: u.tabs, active: u.active, expanded: u.expanded, pinned: u.pinned, closed: u.closed })
+
+  const switchProject = async (id: string): Promise<void> => {
+    setProjOpen(false)
+    if (!ui || id === pid) return
+    await saveKV('sess:' + pid, sessOf(ui))
+    await saveKV('branch:' + pid, curBranch)
+    const ns = await loadNodes(id)
+    const sess = await loadKV<Partial<KodUI>>('sess:' + id)
+    const b: Record<string, Buffer> = {}
+    for (const n of ns) if (n.kind === 'file') b[n.id] = { content: n.content ?? '', dirty: false }
+    setNodes(ns)
+    setBuffers(b)
+    setUi((prev) => (prev ? { ...prev, tabs: sess?.tabs ?? [], active: sess?.active ?? null, expanded: sess?.expanded ?? [], pinned: sess?.pinned ?? [], closed: sess?.closed ?? [] } : prev))
+    setPid(id)
+    setCurBranch((await loadKV<string>('branch:' + id)) ?? 'main')
+    setFolds([])
+    setMulti([])
+    setRect(null)
+    setBms([])
+    setSplitId(null)
+    notify(`Projet « ${projects.find((p) => p.id === id)?.name ?? id} »`)
+  }
+
+  const createProject = async (): Promise<void> => {
+    const name = newProjName.trim()
+    if (!name) return
+    const p: KodProject = { id: uid(), name, createdAt: Date.now() }
+    await putProject(p)
+    setProjects((prev) => [...prev, p])
+    setNewProjName('')
+    await switchProject(p.id)
+  }
+
+  const commitRenameProj = async (): Promise<void> => {
+    if (!renProj) return
+    const name = renProjVal.trim()
+    const id = renProj
+    setRenProj(null)
+    if (!name) return
+    const p = projects.find((x) => x.id === id)
+    if (!p) return
+    await putProject({ ...p, name })
+    setProjects((prev) => prev.map((x) => (x.id === id ? { ...x, name } : x)))
+  }
+
+  const removeProject = async (id: string): Promise<void> => {
+    if (projects.length <= 1) return
+    const p = projects.find((x) => x.id === id)
+    await deleteProject(id)
+    const rest = (await loadProjects()).filter((x) => x.id !== id)
+    setProjects(rest)
+    if (id === pid && rest.length) await switchProject(rest[0].id)
+    notify(`Projet « ${p?.name ?? id} » supprimé`)
+  }
+
   const saveActive = async (id?: string): Promise<void> => {
     const aid = id ?? active
     if (!ui || !aid) return
@@ -534,6 +823,7 @@ export default function KodApp() {
     const node: KodNode = {
       id: uid(),
       parentId: newItem.parentId,
+      projectId: pid,
       name,
       kind: newItem.kind,
       content: newItem.kind === 'file' ? '' : undefined,
@@ -1163,8 +1453,12 @@ export default function KodApp() {
     { id: 'unfoldall', label: '⤒ Déplier tous les blocs', run: () => { setPalOpen(false); unfoldAll() } },
     { id: 'reopen', label: '↩ Rouvrir l’onglet fermé', run: () => { setPalOpen(false); reopenClosedTab() } },
     { id: 'splitclose', label: '↔ Fermer le volet droit', run: () => { setPalOpen(false); setSplitId(null) } },
+    { id: 'gotodef', label: '⤴ Aller à la définition (Ctrl+F12 / Ctrl+clic)', run: () => { setPalOpen(false); doGoToDef() } },
+    { id: 'git', label: '🌿 Git local (commits, branches)', run: () => { setPalOpen(false); void openGit() } },
+    { id: 'snips', label: '✂️ Gérer mes extraits', run: () => { setPalOpen(false); setSnipOpen(true) } },
+    { id: 'zip', label: '📦 Exporter le projet en ZIP', run: () => { setPalOpen(false); void exportZip() } },
     ...HL_THEMES.map((t) => ({ id: 'hl:' + t.id, label: `🎨 Th\u00e8me de coloration : ${t.label}`, run: () => setUi((p) => (p ? { ...p, hlTheme: t.id } : p)) })),
-    ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
+    ...mergedSnippets(lang).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
   ]
 
 
@@ -1541,7 +1835,7 @@ export default function KodApp() {
         k++
       }
       const content = isImageName(name) ? await fileToDataURL(f) : await f.text()
-      const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content, updatedAt: Date.now() }
+      const node: KodNode = { id: uid(), parentId: null, projectId: pid, name, kind: 'file', content, updatedAt: Date.now() }
       await putNode(node)
       setNodes((prev) => [...(prev ?? []), node])
       setBuffers((prev) => ({ ...prev, [node.id]: { content: node.content ?? '', dirty: false } }))
@@ -1558,7 +1852,67 @@ export default function KodApp() {
 
   const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
 
-  const diffRows = useMemo<DiffRow[]>(() => (diffV ? diffLines(diffV.content, content) : []), [diffV, content])
+  const diffRows = useMemo<DiffRow[]>(() => (diffV ? diffLines(diffV.content, buffers[diffV.fileId ?? '']?.content ?? content) : []), [diffV, buffers, content])
+
+  const nodePath = (n: KodNode): string => {
+    const parts: string[] = [n.name]
+    let cur: KodNode | undefined = n
+    while (cur.parentId) {
+      const p = nodesRef.current.find((x) => x.id === cur?.parentId)
+      if (!p) break
+      parts.unshift(p.name)
+      cur = p
+    }
+    return parts.join('/')
+  }
+
+  const defFiles = useMemo<DefFile[]>(() => {
+    const out: DefFile[] = []
+    for (const n of nodes ?? []) {
+      if (n.kind !== 'file') continue
+      out.push({ key: n.id, path: nodePath(n), content: buffers[n.id]?.content ?? n.content ?? '' })
+    }
+    for (const e of flattenReal(realTree)) {
+      if (e.kind === 'file') out.push({ key: e.key, path: e.path, content: buffers[e.key]?.content ?? '' })
+    }
+    return out
+  }, [nodes, realTree, buffers])
+
+  const defIndex = useMemo(() => {
+    const langs: Record<string, string> = {}
+    for (const f of defFiles) langs[f.key] = langOf(f.path.split('/').pop() ?? f.path)
+    return buildIndex(defFiles, langs)
+  }, [defFiles])
+
+  const doGoToDef = (): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const off = ta.selectionStart
+    const v = ta.value
+    const spec = importSpecAtOffset(v, off)
+    if (spec && spec.startsWith('.')) {
+      const fromPath = active.startsWith('real:')
+        ? flattenReal(realTree).find((x) => x.key === active)?.path ?? activeName
+        : nodePath(nodesRef.current.find((n) => n.id === active) ?? { id: '', parentId: null, name: activeName, kind: 'file', updatedAt: 0 })
+      const target = resolveImport(spec, fromPath, defFiles)
+      if (target) {
+        openFileByKey(target.key)
+        setTimeout(() => jumpLine(1), 150)
+        notify(`→ ${target.path}`)
+        return
+      }
+    }
+    const { w } = wordAtOffset(v, off)
+    if (!w) return
+    const hit = findDef(defIndex, w, active)
+    if (!hit) {
+      notify(`Aucune définition trouvée pour « ${w} »`)
+      return
+    }
+    openFileByKey(hit.key)
+    setTimeout(() => jumpLine(hit.line), 150)
+    notify(`→ ${w} (L${hit.line})`)
+  }
 
 
   const createQuickFile = async (ext: string): Promise<void> => {
@@ -1569,7 +1923,7 @@ export default function KodApp() {
       name = `sans-titre-${k}.${ext}`
       k++
     }
-    const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content: '', updatedAt: Date.now() }
+    const node: KodNode = { id: uid(), parentId: null, projectId: pid, name, kind: 'file', content: '', updatedAt: Date.now() }
     await putNode(node)
     setNodes((prev) => [...(prev ?? []), node])
     setBuffers((prev) => ({ ...prev, [node.id]: { content: '', dirty: false } }))
@@ -1586,7 +1940,7 @@ export default function KodApp() {
       const dirName = parts[i]
       let dir = nodesRef.current.find((n) => n.parentId === parentId && n.kind === 'dir' && n.name === dirName)
       if (!dir) {
-        const dn: KodNode = { id: uid(), parentId, name: dirName, kind: 'dir', updatedAt: Date.now() }
+        const dn: KodNode = { id: uid(), parentId, projectId: pid, name: dirName, kind: 'dir', updatedAt: Date.now() }
         await putNode(dn)
         setNodes((prev) => [...(prev ?? []), dn])
         dir = dn
@@ -1601,7 +1955,7 @@ export default function KodApp() {
       k++
     }
     const content = t.content.replaceAll('{{titre}}', t.label)
-    const node: KodNode = { id: uid(), parentId, name, kind: 'file', content, updatedAt: Date.now() }
+    const node: KodNode = { id: uid(), parentId, projectId: pid, name, kind: 'file', content, updatedAt: Date.now() }
     await putNode(node)
     setNodes((prev) => [...(prev ?? []), node])
     setBuffers((prev) => ({ ...prev, [node.id]: { content, dirty: false } }))
@@ -1766,6 +2120,9 @@ export default function KodApp() {
       } else if (c === km('reopenTab')) {
         e.preventDefault()
         reopenClosedTab()
+      } else if (c === km('gotoDef')) {
+        e.preventDefault()
+        doGoToDef()
       } else if (e.key === 'Escape') {
         setFindOpen(false)
         setGOpen(false)
@@ -1927,6 +2284,48 @@ export default function KodApp() {
             ←
           </Link>
         </div>
+        <div className="kod-projbar">
+          <button className="db-btn" title="Changer de projet (multi-projets)" onClick={() => setProjOpen((o) => !o)}>
+            🗂 {projects.find((p) => p.id === pid)?.name ?? '…'} ▾
+          </button>
+        </div>
+        {projOpen && (
+          <div className="kod-panel kod-proj" data-pop="kproj">
+            <div className="kod-panel-head">🗂 Projets</div>
+            {projects.map((p) => (
+              <div key={p.id} className={`kod-proj-row${p.id === pid ? ' active' : ''}`}>
+                {renProj === p.id ? (
+                  <input
+                    className="kod-rename"
+                    autoFocus
+                    value={renProjVal}
+                    onChange={(e) => setRenProjVal(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void commitRenameProj() }}
+                    onBlur={() => void commitRenameProj()}
+                  />
+                ) : (
+                  <button className="kod-panel-item kod-proj-go" onClick={() => void switchProject(p.id)}>
+                    {p.id === pid ? '● ' : ''}{p.name}
+                  </button>
+                )}
+                <button className="db-btn" title="Renommer le projet" onClick={() => { setRenProj(p.id); setRenProjVal(p.name) }}>
+                  ✎
+                </button>
+                {projects.length > 1 && (
+                  <button className="db-btn" title="Supprimer ce projet (fichiers + commits)" onClick={() => void removeProject(p.id)}>
+                    🗑
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="kod-git-actions">
+              <input placeholder="Nouveau projet…" value={newProjName} onChange={(e) => setNewProjName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void createProject() }} />
+              <button className="db-btn" onClick={() => void createProject()}>
+                ＋
+              </button>
+            </div>
+          </div>
+        )}
         <div className="kod-side-actions">
           <button className="db-btn" aria-label="Importer des fichiers" title="Importer des fichiers dans le projet (ou glisse-les dans la fenêtre)" onClick={() => fileInputRef.current?.click()}>
             ⬆️ Importer
@@ -1936,6 +2335,12 @@ export default function KodApp() {
           </button>
           <button className="db-btn" onClick={() => setNewItem({ parentId: null, kind: 'dir', value: '' })} title="Nouveau dossier à la racine">
             📁 Nouveau dossier
+          </button>
+          <button className="db-btn" title="Exporter tout le projet en ZIP" onClick={() => void exportZip()}>
+            📦 Export ZIP
+          </button>
+          <button className="db-btn" title="Importer un projet depuis un fichier ZIP" onClick={() => zipInputRef.current?.click()}>
+            ⇧ Import ZIP
           </button>
         </div>
         <div className="kod-side-actions">
@@ -1947,6 +2352,12 @@ export default function KodApp() {
           </button>
           <button className="db-btn" aria-label="Modèles de fichiers" title="Créer un fichier depuis un modèle (langages, projet, docs)" onClick={() => setTplOpen((o) => !o)}>
             📋 Modèles
+          </button>
+          <button className="db-btn" aria-label="Git local" title="Mini-git 100 % local : commits, branches, diff, restauration" onClick={() => void openGit()}>
+            🌿 Git local
+          </button>
+          <button className="db-btn" aria-label="Mes extraits" title="Gérer mes extraits (snippets) personnels + partage JSON" onClick={() => setSnipOpen((o) => !o)}>
+            ✂️ Extraits
           </button>
           <button className="db-btn" onClick={() => setGOpen(true)} title="Rechercher dans tous les fichiers (Ctrl+Shift+F)">
             🔎 Tout chercher
@@ -2049,7 +2460,130 @@ export default function KodApp() {
             ))}
           </div>
         )}
+        {gitOpen && (
+          <div className="kod-gsearch kod-git" data-pop="kgit">
+            <div className="kod-panel-head">🌿 Git local — {projects.find((p) => p.id === pid)?.name}</div>
+            <div className="kod-git-actions">
+              <input placeholder="Message du commit…" value={gitMsg} onChange={(e) => setGitMsg(e.target.value)} />
+              <button className="db-btn" onClick={() => void commitCurrent()}>Commit fichier</button>
+              <button className="db-btn" onClick={() => void commitProject()}>Commit projet</button>
+            </div>
+            <div className="kod-git-actions">
+              <input placeholder="Nouvelle branche…" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} />
+              <button className="db-btn" onClick={() => void createBranch()}>Créer</button>
+              <span className="kod-git-branch">🌿 {curBranch}</span>
+            </div>
+            {branches.length > 0 && (
+              <div className="kod-git-branches">
+                {branches.map((b) => (
+                  <button
+                    key={b.name}
+                    className={`kod-gres${b.name === curBranch ? ' active' : ''}`}
+                    onClick={async () => {
+                      await saveKV('branch:' + pid, b.name)
+                      setCurBranch(b.name)
+                    }}
+                  >
+                    🌿 {b.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="kod-gresults">
+              {commits.map((c) => (
+                <div key={c.id} className="kod-commit">
+                  <div className="kod-commit-head">
+                    <strong>{c.message}</strong>
+                    {c.branch && <span className="kod-commit-branch">🌿 {c.branch}</span>}
+                    <span className="kod-commit-meta">
+                      {c.scope === 'project' ? `projet (${Object.keys(c.files).length} f.)` : c.fileName} · {new Date(c.at).toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                  <div className="kod-commit-actions">
+                    <button className="db-btn" onClick={() => diffCommit(c)}>Comparer</button>
+                    <button className="db-btn" onClick={() => void restoreCommit(c)}>Restaurer</button>
+                    <button
+                      className="db-btn"
+                      onClick={async () => {
+                        await deleteCommit(c.id)
+                        setCommits(await listCommits(pid))
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {commits.length === 0 && <div className="kod-pal-empty">Aucun commit local — tout reste dans le navigateur, aucun serveur</div>}
+            </div>
+          </div>
+        )}
+        {snipOpen && (
+          <div className="kod-gsearch kod-snip" data-pop="ksnip">
+            <div className="kod-panel-head">✂️ Mes extraits ({snips.length})</div>
+            <div className="kod-git-actions">
+              <select value={snipLang} onChange={(e) => setSnipLang(e.target.value)}>
+                {['javascript', 'typescript', 'html', 'css', 'markdown', 'python'].map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+              <input placeholder="Libellé" value={snipLabel} onChange={(e) => setSnipLabel(e.target.value)} />
+            </div>
+            <textarea className="kod-snip-body" rows={4} placeholder="Corps de l'extrait ($0 = position du curseur)" value={snipBody} onChange={(e) => setSnipBody(e.target.value)} />
+            <div className="kod-git-actions">
+              <button className="db-btn" onClick={() => void addSnippet()}>Ajouter</button>
+              <button className="db-btn" onClick={exportSnippets}>⇩ Exporter JSON</button>
+              <button className="db-btn" onClick={() => snipInputRef.current?.click()}>⇧ Importer JSON</button>
+            </div>
+            <div className="kod-gresults">
+              {snips.map((s, i) => (
+                <div key={i} className="kod-commit">
+                  <div className="kod-commit-head">
+                    <strong>{s.label}</strong>
+                    <span className="kod-commit-meta">{s.lang}</span>
+                  </div>
+                  <div className="kod-commit-actions">
+                    <button className="db-btn" onClick={() => insertText(s.body)}>Insérer</button>
+                    <button
+                      className="db-btn"
+                      onClick={async () => {
+                        const next = snips.filter((_, j) => j !== i)
+                        setSnips(next)
+                        await saveSnippets(next)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {snips.length === 0 && <div className="kod-pal-empty">Aucun extrait perso — exporte/importe en JSON pour les partager</div>}
+            </div>
+          </div>
+        )}
         <input ref={fileInputRef} type="file" multiple hidden onChange={onFilesPicked} />
+        <input
+          ref={zipInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) void importZip(f)
+          }}
+        />
+        <input
+          ref={snipInputRef}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) void importSnippets(f)
+          }}
+        />
         <div className="blocs-sidebar-foot">
           <ThemeButton />
           <SettingsButton appId="kod" appName="Kod" />
@@ -2262,6 +2796,10 @@ export default function KodApp() {
                   onKeyUp={updateLineCol}
                   onClick={(e) => {
                     const ta = taRef.current
+                    if ((e.ctrlKey || e.metaKey) && ta) {
+                      doGoToDef()
+                      return
+                    }
                     if (e.altKey && ta) {
                       const off = ta.selectionStart
                       const lc = offToLC(ta.value, off)
@@ -2470,7 +3008,7 @@ export default function KodApp() {
       {diffV && (
         <div className="kod-panel kod-diff" data-pop="kdiff">
           <div className="kod-panel-head">
-            <span>⇄ Diff — {activeName} · {new Date(diffV.at).toLocaleString('fr-FR')} → courant</span>
+            <span>⇄ Diff — {diffV.fileId ? nodeName(diffV.fileId) : activeName} · {new Date(diffV.at).toLocaleString('fr-FR')} → courant</span>
             <button className="db-btn" aria-label="Fermer le diff" onClick={() => setDiffV(null)}>✕</button>
           </div>
           <div className="kod-diff-body">
