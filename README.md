@@ -100,7 +100,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 ## Les applis Skouar (retenues)
 
 - **Calepin** 📓 — actif : pages + BDD (voir fonctionnalités ci-dessus)
-- **Skrid** ✍️ — traitement de texte léger « spécial livre » (chapitres, compteurs de mots, plan, export PDF du livre) — bientôt
+- **Skrid** ✍️ — actif : traitement de texte léger. **3 vues** en haut de la sidebar : ✍️ **Document** (défaut, édition pure), 🖋️ **Écrivain** (plan du livre, objectifs 🎯, réordonnancement ↑↓, export PDF 📄), 📊 **Stats** (mots par chapitre, objectifs atteints). **31 templates** de texte 📋 (motivation, résiliation, compte-rendu, discours, CV, recette…), mode focus 🎯, police serif, autosave + undo persisté
 - **Ler** 📕 — visionneuse/annotatrice PDF (surlignage, notes, fusion, split) — bientôt
 - **Skeud** 🖼️ — visionneuse + retouche d'images (recadrage, filtres, cadres, calques simples, **traitement par lot**) — bientôt
 - **Taol** 🧮 — tableur local (formules, tris/filtres, graphiques, export CSV) — bientôt
