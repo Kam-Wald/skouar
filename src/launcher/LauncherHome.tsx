@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
 import { apps } from '../apps/registry'
+import ThemeButton from '../ThemeButton'
 
 export default function LauncherHome() {
   return (
     <div className="launcher">
+      <div className="launcher-theme">
+        <ThemeButton />
+      </div>
       <header className="launcher-header">
         <img
           className="launcher-logo-img"
