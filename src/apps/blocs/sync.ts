@@ -7,10 +7,19 @@ export interface SyncHandle {
   leave: () => void
 }
 
-export function startSync(code: string): SyncHandle {
+export function startSync(code: string, onPeers?: (n: number) => void): SyncHandle {
   const doc = new Y.Doc()
   const room = joinRoom({ appId: 'skouar-blocs-v1' }, code)
   const [sendUpdate, onUpdate] = room.makeAction<Uint8Array>('yjs')
+  let peers = 0
+  room.onPeerJoin(() => {
+    peers += 1
+    onPeers?.(peers)
+  })
+  room.onPeerLeave(() => {
+    peers = Math.max(0, peers - 1)
+    onPeers?.(peers)
+  })
 
   doc.on('update', (update: Uint8Array, origin: unknown) => {
     if (origin !== room) void sendUpdate(update)
