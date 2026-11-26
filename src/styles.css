@@ -5236,3 +5236,81 @@ th.drag-over {
     border-top: 1px solid var(--border);
   }
 }
+
+.kod-app.hl-dracula .tok-k { color: #ff79c6; }
+.kod-app.hl-dracula .tok-s { color: #f1fa8c; }
+.kod-app.hl-dracula .tok-c { color: #6272a4; }
+.kod-app.hl-dracula .tok-n { color: #bd93f9; }
+.kod-app.hl-dracula .tok-f { color: #50fa7b; }
+.kod-app.hl-dracula .tok-t { color: #ff79c6; }
+.kod-app.hl-dracula .tok-h { color: #ffb86c; }
+
+.kod-app.hl-nord .tok-k { color: #81a1c1; }
+.kod-app.hl-nord .tok-s { color: #a3be8c; }
+.kod-app.hl-nord .tok-c { color: #4c566a; }
+.kod-app.hl-nord .tok-n { color: #b48ead; }
+.kod-app.hl-nord .tok-f { color: #88c0d0; }
+.kod-app.hl-nord .tok-t { color: #81a1c1; }
+.kod-app.hl-nord .tok-h { color: #ebcb8b; }
+
+.kod-app.hl-solarized .tok-k { color: #859900; }
+.kod-app.hl-solarized .tok-s { color: #2aa198; }
+.kod-app.hl-solarized .tok-c { color: #93a1a1; }
+.kod-app.hl-solarized .tok-n { color: #d33682; }
+.kod-app.hl-solarized .tok-f { color: #268bd2; }
+.kod-app.hl-solarized .tok-t { color: #dc322f; }
+.kod-app.hl-solarized .tok-h { color: #b58900; }
+
+.kod-app.hl-one-light .tok-k { color: #a626a4; }
+.kod-app.hl-one-light .tok-s { color: #50a14f; }
+.kod-app.hl-one-light .tok-c { color: #a0a1a7; }
+.kod-app.hl-one-light .tok-n { color: #b76b01; }
+.kod-app.hl-one-light .tok-f { color: #4078f2; }
+.kod-app.hl-one-light .tok-t { color: #e45649; }
+.kod-app.hl-one-light .tok-h { color: #c18401; }
+
+.kod-hl {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--chw, 8px) * var(--kod-tab, 2) - 1px),
+    var(--border) calc(var(--chw, 8px) * var(--kod-tab, 2) - 1px),
+    var(--border) calc(var(--chw, 8px) * var(--kod-tab, 2))
+  );
+}
+
+.kod-bracket {
+  position: absolute;
+  width: var(--chw, 8px);
+  height: calc(var(--kod-fs, 13px) * 1.55);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.kod-gutter .foldable {
+  cursor: pointer;
+}
+
+.kod-gutter .foldable:hover {
+  color: var(--accent);
+}
+
+.kod-app.zen .blocs-sidebar,
+.kod-app.zen .sidebar-resizer {
+  display: none;
+}
+
+.kod-app.zen .kod-main > * {
+  width: 100%;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.kod-app.zen .kod-body {
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
