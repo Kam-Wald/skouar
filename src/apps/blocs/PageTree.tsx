@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import type { Page } from './types'
+import AppIcon from './Icon'
 
 export default function PageTree({
   pages,
@@ -74,7 +75,7 @@ export default function PageTree({
                     className="blocs-page-icon"
                     style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}
                   >
-                    {p.icon}
+                    <AppIcon icon={p.icon} size={14} color={p.iconColor ?? undefined} />
                   </span>
                 )}
                 {p.title.trim() || 'Sans titre'}

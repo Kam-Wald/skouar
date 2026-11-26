@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Block, BlockType, BlocsState, Page } from './types'
-import { createBlock, createDatabase, createPage, loadState, saveState, uid } from './store'
+import { createBlock, createColumn, createDatabase, createPage, loadState, saveState, uid } from './store'
 import { exportStateToFile, isBlocsState, parseImportFile } from './export'
 import { readRemoteState, startSync, type SyncHandle } from './sync'
 import { BLOCK_CATS, BLOCK_CAT_ORDER, BLOCK_TYPES, type BlockTypeDef } from './blockTypes'
@@ -29,6 +29,7 @@ import ThemeButton from '../../ThemeButton'
 import GraphView from './GraphView'
 import DashboardView from './DashboardView'
 import { exportPageHtml } from './share'
+import AppIcon from './Icon'
 
 const TAG_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
@@ -503,7 +504,16 @@ export default function BlocsApp() {
     page.blocks = tpl.blocks.map((b) => {
       const nb = createBlock(b.type as BlockType, b.text)
       if (b.done !== undefined) nb.done = b.done
-      if (b.type === 'database') nb.db = createDatabase()
+      if (b.progress !== undefined) nb.progress = b.progress
+      if (b.type === 'database') {
+        nb.db = createDatabase()
+        if (b.cols) {
+          nb.db.columns = b.cols.map((c) => ({
+            ...createColumn(c.name, c.type),
+            options: c.options ?? (c.type === 'select' || c.type === 'status' || c.type === 'multi' ? [] : undefined)
+          }))
+        }
+      }
       return nb
     })
     setState((s) => (s ? { pages: [page, ...s.pages], currentPageId: page.id } : s))
@@ -841,26 +851,12 @@ export default function BlocsApp() {
         )}
         {!q && allTags.length > 0 && (
           <select className="blocs-search" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-            <option value="">Toutes les étiquettes</option>
+            <option value="">Tous les tags</option>
             {allTags.map((t) => (
               <option key={t} value={t}>🏷 {t}</option>
             ))}
           </select>
         )}
-        <div className="blocs-sidebar-head">
-          <span>{showTrash ? '🗑 Corbeille' : 'Pages'}</span>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <button className="blocs-new-page" onClick={openJournal} title="Journal du jour (AAAA-MM-JJ)">
-              📅
-            </button>
-            <button className="blocs-new-page" onClick={() => setGraphOpen(true)} title="Graphe des pages (liens [[…]])">
-              🕸
-            </button>
-            <button className="blocs-new-page" onClick={() => setShowTrash((v) => !v)} title="Corbeille / Pages">
-              🗑
-            </button>
-          </div>
-        </div>
         <button
           className={`rappels-row${soon48.length > 0 ? ' has-soon' : ''}`}
           data-pop="bell"
@@ -883,7 +879,7 @@ export default function BlocsApp() {
                   setSidebarOpen(false)
                 }}
               >
-                <span className="blocs-side-link-ic">{p.icon ?? '📄'}</span>
+                <span className="blocs-side-link-ic"><AppIcon icon={p.icon ?? '📄'} size={15} /></span>
                 <span className="blocs-side-link-title">{stripHtml(p.title).trim() || 'Sans titre'}</span>
                 <span className="blocs-side-link-ic">📌</span>
               </button>
@@ -902,20 +898,36 @@ export default function BlocsApp() {
                   setSidebarOpen(false)
                 }}
               >
-                <span className="blocs-side-link-ic">{p.icon ?? '📄'}</span>
+                <span className="blocs-side-link-ic"><AppIcon icon={p.icon ?? '📄'} size={15} /></span>
                 <span className="blocs-side-link-title">{stripHtml(p.title).trim() || 'Sans titre'}</span>
                 <span className="blocs-side-link-time">{relTime(p.lastOpened ?? 0)}</span>
               </button>
             ))}
           </>
         )}
+        <div className="blocs-side-sep" />
+        <div className="blocs-sidebar-head">
+          <span>{showTrash ? '🗑 Corbeille' : 'Pages'}</span>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button className="blocs-new-page" onClick={openJournal} title="Journal du jour (AAAA-MM-JJ)">
+              📅
+            </button>
+            <button className="blocs-new-page" onClick={() => setGraphOpen(true)} title="Graphe des pages (liens [[…]])">
+              🕸
+            </button>
+            <button className="blocs-new-page" onClick={() => setShowTrash((v) => !v)} title="Corbeille / Pages">
+              🗑
+            </button>
+          </div>
+        </div>
+        <div className="blocs-sidebar-scroll">
         <ul className="blocs-page-list">
           {showTrash
             ? trashPages.map((p) => (
                 <li key={p.id}>
                   <div className="blocs-page-row">
                     <span className="blocs-page-item" style={{ cursor: 'default' }}>
-                      {p.icon && <span className="blocs-page-icon">{p.icon}</span>}
+                      {p.icon && <span className="blocs-page-icon"><AppIcon icon={p.icon} size={14} /></span>}
                       {stripHtml(p.title).trim() || 'Sans titre'}
                     </span>
                     <button className="blocs-page-act" title="Restaurer" onClick={() => restorePage(p.id)}>↩</button>
@@ -931,7 +943,7 @@ export default function BlocsApp() {
                         className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
                         onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
                       >
-                        {p.icon && <span className="blocs-page-icon" style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}>{p.icon}</span>}
+                        {p.icon && <span className="blocs-page-icon" style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}><AppIcon icon={p.icon} size={14} color={p.iconColor ?? undefined} /></span>}
                         {stripHtml(p.title).trim() || 'Sans titre'}
                       </button>
                     </div>
@@ -965,6 +977,7 @@ export default function BlocsApp() {
                 />
               )}
         </ul>
+        </div>
         {!showTrash && (
           <>
             <button
@@ -986,8 +999,8 @@ export default function BlocsApp() {
           <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P">
             {sync ? `⇄ ${sync.code}` : '⇄ Sync'}
           </button>
-          <button className="blocs-io" onClick={() => exportStateToFile(state)} title="Export JSON complet">
-            ↓ JSON
+          <button className="blocs-io" onClick={() => exportStateToFile(state)} title="Exporter toutes les données (JSON)">
+            ↓ Exporter
           </button>
           <button className="blocs-io" onClick={() => fileInput.current?.click()} title="Import JSON ou .md">
             ↑ Import
@@ -1057,7 +1070,7 @@ export default function BlocsApp() {
               title="Icône de la page"
               onClick={() => setIconOpen((o) => !o)}
             >
-              {current.icon ?? '＋'}
+              {current.icon ? <AppIcon icon={current.icon} size={22} color={current.iconColor ?? undefined} /> : '＋'}
             </button>
             {iconOpen && (
               <EmojiPicker
@@ -1081,7 +1094,7 @@ export default function BlocsApp() {
           />
           <div className="page-head-actions">
             <div className="page-icon-wrap" data-pop="tags">
-              <button className="page-cover-btn" title="Étiquettes" onClick={() => setTagsOpen((o) => !o)}>
+              <button className="page-cover-btn" title="Tags" onClick={() => setTagsOpen((o) => !o)}>
                 🏷
               </button>
               {tagsOpen && (
@@ -1089,7 +1102,7 @@ export default function BlocsApp() {
                   <div className="tag-input-row">
                     <input
                       className="db-input"
-                      placeholder="Nouvelle étiquette…"
+                      placeholder="Nouveau tag…"
                       value={tagInput}
                       autoFocus
                       onChange={(e) => setTagInput(e.target.value)}
@@ -1124,7 +1137,7 @@ export default function BlocsApp() {
             <button className="page-cover-btn" title="Exporter cette page en Markdown" onClick={exportPageMd}>
               ⇩
             </button>
-            <button className="page-cover-btn" title="Imprimer / PDF" onClick={() => window.print()}>
+            <button className="page-cover-btn" title="Exporter en PDF" onClick={() => window.print()}>
               🖨
             </button>
             <button className="page-cover-btn" title="Dupliquer la page" onClick={() => duplicatePage(current.id)}>
