@@ -11,6 +11,8 @@ export interface SkridDoc {
   kind?: 'chapter' | 'fiche' | 'memo'
   ficheType?: string
   fields?: Record<string, string>
+  pinned?: boolean
+  color?: string
 }
 
 export interface FicheType {
@@ -28,6 +30,9 @@ export const FICHE_TYPES: FicheType[] = [
   { id: 'orga', label: 'Organisation', icon: '🏛️', fields: ['Nom', 'Type', 'Membres', 'But', 'Notes'] },
   { id: 'event', label: 'Événement', icon: '📅', fields: ['Nom', 'Date', 'Lieu', 'Résumé', 'Notes'] },
   { id: 'concept', label: 'Concept', icon: '💡', fields: ['Nom', 'Définition', 'Exemples', 'Notes'] },
+  { id: 'citation', label: 'Citation', icon: '💬', fields: ['Auteur', 'Texte', 'Source', 'Contexte', 'Notes'] },
+  { id: 'intrigue', label: 'Idée d’intrigue', icon: '🎬', fields: ['Accroche', 'Conflit', 'Enjeu', 'Résolution possible', 'Notes'] },
+  { id: 'glossaire', label: 'Glossaire', icon: '📖', fields: ['Terme', 'Définition', 'Origine', 'Notes'] },
   { id: 'autre', label: 'Autre', icon: '📌', fields: ['Nom', 'Notes'] }
 ]
 

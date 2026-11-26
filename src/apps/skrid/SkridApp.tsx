@@ -225,6 +225,10 @@ export default function SkridApp() {
   const [readSize, setReadSize] = useState(1.3)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQ, setMentionQ] = useState('')
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const [mentionPos, setMentionPos] = useState({ x: 0, y: 0 })
   const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
@@ -241,6 +245,7 @@ export default function SkridApp() {
   useDismiss('skcom', comPop, () => setComPop(false))
   useDismiss('skcoms', comOpen, () => setComOpen(false))
   useDismiss('skexp', expOpen, () => setExpOpen(false))
+  useDismiss('skmen', mentionOpen, () => setMentionOpen(false))
 
   useEffect(() => {
     let alive = true
@@ -721,6 +726,50 @@ export default function SkridApp() {
     })
   }
 
+  const openMentionAtCaret = () => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || !editorRef.current?.contains(sel.anchorNode)) return
+    const t = sel.anchorNode
+    if (!t || t.nodeType !== Node.TEXT_NODE) return
+    const upto = ((t as Text).nodeValue ?? '').slice(0, sel.anchorOffset)
+    const m = upto.match(/@([^\s@]{0,30})$/)
+    if (!m) {
+      if (mentionOpen) setMentionOpen(false)
+      return
+    }
+    setMentionQ(m[1])
+    setMentionIdx(0)
+    const rect = sel.getRangeAt(0).getBoundingClientRect()
+    setMentionPos({ x: Math.max(8, rect.left), y: rect.bottom + 6 })
+    setMentionOpen(true)
+  }
+
+  const insertMention = (d: SkridDoc) => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const t = sel.anchorNode as Text
+    if (t && t.nodeType === Node.TEXT_NODE) {
+      const upto = (t.nodeValue ?? '').slice(0, sel.anchorOffset)
+      const m = upto.match(/@([^\s@]{0,30})$/)
+      if (m) t.deleteData(sel.anchorOffset - m[0].length, m[0].length)
+    }
+    const span = document.createElement('span')
+    span.className = 'skrid-ref'
+    span.setAttribute('data-doc', d.id)
+    span.contentEditable = 'false'
+    span.textContent = `@${d.title.trim() || 'Sans titre'}`
+    const r = sel.getRangeAt(0)
+    r.collapse(true)
+    r.insertNode(span)
+    r.setStartAfter(span)
+    r.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(r)
+    saveContent()
+    setMentionOpen(false)
+    setMentionQ('')
+  }
+
   const pdfOpts = (): PdfOpts => {
     const p = state?.pdf ?? {}
     return {
@@ -782,6 +831,28 @@ export default function SkridApp() {
   }
 
   const onEditorKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (mentionOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIdx((i) => Math.min(i + 1, mentionList.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIdx((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const d = mentionList[Math.min(mentionIdx, mentionList.length - 1)]
+        if (d) insertMention(d)
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentionOpen(false)
+        return
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       e.preventDefault()
       fmt(e.key.toLowerCase())
@@ -803,6 +874,8 @@ export default function SkridApp() {
   const chapIdx = docsOrdered.findIndex((d) => d.id === current?.id)
   const comCount = Object.keys(current?.comments ?? {}).length
   const kindLabel = current?.kind === 'memo' ? 'Mémo' : current?.kind === 'fiche' ? 'Fiche' : 'Chapitre'
+  const annexesSorted = [...annexes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+  const mentionList = annexesSorted.filter((d) => `${d.title} ${d.kind ?? ''}`.toLowerCase().includes(mentionQ.toLowerCase()))
 
   const exportBook = () => {
     if (!state) return
@@ -911,7 +984,7 @@ export default function SkridApp() {
               </div>
             </div>
             <ul className="blocs-page-list">
-              {annexes.map((d) => (
+              {annexesSorted.map((d) => (
                 <li key={d.id}>
                   <div className="blocs-page-row">
                     <button
@@ -921,6 +994,17 @@ export default function SkridApp() {
                       <span className="skrid-doc-count">{wordCount(d.content)}</span>
                       <span style={{ marginRight: 5 }}>{docIcon(d)}</span>
                       {d.title.trim() || 'Sans titre'}
+                    </button>
+                    <label className="skrid-dot-btn" title="Couleur">
+                      <span className="skrid-dot" style={{ background: d.color ?? 'transparent', borderColor: d.color ?? 'var(--muted)' }} />
+                      <input type="color" className="skrid-dot-in" defaultValue={d.color ?? '#e8b93e'} onChange={(e) => updateDoc(d.id, { color: e.target.value })} />
+                    </label>
+                    <button
+                      className={`blocs-page-act skrid-pin${d.pinned ? ' on' : ''}`}
+                      title={d.pinned ? 'Désépingler' : 'Épingler en haut'}
+                      onClick={() => updateDoc(d.id, { pinned: !d.pinned })}
+                    >
+                      📌
                     </button>
                     <button className="blocs-page-del" title="Supprimer" onClick={() => deleteDoc(d.id)}>
                       ×
@@ -1049,6 +1133,23 @@ export default function SkridApp() {
               </div>
             ))}
             {!comCount && <p className="mono skrid-com-empty">Sélectionne du texte puis 💬 dans la barre pour annoter.</p>}
+          </div>
+        )}
+        {view === 'doc' && mentionOpen && (
+          <div className="skrid-mention" data-pop="skmen" style={{ left: mentionPos.x, top: mentionPos.y }}>
+            {mentionList.length === 0 && <div className="skrid-mention-empty mono">Aucune fiche ni mémo correspondant</div>}
+            {mentionList.slice(0, 8).map((d, i) => (
+              <button
+                key={d.id}
+                className={`skrid-mention-item${i === Math.min(mentionIdx, mentionList.length - 1) ? ' cur' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertMention(d)}
+              >
+                <span>{docIcon(d)}</span>
+                <span>{d.title.trim() || 'Sans titre'}</span>
+                <span className="mono skrid-mention-kind">{d.kind === 'memo' ? 'mémo' : ficheTypeOf(d).label.toLowerCase()}</span>
+              </button>
+            ))}
           </div>
         )}
         {expOpen && (
@@ -1190,7 +1291,13 @@ export default function SkridApp() {
                   {!current.kind || current.kind === 'chapter' ? (
                     <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
                   ) : (
-                    <span className="mono skrid-chap-num">{current.kind === 'memo' ? '🗒️ mémo' : `fiche ${ficheTypeOf(current).icon} ${ficheTypeOf(current).label.toLowerCase()}`}</span>
+                    <>
+                      <label className="skrid-dot-btn" title="Couleur">
+                        <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
+                        <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                      </label>
+                      <span className="mono skrid-chap-num">{current.kind === 'memo' ? '🗒️ mémo' : `fiche ${ficheTypeOf(current).icon} ${ficheTypeOf(current).label.toLowerCase()}`}</span>
+                    </>
                   )}
                   <button
                     className="page-cover-btn"
@@ -1225,6 +1332,10 @@ export default function SkridApp() {
                       </option>
                     ))}
                   </select>
+                  <label className="skrid-dot-btn" title="Couleur de la fiche">
+                    <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
+                    <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                  </label>
                   {ficheTypeOf(current).fields.map((f) => (
                     <label className="skrid-fiche-field" key={f}>
                       <span>{f}</span>
@@ -1426,8 +1537,22 @@ export default function SkridApp() {
               lang="fr"
               style={read ? { fontSize: `${readSize}rem` } : undefined}
               data-placeholder="Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…"
-              onInput={saveContent}
+              onInput={() => {
+                saveContent()
+                openMentionAtCaret()
+              }}
               onKeyDown={onEditorKeyDown}
+              onClick={(e) => {
+                const ref = (e.target as HTMLElement).closest?.('.skrid-ref')
+                if (ref) {
+                  e.preventDefault()
+                  const id = ref.getAttribute('data-doc')
+                  if (id && state?.docs.some((d) => d.id === id)) {
+                    setState((s) => (s ? { ...s, currentId: id } : s))
+                    editorRef.current?.scrollTo({ top: 0 })
+                  }
+                }
+              }}
               onBlur={saveContent}
               onDoubleClick={(e) => {
                 const li = (e.target as HTMLElement).closest?.('li.task')
