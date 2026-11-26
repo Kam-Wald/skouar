@@ -7,6 +7,9 @@ import { buildPdf, downloadPdf, wrap, type PdfLine, type PdfOpts } from '../bloc
 import { exportFile } from '../blocs/markdown'
 import {
   createDoc,
+  docIcon,
+  FICHE_TYPES,
+  ficheTypeOf,
   loadSkrid,
   loadSkridHistory,
   orderedDocs,
@@ -222,6 +225,10 @@ export default function SkridApp() {
   const [readSize, setReadSize] = useState(1.3)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQ, setMentionQ] = useState('')
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const [mentionPos, setMentionPos] = useState({ x: 0, y: 0 })
   const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
@@ -238,6 +245,7 @@ export default function SkridApp() {
   useDismiss('skcom', comPop, () => setComPop(false))
   useDismiss('skcoms', comOpen, () => setComOpen(false))
   useDismiss('skexp', expOpen, () => setExpOpen(false))
+  useDismiss('skmen', mentionOpen, () => setMentionOpen(false))
 
   useEffect(() => {
     let alive = true
@@ -382,6 +390,19 @@ export default function SkridApp() {
       return { ...s, docs: [...s.docs, d], currentId: d.id }
     })
   }
+
+  const addAnnexe = (kind: 'fiche' | 'memo') => {
+    setState((s) => {
+      if (!s) return s
+      const d = createDoc(kind === 'memo' ? 'Nouveau mémo' : 'Nouvelle fiche')
+      d.kind = kind
+      if (kind === 'fiche') d.ficheType = 'perso'
+      return { ...s, docs: [...s.docs, d], currentId: d.id }
+    })
+  }
+
+  const addFiche = () => addAnnexe('fiche')
+  const addMemo = () => addAnnexe('memo')
 
   const deleteDoc = (id: string) => {
     const snap = state
@@ -705,6 +726,50 @@ export default function SkridApp() {
     })
   }
 
+  const openMentionAtCaret = () => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || !editorRef.current?.contains(sel.anchorNode)) return
+    const t = sel.anchorNode
+    if (!t || t.nodeType !== Node.TEXT_NODE) return
+    const upto = ((t as Text).nodeValue ?? '').slice(0, sel.anchorOffset)
+    const m = upto.match(/@([^\s@]{0,30})$/)
+    if (!m) {
+      if (mentionOpen) setMentionOpen(false)
+      return
+    }
+    setMentionQ(m[1])
+    setMentionIdx(0)
+    const rect = sel.getRangeAt(0).getBoundingClientRect()
+    setMentionPos({ x: Math.max(8, rect.left), y: rect.bottom + 6 })
+    setMentionOpen(true)
+  }
+
+  const insertMention = (d: SkridDoc) => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const t = sel.anchorNode as Text
+    if (t && t.nodeType === Node.TEXT_NODE) {
+      const upto = (t.nodeValue ?? '').slice(0, sel.anchorOffset)
+      const m = upto.match(/@([^\s@]{0,30})$/)
+      if (m) t.deleteData(sel.anchorOffset - m[0].length, m[0].length)
+    }
+    const span = document.createElement('span')
+    span.className = 'skrid-ref'
+    span.setAttribute('data-doc', d.id)
+    span.contentEditable = 'false'
+    span.textContent = `@${d.title.trim() || 'Sans titre'}`
+    const r = sel.getRangeAt(0)
+    r.collapse(true)
+    r.insertNode(span)
+    r.setStartAfter(span)
+    r.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(r)
+    saveContent()
+    setMentionOpen(false)
+    setMentionQ('')
+  }
+
   const pdfOpts = (): PdfOpts => {
     const p = state?.pdf ?? {}
     return {
@@ -744,7 +809,7 @@ export default function SkridApp() {
     } else {
       exportFile(`${fname}.doc`, wordHtml(title, current.content), 'application/msword')
     }
-    setToast({ key: Date.now(), msg: `Chapitre exporté (${format.toUpperCase()}) ⬇` })
+    setToast({ key: Date.now(), msg: `${kindLabel} exporté (${format.toUpperCase()}) ⬇` })
     setExpOpen(false)
   }
 
@@ -766,6 +831,28 @@ export default function SkridApp() {
   }
 
   const onEditorKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (mentionOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIdx((i) => Math.min(i + 1, mentionList.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIdx((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const d = mentionList[Math.min(mentionIdx, mentionList.length - 1)]
+        if (d) insertMention(d)
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentionOpen(false)
+        return
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       e.preventDefault()
       fmt(e.key.toLowerCase())
@@ -774,8 +861,10 @@ export default function SkridApp() {
 
   const words = current ? wordCount(current.content) : 0
   const target = current?.wordTarget ?? 0
-  const totalWords = state ? orderedDocs(state.docs).reduce((a, d) => a + wordCount(d.content), 0) : 0
-  const docsOrdered = state ? orderedDocs(state.docs) : []
+  const chapters = state ? state.docs.filter((d) => !d.kind || d.kind === 'chapter') : []
+  const annexes = state ? state.docs.filter((d) => d.kind === 'fiche' || d.kind === 'memo') : []
+  const totalWords = chapters.reduce((a, d) => a + wordCount(d.content), 0)
+  const docsOrdered = orderedDocs(chapters)
   const maxW = Math.max(1, ...docsOrdered.map((d) => wordCount(d.content)))
   const daily = state?.daily ?? {}
   const days14 = lastNDays(daily, 14)
@@ -784,6 +873,9 @@ export default function SkridApp() {
   const streak = streakOf(daily)
   const chapIdx = docsOrdered.findIndex((d) => d.id === current?.id)
   const comCount = Object.keys(current?.comments ?? {}).length
+  const kindLabel = current?.kind === 'memo' ? 'Mémo' : current?.kind === 'fiche' ? 'Fiche' : 'Chapitre'
+  const annexesSorted = [...annexes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+  const mentionList = annexesSorted.filter((d) => `${d.title} ${d.kind ?? ''}`.toLowerCase().includes(mentionQ.toLowerCase()))
 
   const exportBook = () => {
     if (!state) return
@@ -791,7 +883,7 @@ export default function SkridApp() {
       { text: state.bookTitle || 'Mon livre', size: 26, font: 2, indent: 0, gapBefore: 0 },
       { text: `Skrid — Skouar · ${new Date().toLocaleDateString('fr-FR')} · ${totalWords} mots`, size: 10, font: 1, indent: 0, gapBefore: 8 }
     ]
-    orderedDocs(state.docs).forEach((d, i) => {
+    orderedDocs(state.docs.filter((d) => !d.kind || d.kind === 'chapter')).forEach((d, i) => {
       lines.push({ text: '', size: 8, font: 1, indent: 0, gapBefore: i === 0 ? 40 : 90 })
       lines.push({ text: d.title.trim() || 'Sans titre', size: 18, font: 2, indent: 0, gapBefore: 0, chapter: d.title.trim() || 'Sans titre' })
       htmlToLines(d.content, lines)
@@ -858,7 +950,7 @@ export default function SkridApp() {
           <div className="blocs-sidebar-scroll">
             <ul className="blocs-page-list">
               <DocTree
-                docs={state.docs}
+                docs={chapters}
                 parentId={null}
                 depth={0}
                 currentId={current.id}
@@ -879,6 +971,47 @@ export default function SkridApp() {
                   setDragOverId(null)
                 }}
               />
+            </ul>
+            <div className="blocs-sidebar-head" style={{ marginTop: 12 }}>
+              <span>Fiches & mémos</span>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <button className="blocs-new-page" onClick={addFiche} title="Nouvelle fiche">
+                  ＋
+                </button>
+                <button className="blocs-new-page" onClick={addMemo} title="Nouveau mémo">
+                  🗒️
+                </button>
+              </div>
+            </div>
+            <ul className="blocs-page-list">
+              {annexesSorted.map((d) => (
+                <li key={d.id}>
+                  <div className="blocs-page-row">
+                    <button
+                      className={`blocs-page-item${d.id === current.id ? ' selected' : ''}`}
+                      onClick={() => setState((s) => (s ? { ...s, currentId: d.id } : s))}
+                    >
+                      <span className="skrid-doc-count">{wordCount(d.content)}</span>
+                      <span style={{ marginRight: 5 }}>{docIcon(d)}</span>
+                      {d.title.trim() || 'Sans titre'}
+                    </button>
+                    <label className="skrid-dot-btn" title="Couleur">
+                      <span className="skrid-dot" style={{ background: d.color ?? 'transparent', borderColor: d.color ?? 'var(--muted)' }} />
+                      <input type="color" className="skrid-dot-in" defaultValue={d.color ?? '#e8b93e'} onChange={(e) => updateDoc(d.id, { color: e.target.value })} />
+                    </label>
+                    <button
+                      className={`blocs-page-act skrid-pin${d.pinned ? ' on' : ''}`}
+                      title={d.pinned ? 'Désépingler' : 'Épingler en haut'}
+                      onClick={() => updateDoc(d.id, { pinned: !d.pinned })}
+                    >
+                      📌
+                    </button>
+                    <button className="blocs-page-del" title="Supprimer" onClick={() => deleteDoc(d.id)}>
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
             </ul>
           </div>
           <button className="blocs-side-link" onClick={() => addDoc(null)}>
@@ -1002,12 +1135,29 @@ export default function SkridApp() {
             {!comCount && <p className="mono skrid-com-empty">Sélectionne du texte puis 💬 dans la barre pour annoter.</p>}
           </div>
         )}
+        {view === 'doc' && mentionOpen && (
+          <div className="skrid-mention" data-pop="skmen" style={{ left: mentionPos.x, top: mentionPos.y }}>
+            {mentionList.length === 0 && <div className="skrid-mention-empty mono">Aucune fiche ni mémo correspondant</div>}
+            {mentionList.slice(0, 8).map((d, i) => (
+              <button
+                key={d.id}
+                className={`skrid-mention-item${i === Math.min(mentionIdx, mentionList.length - 1) ? ' cur' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertMention(d)}
+              >
+                <span>{docIcon(d)}</span>
+                <span>{d.title.trim() || 'Sans titre'}</span>
+                <span className="mono skrid-mention-kind">{d.kind === 'memo' ? 'mémo' : ficheTypeOf(d).label.toLowerCase()}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {expOpen && (
           <div className="skrid-pop skrid-exp" data-pop="skexp">
-            <button className="skrid-exp-btn" onClick={() => exportChapter('pdf')}>⬇ Chapitre en PDF</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('html')}>⬇ Chapitre en HTML</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('md')}>⬇ Chapitre en Markdown</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('doc')}>⬇ Chapitre en .doc</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('pdf')}>⬇ {kindLabel} en PDF</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('html')}>⬇ {kindLabel} en HTML</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('md')}>⬇ {kindLabel} en Markdown</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('doc')}>⬇ {kindLabel} en .doc</button>
             <div className="skrid-exp-sep" />
             <button className="skrid-exp-btn" onClick={exportBook}>⬇ Livre entier en PDF</button>
             <label className="skrid-exp-opt">
@@ -1134,11 +1284,21 @@ export default function SkridApp() {
                 <input
                   className="blocs-title"
                   value={current.title}
-                  placeholder="Titre du chapitre"
+                  placeholder={!current.kind || current.kind === 'chapter' ? 'Titre du chapitre' : current.kind === 'memo' ? 'Titre du mémo' : 'Nom de la fiche'}
                   onChange={(e) => updateDoc(current.id, { title: e.target.value })}
                 />
                 <div className="page-head-actions">
-                  <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
+                  {!current.kind || current.kind === 'chapter' ? (
+                    <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
+                  ) : (
+                    <>
+                      <label className="skrid-dot-btn" title="Couleur">
+                        <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
+                        <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                      </label>
+                      <span className="mono skrid-chap-num">{current.kind === 'memo' ? '🗒️ mémo' : `fiche ${ficheTypeOf(current).icon} ${ficheTypeOf(current).label.toLowerCase()}`}</span>
+                    </>
+                  )}
                   <button
                     className="page-cover-btn"
                     title={focus ? 'Quitter le mode focus' : 'Mode focus (sans sidebar ni barre)'}
@@ -1158,6 +1318,36 @@ export default function SkridApp() {
                   </button>
                 </div>
               </div>
+              {current.kind === 'fiche' && (
+                <div className="skrid-fiche">
+                  <select
+                    className="skrid-select"
+                    title="Type de fiche"
+                    value={current.ficheType ?? 'perso'}
+                    onChange={(e) => updateDoc(current.id, { ficheType: e.target.value, fields: {} })}
+                  >
+                    {FICHE_TYPES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.icon} {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="skrid-dot-btn" title="Couleur de la fiche">
+                    <span className="skrid-dot" style={{ background: current.color ?? 'transparent', borderColor: current.color ?? 'var(--muted)' }} />
+                    <input type="color" className="skrid-dot-in" defaultValue={current.color ?? '#e8b93e'} onChange={(e) => updateDoc(current.id, { color: e.target.value })} />
+                  </label>
+                  {ficheTypeOf(current).fields.map((f) => (
+                    <label className="skrid-fiche-field" key={f}>
+                      <span>{f}</span>
+                      <input
+                        className="db-input"
+                        value={current.fields?.[f] ?? ''}
+                        onChange={(e) => updateDoc(current.id, { fields: { ...(current.fields ?? {}), [f]: e.target.value } })}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
               <div className="skrid-toolbar-wrap">
                 <div className="skrid-toolbar">
                   <button className="tool" title="Annuler (Ctrl+Z)" onMouseDown={(e) => e.preventDefault()} onClick={undo}>
@@ -1167,24 +1357,23 @@ export default function SkridApp() {
                     <Redo2 size={15} />
                   </button>
                   <span className="sel-sep" />
-                  <select className="skrid-select" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
+                  <select className="skrid-select skrid-font-sel" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
                     <option value="" disabled>Police…</option>
-                    <option value="'Iowan Old Style', Georgia, serif">Iowan (défaut)</option>
-                    <option value="Inter, system-ui, sans-serif">Inter</option>
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
-                    <option value="Georgia, serif">Georgia</option>
-                    <option value="'Times New Roman', serif">Times New Roman</option>
-                    <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
-                    <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
-                    <option value="Garamond, serif">Garamond</option>
-                    <option value="Verdana, sans-serif">Verdana</option>
-                    <option value="Tahoma, sans-serif">Tahoma</option>
-                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
-                    <option value="'Courier New', monospace">Courier New</option>
-                    <option value="'Lucida Console', monospace">Lucida Console</option>
-                    <option value="'Comic Sans MS', cursive">Comic Sans</option>
-                    <option value="Impact, sans-serif">Impact</option>
+                    <option value="'Iowan Old Style', Georgia, serif" style={{ fontFamily: "'Iowan Old Style', Georgia, serif" }}>Iowan (défaut)</option>
+                    <option value="Inter, system-ui, sans-serif" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Inter</option>
+                    <option value="Arial, sans-serif" style={{ fontFamily: 'Arial, sans-serif' }}>Arial</option>
+                    <option value="'Segoe UI', system-ui, sans-serif" style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}>Segoe UI</option>
+                    <option value="Georgia, serif" style={{ fontFamily: 'Georgia, serif' }}>Georgia</option>
+                    <option value="'Times New Roman', serif" style={{ fontFamily: "'Times New Roman', serif" }}>Times New Roman</option>
+                    <option value="'Palatino Linotype', Palatino, serif" style={{ fontFamily: "'Palatino Linotype', Palatino, serif" }}>Palatino</option>
+                    <option value="'Book Antiqua', Palatino, serif" style={{ fontFamily: "'Book Antiqua', Palatino, serif" }}>Book Antiqua</option>
+                    <option value="Garamond, serif" style={{ fontFamily: 'Garamond, serif' }}>Garamond</option>
+                    <option value="Verdana, sans-serif" style={{ fontFamily: 'Verdana, sans-serif' }}>Verdana</option>
+                    <option value="Tahoma, sans-serif" style={{ fontFamily: 'Tahoma, sans-serif' }}>Tahoma</option>
+                    <option value="'Trebuchet MS', sans-serif" style={{ fontFamily: "'Trebuchet MS', sans-serif" }}>Trebuchet</option>
+                    <option value="'Courier New', monospace" style={{ fontFamily: "'Courier New', monospace" }}>Courier New</option>
+                    <option value="'Lucida Console', monospace" style={{ fontFamily: "'Lucida Console', monospace" }}>Lucida Console</option>
+                    <option value="Impact, sans-serif" style={{ fontFamily: 'Impact, sans-serif' }}>Impact</option>
                   </select>
                   <select className="skrid-select" title="Style de bloc" value="" onChange={(e) => e.target.value && fmtFromUi('formatBlock', e.target.value)}>
                     <option value="" disabled>¶ Titre…</option>
@@ -1348,8 +1537,22 @@ export default function SkridApp() {
               lang="fr"
               style={read ? { fontSize: `${readSize}rem` } : undefined}
               data-placeholder="Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…"
-              onInput={saveContent}
+              onInput={() => {
+                saveContent()
+                openMentionAtCaret()
+              }}
               onKeyDown={onEditorKeyDown}
+              onClick={(e) => {
+                const ref = (e.target as HTMLElement).closest?.('.skrid-ref')
+                if (ref) {
+                  e.preventDefault()
+                  const id = ref.getAttribute('data-doc')
+                  if (id && state?.docs.some((d) => d.id === id)) {
+                    setState((s) => (s ? { ...s, currentId: id } : s))
+                    editorRef.current?.scrollTo({ top: 0 })
+                  }
+                }
+              }}
               onBlur={saveContent}
               onDoubleClick={(e) => {
                 const li = (e.target as HTMLElement).closest?.('li.task')

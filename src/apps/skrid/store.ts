@@ -8,7 +8,37 @@ export interface SkridDoc {
   wordTarget?: number
   updatedAt: number
   comments?: Record<string, { text: string; at: number }>
+  kind?: 'chapter' | 'fiche' | 'memo'
+  ficheType?: string
+  fields?: Record<string, string>
+  pinned?: boolean
+  color?: string
 }
+
+export interface FicheType {
+  id: string
+  label: string
+  icon: string
+  fields: string[]
+}
+
+export const FICHE_TYPES: FicheType[] = [
+  { id: 'perso', label: 'Personnage', icon: '🧍', fields: ['Nom', 'Âge', 'Rôle', 'Traits', 'Histoire', 'Notes'] },
+  { id: 'lieu', label: 'Lieu', icon: '📍', fields: ['Nom', 'Type', 'Description', 'Ambiance', 'Notes'] },
+  { id: 'objet', label: 'Objet', icon: '🎒', fields: ['Nom', 'Description', 'Importance', 'Notes'] },
+  { id: 'creature', label: 'Créature', icon: '🐾', fields: ['Nom', 'Espèce', 'Description', 'Pouvoirs', 'Notes'] },
+  { id: 'orga', label: 'Organisation', icon: '🏛️', fields: ['Nom', 'Type', 'Membres', 'But', 'Notes'] },
+  { id: 'event', label: 'Événement', icon: '📅', fields: ['Nom', 'Date', 'Lieu', 'Résumé', 'Notes'] },
+  { id: 'concept', label: 'Concept', icon: '💡', fields: ['Nom', 'Définition', 'Exemples', 'Notes'] },
+  { id: 'citation', label: 'Citation', icon: '💬', fields: ['Auteur', 'Texte', 'Source', 'Contexte', 'Notes'] },
+  { id: 'intrigue', label: 'Idée d’intrigue', icon: '🎬', fields: ['Accroche', 'Conflit', 'Enjeu', 'Résolution possible', 'Notes'] },
+  { id: 'glossaire', label: 'Glossaire', icon: '📖', fields: ['Terme', 'Définition', 'Origine', 'Notes'] },
+  { id: 'autre', label: 'Autre', icon: '📌', fields: ['Nom', 'Notes'] }
+]
+
+export const ficheTypeOf = (d: SkridDoc): FicheType => FICHE_TYPES.find((t) => t.id === d.ficheType) ?? FICHE_TYPES[0]
+
+export const docIcon = (d: SkridDoc): string => (d.kind === 'memo' ? '🗒️' : d.kind === 'fiche' ? ficheTypeOf(d).icon : '📄')
 
 export interface SkridPdfOpts {
   format?: 'a4' | 'a5' | 'livret'
