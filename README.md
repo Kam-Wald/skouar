@@ -100,7 +100,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 ## Les applis Skouar (retenues)
 
 - **Calepin** 📓 — actif : pages + BDD (voir fonctionnalités ci-dessus)
-- **Skrid** ✍️ — actif : traitement de texte léger. **3 vues** en haut de la sidebar : ✍️ **Document** (défaut, édition pure), 🖋️ **Écrivain** (plan du livre, objectifs 🎯, réordonnancement ↑↓, export PDF 📄), 📊 **Stats** (mots par chapitre, objectifs atteints). **31 templates** de texte 📋 (motivation, résiliation, compte-rendu, discours, CV, recette…), mode focus 🎯, police serif, autosave + undo persisté
+- **Skrid** ✍️ — actif : traitement de texte léger. **3 vues** en haut de la sidebar : ✍️ **Document** (défaut, édition pure), 🖋️ **Écrivain** (plan du livre, objectifs 🎯, réordonnancement ↑↓, export PDF 📄), 📊 **Stats** (mots par chapitre, objectifs atteints). **31 templates** de texte 📋 (motivation, résiliation, compte-rendu, discours, CV, recette…), mode focus 🎯, police serif, autosave + undo persisté, **barre de mise en forme exhaustive** (polices, H1–H4, citation, bloc code, interligne, gras/italique/souligné/barré, couleur de police et de fond, listes à puces/numérotées/à cocher, liens, tableaux, images, ligne horizontale, retraits, alignements, effacer le format, undo/redo ↶↷)
 - **Ler** 📕 — visionneuse/annotatrice PDF (surlignage, notes, fusion, split) — bientôt
 - **Skeud** 🖼️ — visionneuse + retouche d'images (recadrage, filtres, cadres, calques simples, **traitement par lot**) — bientôt
 - **Taol** 🧮 — tableur local (formules, tris/filtres, graphiques, export CSV) — bientôt

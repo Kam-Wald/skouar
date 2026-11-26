@@ -16,6 +16,25 @@ import {
   type SkridState
 } from './store'
 import { SKRID_TEMPLATES } from './templates'
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Eraser,
+  Image as ImageIcon,
+  IndentDecrease,
+  IndentIncrease,
+  Link2,
+  List,
+  ListChecks,
+  ListOrdered,
+  Minus,
+  Redo2,
+  Strikethrough,
+  Table2,
+  Undo2,
+  Unlink2
+} from 'lucide-react'
 
 type SkridView = 'doc' | 'writer' | 'stats'
 
@@ -130,14 +149,22 @@ export default function SkridApp() {
   const [focus, setFocus] = useState(false)
   const [targetPop, setTargetPop] = useState(false)
   const [targetDraft, setTargetDraft] = useState('')
+  const [linkPop, setLinkPop] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const [tablePop, setTablePop] = useState(false)
+  const [tRows, setTRows] = useState('3')
+  const [tCols, setTCols] = useState('3')
   const [toast, setToast] = useState<{ key: number; msg: string; action?: () => void } | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLInputElement>(null)
   const pastRef = useRef<SkridState[]>([])
   const futureRef = useRef<SkridState[]>([])
   const prevRef = useRef<SkridState | null>(null)
   const lastPush = useRef(0)
   useDismiss('target', targetPop, () => setTargetPop(false))
   useDismiss('tplsk', tplOpen, () => setTplOpen(false))
+  useDismiss('sklink', linkPop, () => setLinkPop(false))
+  useDismiss('sktable', tablePop, () => setTablePop(false))
 
   useEffect(() => {
     let alive = true
@@ -330,9 +357,117 @@ export default function SkridApp() {
     if (el && current) updateDoc(current.id, { content: el.innerHTML })
   }
 
+  const eachSelectedBlock = (fn: (el: HTMLElement) => void, tags = 'p,h1,h2,h3,h4,li,blockquote,div,pre,td,th') => {
+    const el = editorRef.current
+    if (!el) return
+    const sel = window.getSelection()
+    const blocks = new Set<HTMLElement>()
+    if (sel && sel.rangeCount > 0) {
+      const r = sel.getRangeAt(0)
+      el.querySelectorAll(tags).forEach((b) => {
+        if (r.intersectsNode(b)) blocks.add(b as HTMLElement)
+      })
+      if (!blocks.size && sel.anchorNode) {
+        let n = sel.anchorNode as HTMLElement | null
+        while (n && n !== el) {
+          if (tags.split(',').includes(n.tagName.toLowerCase())) {
+            blocks.add(n)
+            break
+          }
+          n = n.parentElement
+        }
+      }
+    }
+    if (!blocks.size) {
+      let n = (sel?.anchorNode ?? el) as HTMLElement | null
+      while (n && n !== el) {
+        if (tags.split(',').includes(n.tagName.toLowerCase())) {
+          blocks.add(n)
+          break
+        }
+        n = n.parentElement
+      }
+      if (!blocks.size) blocks.add(el.firstElementChild as HTMLElement ?? el)
+    }
+    blocks.forEach(fn)
+  }
+
+  const applyLineHeight = (lh: string) => {
+    eachSelectedBlock((b) => {
+      b.style.lineHeight = lh
+    })
+    saveContent()
+  }
+
+  const toggleTaskList = () => {
+    const sel = window.getSelection()
+    const inLi = sel && sel.anchorNode ? !!(sel.anchorNode as HTMLElement).closest?.('li') || (sel.anchorNode as HTMLElement).tagName === 'LI' : false
+    if (!inLi) document.execCommand('insertUnorderedList', false)
+    eachSelectedBlock((b) => {
+      if (b.tagName === 'LI') b.classList.toggle('task')
+    }, 'li')
+    saveContent()
+  }
+
+  const doLink = () => {
+    const url = linkUrl.trim()
+    if (!url) return
+    document.execCommand('styleWithCSS', false, 'true')
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed) document.execCommand('createLink', false, url)
+    else document.execCommand('insertHTML', false, `<a href="${url}">${url}</a>`)
+    saveContent()
+    setLinkPop(false)
+    setLinkUrl('')
+  }
+
+  const doTable = () => {
+    const r = Math.min(20, Math.max(1, Number(tRows) || 1))
+    const c = Math.min(10, Math.max(1, Number(tCols) || 1))
+    let html = '<table class="skrid-table"><tbody>'
+    for (let i = 0; i < r; i++) {
+      html += '<tr>'
+      for (let j = 0; j < c; j++) html += '<td><br></td>'
+      html += '</tr>'
+    }
+    html += '</tbody></table><p><br></p>'
+    document.execCommand('insertHTML', false, html)
+    saveContent()
+    setTablePop(false)
+  }
+
+  const onImgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      document.execCommand('insertHTML', false, `<img src="${String(reader.result)}" alt="" style="max-width:100%;border-radius:10px">`)
+      saveContent()
+    }
+    reader.readAsDataURL(f)
+  }
+
   const fmt = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value)
     saveContent()
+  }
+
+  const fmtFromUi = (cmd: string, value?: string) => {
+    editorRef.current?.focus()
+    fmt(cmd, value)
+  }
+
+  const setForeColor = (color: string) => {
+    editorRef.current?.focus()
+    document.execCommand('styleWithCSS', false, 'true')
+    fmt('foreColor', color)
+  }
+
+  const setHiliteColor = (color: string) => {
+    editorRef.current?.focus()
+    document.execCommand('styleWithCSS', false, 'true')
+    fmt('hiliteColor', color)
   }
 
   const onEditorKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -498,30 +633,151 @@ export default function SkridApp() {
                   </button>
                 </div>
               </div>
-              <div className="skrid-toolbar">
-                {(['p', 'H1', 'H2', '❝'] as const).map((f) => (
-                  <button
-                    key={f}
-                    className="tool"
-                    title={f === '❝' ? 'Citation' : f === 'p' ? 'Paragraphe' : f}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => fmt('formatBlock', f === '❝' ? 'blockquote' : f)}
-                  >
-                    {f === '❝' ? '❝' : f === 'p' ? '¶' : f}
+              <div className="skrid-toolbar-wrap">
+                <div className="skrid-toolbar">
+                  <button className="tool" title="Annuler (Ctrl+Z)" onMouseDown={(e) => e.preventDefault()} onClick={undo}>
+                    <Undo2 size={15} />
                   </button>
-                ))}
-                <span className="sel-sep" />
-                {(['b', 'i', 'u'] as const).map((f) => (
-                  <button
-                    key={f}
-                    className="tool"
-                    title={f === 'b' ? 'Gras (Ctrl+B)' : f === 'i' ? 'Italique (Ctrl+I)' : 'Souligné (Ctrl+U)'}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => fmt(f)}
-                  >
-                    {f === 'b' ? 'B' : f === 'i' ? 'I' : 'U'}
+                  <button className="tool" title="Rétablir (Ctrl+Y)" onMouseDown={(e) => e.preventDefault()} onClick={redo}>
+                    <Redo2 size={15} />
                   </button>
-                ))}
+                  <span className="sel-sep" />
+                  <select className="skrid-select" title="Police d'écriture" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
+                    <option value="" disabled>Police…</option>
+                    <option value="'Iowan Old Style', Georgia, serif">Iowan (défaut)</option>
+                    <option value="Inter, system-ui, sans-serif">Inter</option>
+                    <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+                    <option value="'Courier New', monospace">Courier</option>
+                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+                    <option value="Verdana, sans-serif">Verdana</option>
+                    <option value="'Comic Sans MS', cursive">Comic Sans</option>
+                    <option value="Impact, sans-serif">Impact</option>
+                  </select>
+                  <select className="skrid-select" title="Style de bloc" value="" onChange={(e) => e.target.value && fmtFromUi('formatBlock', e.target.value)}>
+                    <option value="" disabled>¶ Titre…</option>
+                    <option value="p">¶ Paragraphe</option>
+                    <option value="h1">H1 Titre</option>
+                    <option value="h2">H2 Sous-titre</option>
+                    <option value="h3">H3</option>
+                    <option value="h4">H4</option>
+                    <option value="blockquote">❝ Citation</option>
+                    <option value="pre">{'</>'} Bloc code</option>
+                  </select>
+                  <select className="skrid-select" title="Interligne" value="" onChange={(e) => e.target.value && applyLineHeight(e.target.value)}>
+                    <option value="" disabled>Interligne…</option>
+                    <option value="1">1</option>
+                    <option value="1.15">1,15</option>
+                    <option value="1.5">1,5</option>
+                    <option value="1.75">1,75</option>
+                    <option value="2">2</option>
+                    <option value="2.5">2,5</option>
+                  </select>
+                  <span className="sel-sep" />
+                  <button className="tool" title="Gras (Ctrl+B)" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bold')}>
+                    <b>B</b>
+                  </button>
+                  <button className="tool" title="Italique (Ctrl+I)" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('italic')}>
+                    <i>I</i>
+                  </button>
+                  <button className="tool" title="Souligné (Ctrl+U)" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('underline')}>
+                    <u>U</u>
+                  </button>
+                  <button className="tool" title="Barré" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('strikeThrough')}>
+                    <Strikethrough size={15} />
+                  </button>
+                  <label className="tool skrid-color-btn" title="Couleur de la police">
+                    <span className="skrid-color-a">A</span>
+                    <input type="color" className="skrid-color" defaultValue="#e8e6e3" onChange={(e) => setForeColor(e.target.value)} />
+                  </label>
+                  <label className="tool skrid-color-btn" title="Couleur de fond du texte (surlignage)">
+                    <span className="skrid-color-a skrid-hl">A</span>
+                    <input type="color" className="skrid-color" defaultValue="#ffd54a" onChange={(e) => setHiliteColor(e.target.value)} />
+                  </label>
+                  <span className="sel-sep" />
+                  <button className="tool" title="Liste à puces" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('insertUnorderedList')}>
+                    <List size={15} />
+                  </button>
+                  <button className="tool" title="Liste numérotée" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('insertOrderedList')}>
+                    <ListOrdered size={15} />
+                  </button>
+                  <button className="tool" title="Liste à cocher (double-clic sur une case pour la cocher)" onMouseDown={(e) => e.preventDefault()} onClick={toggleTaskList}>
+                    <ListChecks size={15} />
+                  </button>
+                  <button
+                    className="tool"
+                    data-pop="sklink"
+                    title="Insérer un lien"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const s = window.getSelection()
+                      setLinkUrl(s && !s.isCollapsed ? String(s) : '')
+                      setLinkPop((o) => !o)
+                    }}
+                  >
+                    <Link2 size={15} />
+                  </button>
+                  <button className="tool" title="Supprimer le lien" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('unlink')}>
+                    <Unlink2 size={15} />
+                  </button>
+                  <button className="tool" data-pop="sktable" title="Insérer un tableau" onMouseDown={(e) => e.preventDefault()} onClick={() => setTablePop((o) => !o)}>
+                    <Table2 size={15} />
+                  </button>
+                  <button className="tool" title="Insérer une image" onMouseDown={(e) => e.preventDefault()} onClick={() => imgRef.current?.click()}>
+                    <ImageIcon size={15} />
+                  </button>
+                  <span className="sel-sep" />
+                  <button className="tool" title="Ligne horizontale" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('insertHorizontalRule')}>
+                    <Minus size={15} />
+                  </button>
+                  <button className="tool" title="Augmenter le retrait" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('indent')}>
+                    <IndentIncrease size={15} />
+                  </button>
+                  <button className="tool" title="Diminuer le retrait" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('outdent')}>
+                    <IndentDecrease size={15} />
+                  </button>
+                  <button className="tool" title="Aligner à gauche" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('justifyLeft')}>
+                    <AlignLeft size={15} />
+                  </button>
+                  <button className="tool" title="Centrer" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('justifyCenter')}>
+                    <AlignCenter size={15} />
+                  </button>
+                  <button className="tool" title="Aligner à droite" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('justifyRight')}>
+                    <AlignRight size={15} />
+                  </button>
+                  <button className="tool" title="Effacer la mise en forme" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('removeFormat')}>
+                    <Eraser size={15} />
+                  </button>
+                </div>
+                {linkPop && (
+                  <div className="skrid-pop" data-pop="sklink">
+                    <input
+                      className="db-input"
+                      autoFocus
+                      type="url"
+                      placeholder="https://…"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') doLink()
+                        if (e.key === 'Escape') setLinkPop(false)
+                      }}
+                    />
+                    <button className="db-btn" onClick={doLink}>
+                      OK
+                    </button>
+                  </div>
+                )}
+                {tablePop && (
+                  <div className="skrid-pop" data-pop="sktable">
+                    <input className="db-input skrid-tbl-in" autoFocus type="number" min={1} max={20} value={tRows} onChange={(e) => setTRows(e.target.value)} title="Lignes" />
+                    <span className="mono">×</span>
+                    <input className="db-input skrid-tbl-in" type="number" min={1} max={10} value={tCols} onChange={(e) => setTCols(e.target.value)} title="Colonnes" />
+                    <button className="db-btn" onClick={doTable}>
+                      Insérer
+                    </button>
+                  </div>
+                )}
+                <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImgFile} />
               </div>
             </div>
             <div
@@ -529,10 +785,17 @@ export default function SkridApp() {
               className="skrid-editor"
               contentEditable
               suppressContentEditableWarning
-              data-placeholder="Écris ton chapitre ici… (Ctrl+B/I/U, ¶ H1 H2 ❝ dans la barre)"
+              data-placeholder="Écris ton chapitre ici… — mise en forme complète dans la barre : polices, H1–H4, interligne, couleurs, listes, liens, tableaux, images…"
               onInput={saveContent}
               onKeyDown={onEditorKeyDown}
               onBlur={saveContent}
+              onDoubleClick={(e) => {
+                const li = (e.target as HTMLElement).closest?.('li.task')
+                if (li) {
+                  li.classList.toggle('done')
+                  saveContent()
+                }
+              }}
             />
             <div className="skrid-status">
               <span className="mono">

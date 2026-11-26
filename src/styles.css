@@ -3278,3 +3278,169 @@ th.drag-over {
   color: var(--muted);
   flex-shrink: 0;
 }
+
+.skrid-toolbar-wrap {
+  position: relative;
+}
+
+.skrid-toolbar {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+}
+
+.skrid-toolbar .tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.skrid-toolbar .tool svg {
+  display: block;
+}
+
+.skrid-select {
+  flex: 0 0 auto;
+  max-width: 132px;
+  height: 30px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.skrid-select:hover {
+  border-color: var(--accent);
+}
+
+.skrid-color-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.skrid-color {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.skrid-color-a {
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+  border-bottom: 3px solid var(--accent);
+}
+
+.skrid-color-a.skrid-hl {
+  background: var(--accent-soft);
+  border-radius: 4px;
+  border-bottom: none;
+  padding: 2px 3px;
+}
+
+.skrid-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+
+.skrid-pop .db-input {
+  width: 210px;
+}
+
+.skrid-tbl-in {
+  width: 56px !important;
+}
+
+.skrid-editor h3 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1.18rem;
+  margin: 0.9em 0 0.25em;
+}
+
+.skrid-editor h4 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1.05rem;
+  margin: 0.8em 0 0.2em;
+}
+
+.skrid-editor pre {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.skrid-editor a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.skrid-editor img {
+  max-width: 100%;
+  border-radius: 10px;
+  margin: 8px 0;
+}
+
+.skrid-editor hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.skrid-editor li.task {
+  list-style: none;
+}
+
+.skrid-editor li.task::before {
+  content: '☐\00a0';
+}
+
+.skrid-editor li.task.done::before {
+  content: '☑\00a0';
+}
+
+.skrid-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 0.95em;
+}
+
+.skrid-table td,
+.skrid-table th {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  min-width: 64px;
+  text-align: left;
+}
+
+.skrid-table tr:first-child td {
+  background: var(--panel-2);
+  font-weight: 600;
+}
