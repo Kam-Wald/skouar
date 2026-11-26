@@ -18,7 +18,7 @@ describe('Calepin (smoke jsdom)', () => {
     const React = await import('react')
     const { createRoot } = await import('react-dom/client')
     const { MemoryRouter } = await import('react-router-dom')
-    const BlocsApp = (await import('/workspace/github__Kam-Wald__skouar/src/apps/blocs/BlocsApp')).default
+    const BlocsApp = (await import('../src/apps/blocs/BlocsApp')).default
     const div = document.createElement('div')
     document.body.appendChild(div)
     const root = createRoot(div)
