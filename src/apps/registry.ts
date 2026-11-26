@@ -20,24 +20,43 @@ export const apps: AppMeta[] = [
     component: lazy(() => import('./blocs/BlocsApp'))
   },
   {
-    id: 'taol',
-    name: 'Taol',
-    description: 'Tableur — bientôt disponible.',
-    icon: '🧮',
+    id: 'skrid',
+    name: 'Skrid',
+    description: 'Traitement de texte léger, pensé pour écrire un livre (chapitres, compteurs, export PDF).',
+    icon: '✍️',
+    logo: `${import.meta.env.BASE_URL}app-icons/skrid.svg`,
+    soon: true
+  },
+  {
+    id: 'ler',
+    name: 'Ler',
+    description: 'Visionneuse et annotatrice de PDF (surlignage, notes, fusion de fichiers).',
+    icon: '📕',
+    logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`,
     soon: true
   },
   {
     id: 'skeud',
     name: 'Skeud',
-    description: 'Galerie et retouche d’images — bientôt disponible.',
+    description: 'Visionneuse + retouche d’images (recadrage, filtres, cadres, traitement par lot).',
     icon: '🖼️',
+    logo: `${import.meta.env.BASE_URL}app-icons/skeud.svg`,
     soon: true
   },
   {
-    id: 'son',
-    name: 'Son',
-    description: 'Bibliothèque audio — bientôt disponible.',
-    icon: '🎧',
+    id: 'taol',
+    name: 'Taol',
+    description: 'Tableur local : formules, tris, filtres, graphiques, export CSV.',
+    icon: '🧮',
+    logo: `${import.meta.env.BASE_URL}app-icons/taol.svg`,
+    soon: true
+  },
+  {
+    id: 'tres',
+    name: 'Tres',
+    description: 'Dessin & présentations : formes, flèches, diapos, export SVG/PNG.',
+    icon: '✏️',
+    logo: `${import.meta.env.BASE_URL}app-icons/tres.svg`,
     soon: true
   }
 ]
