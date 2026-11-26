@@ -209,6 +209,41 @@ export const KOD_TEMPLATES: KodTemplate[] = [
     icon: '🔎',
     path: 'requetes.sql',
     content: '-- {{titre}} : requetes utiles\n\n-- Jointure avec agregation\nSELECT c.nom, COUNT(p.id) AS nb, SUM(p.prix) AS total\nFROM categories c\nLEFT JOIN produits p ON p.categorie_id = c.id\nGROUP BY c.nom\nORDER BY total DESC\n\n-- Mise a jour prudente (toujours un WHERE)\nUPDATE produits SET prix = prix * 1.10 WHERE categorie_id = 3\n'
+  },
+  {
+    group: 'Extraits',
+    label: 'Composant Vue 3 (SFC)',
+    icon: '🟢',
+    path: 'modele.vue',
+    content: '<template>\n  <section>\n    <h1>{{titre}}</h1>\n  </section>\n</template>\n\n<script setup lang="ts">\nconst props = defineProps<{ titre?: string }>()\n</script>\n'
+  },
+  {
+    group: 'Extraits',
+    label: 'Composant Svelte 5',
+    icon: '🧡',
+    path: 'modele.svelte',
+    content: "<script>\n  let titre = $state('{{titre}}')\n</script>\n\n<main>\n  <h1>{titre}</h1>\n</main>\n"
+  },
+  {
+    group: 'Extraits',
+    label: 'Store Pinia',
+    icon: '🍍',
+    path: 'store.ts',
+    content: "import { defineStore } from 'pinia'\n\nexport const useCompteur = defineStore('compteur', {\n  state: () => ({ valeur: 0 }),\n  getters: {\n    double: (s) => s.valeur * 2\n  },\n  actions: {\n    incrementer() {\n      this.valeur++\n    }\n  }\n})\n"
+  },
+  {
+    group: 'Projet',
+    label: 'package.json (Vite + Vue)',
+    icon: '🧩',
+    path: 'package.json',
+    content: '{\n  "name": "{{titre}}",\n  "private": true,\n  "version": "0.1.0",\n  "type": "module",\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "vue": "^3.5.13"\n  },\n  "devDependencies": {\n    "@vitejs/plugin-vue": "^5.2.1",\n    "vite": "^5.4.11",\n    "vue-tsc": "^2.2.0",\n    "typescript": "^5.6.3"\n  }\n}\n'
+  },
+  {
+    group: 'Projet',
+    label: 'package.json (SvelteKit)',
+    icon: '🟠',
+    path: 'package.json',
+    content: '{\n  "name": "{{titre}}",\n  "private": true,\n  "version": "0.1.0",\n  "type": "module",\n  "scripts": {\n    "dev": "vite dev",\n    "build": "vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "@sveltejs/kit": "^2.9.0",\n    "svelte": "^5.16.0"\n  },\n  "devDependencies": {\n    "@sveltejs/adapter-static": "^3.0.8",\n    "vite": "^5.4.11"\n  }\n}\n'
   }
 ]
 
