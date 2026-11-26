@@ -31,7 +31,7 @@ export default function LauncherHome() {
             Skouar<span className="launcher-title-dot">.</span>
           </h1>
           <p className="launcher-subtitle">
-            Tes applications, réunies sur une seule place.
+            <strong>Plein d’applications. Une seule place.</strong>
           </p>
         </div>
       </header>

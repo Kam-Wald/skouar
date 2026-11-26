@@ -1,3 +1,32 @@
+@font-face {
+  font-family: 'Alegreya';
+  src: url('./assets/fonts/alegreya-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alegreya';
+  src: url('./assets/fonts/alegreya-latin-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alegreya';
+  src: url('./assets/fonts/alegreya-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alegreya';
+  src: url('./assets/fonts/alegreya-latin-900-normal.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #0b0f19;
   --panel: #121826;
@@ -4434,11 +4463,12 @@ th.drag-over {
   position: relative;
   z-index: 0;
   margin: 0;
-  font-size: clamp(2.8rem, 8vw, 4.6rem);
-  font-weight: 800;
-  letter-spacing: -0.045em;
+  color: #faf6ed;
+  font-family: "Alegreya", Georgia, serif;
+  font-size: clamp(2.75rem, 7vw, 4.75rem);
+  font-weight: 900;
   line-height: 0.95;
-  color: var(--text);
+  letter-spacing: -0.035em;
 }
 
 .launcher-header .launcher-title::before {
@@ -4453,8 +4483,8 @@ th.drag-over {
 }
 
 .launcher-title-dot {
-  color: var(--accent);
-  text-shadow: 0 0 22px var(--accent);
+  color: #83b8b8;
+  text-shadow: 0 0 22px rgba(131, 184, 184, 0.85);
 }
 
 @media print {
@@ -5298,6 +5328,32 @@ th.drag-over {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tab-btn {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 10px 10px 0 0;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.settings-tab-btn:hover {
+  color: var(--text);
+}
+.settings-tab-btn.active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .settings-body {
@@ -7344,6 +7400,7 @@ th.drag-over {
   flex: none;
   max-height: 132px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .sk-panel-col {
   flex-direction: column;
@@ -7360,14 +7417,20 @@ th.drag-over {
   flex-wrap: wrap;
   gap: 4px 12px;
   max-width: none;
+  width: 100%;
 }
 .sk-fine {
   font-size: 12px;
+  width: 100%;
 }
 .sk-fine-sum {
   cursor: pointer;
   user-select: none;
+  display: inline-block;
 }
 .sk-fine[open] .sk-filters {
   margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 16px;
 }

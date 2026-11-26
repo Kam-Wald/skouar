@@ -113,7 +113,7 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   if (st.filter.sharpen > 0) unsharp(off, st.filter.sharpen)
   if (st.frame.scan) {
     octx.filter = 'none'
-    octx.fillStyle = 'rgba(0,0,0,0.09)'
+    octx.fillStyle = 'rgba(0,0,0,0.16)'
     for (let y = 0; y < g.ih; y += 3) octx.fillRect(0, y, g.iw, 1)
   }
 
@@ -170,8 +170,8 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   }
   if (st.frame.shadow) {
     ctx.shadowColor = 'rgba(0,0,0,0.45)'
-    ctx.shadowBlur = 18
-    ctx.shadowOffsetY = 10
+    ctx.shadowBlur = 24
+    ctx.shadowOffsetY = 12
     ctx.fillStyle = '#000000'
     ctx.fillRect(g.ix, g.iy, g.iw, g.ih)
     ctx.shadowColor = 'transparent'
@@ -226,27 +226,27 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
     ctx.beginPath()
     if (st.frame.stamp) {
       for (let x = g.ix - 4; x <= g.ix + g.iw + 4; x += 10) {
-        ctx.moveTo(x + 3.5, g.iy - 2)
-        ctx.arc(x, g.iy - 2, 3.5, 0, Math.PI * 2)
-        ctx.moveTo(x + 3.5, g.iy + g.ih + 2)
-        ctx.arc(x, g.iy + g.ih + 2, 3.5, 0, Math.PI * 2)
+        ctx.moveTo(x + 4.5, g.iy - 2)
+        ctx.arc(x, g.iy - 2, 4.5, 0, Math.PI * 2)
+        ctx.moveTo(x + 4.5, g.iy + g.ih + 2)
+        ctx.arc(x, g.iy + g.ih + 2, 4.5, 0, Math.PI * 2)
       }
       for (let y = g.iy - 4; y <= g.iy + g.ih + 4; y += 10) {
-        ctx.moveTo(g.ix - 2, y + 3.5)
-        ctx.arc(g.ix - 2, y, 3.5, 0, Math.PI * 2)
-        ctx.moveTo(g.ix + g.iw + 2, y + 3.5)
-        ctx.arc(g.ix + g.iw + 2, y, 3.5, 0, Math.PI * 2)
+        ctx.moveTo(g.ix - 2, y + 4.5)
+        ctx.arc(g.ix - 2, y, 4.5, 0, Math.PI * 2)
+        ctx.moveTo(g.ix + g.iw + 2, y + 4.5)
+        ctx.arc(g.ix + g.iw + 2, y, 4.5, 0, Math.PI * 2)
       }
     }
     if (st.frame.lace) {
-      const r = 5
-      for (let x = 2; x <= g.W - 2; x += 12) {
+      const r = 6.5
+      for (let x = 2; x <= g.W - 2; x += 14) {
         ctx.moveTo(x + r, 1)
         ctx.arc(x, 1, r, 0, Math.PI * 2)
         ctx.moveTo(x + r, g.H - 1)
         ctx.arc(x, g.H - 1, r, 0, Math.PI * 2)
       }
-      for (let y = 2; y <= g.H - 2; y += 12) {
+      for (let y = 2; y <= g.H - 2; y += 14) {
         ctx.moveTo(1, y + r)
         ctx.arc(1, y, r, 0, Math.PI * 2)
         ctx.moveTo(g.W - 1, y + r)
@@ -255,9 +255,9 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
     }
     if (st.frame.film) {
       const fm = Math.max(22, Math.round(h * 0.09))
-      for (let y = g.iy + 6; y < g.iy + g.ih - 8; y += 16) {
-        ctx.rect(g.ix - fm + 5, y, fm - 10, 8)
-        ctx.rect(g.ix + g.iw + 5, y, fm - 10, 8)
+      for (let y = g.iy + 6; y < g.iy + g.ih - 10; y += 18) {
+        ctx.rect(g.ix - fm + 5, y, fm - 10, 10)
+        ctx.rect(g.ix + g.iw + 5, y, fm - 10, 10)
       }
     }
     ctx.fill()
@@ -312,19 +312,19 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
     ctx.strokeRect(g.ix + 1.5, g.iy + 1.5, g.iw - 3, g.ih - 3)
   }
   if (st.frame.sketch) {
-    const amp = Math.max(3, Math.round(Math.min(w, h) * 0.008))
+    const amp = Math.max(4, Math.round(Math.min(w, h) * 0.012))
     ctx.strokeStyle = st.frame.borderColor
-    ctx.lineWidth = 2
+    ctx.lineWidth = 3
     jaggedRect(ctx, g.ix, g.iy, g.iw, g.ih, amp, seed)
     ctx.stroke()
-    ctx.globalAlpha = 0.6
-    ctx.lineWidth = 1.2
+    ctx.globalAlpha = 0.75
+    ctx.lineWidth = 1.6
     jaggedRect(ctx, g.ix + 1.5, g.iy + 1.5, g.iw - 3, g.ih - 3, amp, seed + 7)
     ctx.stroke()
     ctx.globalAlpha = 1
   }
   if (st.frame.corners) {
-    const cs = Math.max(20, Math.round(Math.min(g.iw, g.ih) * 0.07))
+    const cs = Math.max(26, Math.round(Math.min(g.iw, g.ih) * 0.09))
     ctx.fillStyle = st.frame.cornerColor
     ctx.beginPath()
     ctx.moveTo(g.ix, g.iy)
@@ -343,7 +343,7 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   }
   if (st.frame.tape) {
     ctx.save()
-    ctx.fillStyle = 'rgba(250,240,190,0.6)'
+    ctx.fillStyle = 'rgba(250,240,190,0.72)'
     ctx.shadowColor = 'rgba(0,0,0,0.15)'
     ctx.shadowBlur = 4
     ctx.shadowOffsetY = 2
@@ -357,7 +357,7 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
       ctx.save()
       ctx.translate(cx, cy)
       ctx.rotate(rot)
-      ctx.fillRect(-26, -9, 52, 18)
+      ctx.fillRect(-32, -11, 64, 22)
       ctx.restore()
     }
     ctx.restore()
@@ -365,15 +365,15 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   if (st.frame.splatter) {
     const rnd = mulberry32((seed ^ 0x9e3779b9) >>> 0)
     ctx.fillStyle = st.frame.splatColor
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 18; i++) {
       const c = Math.floor(rnd() * 4)
       const cx = c % 2 === 0 ? g.ix : g.ix + g.iw
       const cy = c < 2 ? g.iy : g.iy + g.ih
-      const px = cx + (rnd() * 56 - 28)
-      const py = cy + (rnd() * 56 - 28)
+      const px = cx + (rnd() * 64 - 32)
+      const py = cy + (rnd() * 64 - 32)
       ctx.globalAlpha = 0.55 + rnd() * 0.4
       ctx.beginPath()
-      ctx.arc(px, py, 1 + rnd() * 4.5, 0, Math.PI * 2)
+      ctx.arc(px, py, 1.5 + rnd() * 5.5, 0, Math.PI * 2)
       ctx.fill()
     }
     ctx.globalAlpha = 1
