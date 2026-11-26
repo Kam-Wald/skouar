@@ -58,5 +58,29 @@ export const apps: AppMeta[] = [
     icon: '✏️',
     logo: `${import.meta.env.BASE_URL}app-icons/tres.svg`,
     soon: true
+  },
+  {
+    id: 'kod',
+    name: 'Kod',
+    description: 'Éditeur de code léger et agréable : coloration, onglets, arbre de fichiers, recherche.',
+    icon: '💻',
+    logo: `${import.meta.env.BASE_URL}app-icons/kod.svg`,
+    soon: true
+  },
+  {
+    id: 'kemm',
+    name: 'Kemm',
+    description: 'Convertisseur de fichiers 100 % local (images, audio, CSV/JSON…).',
+    icon: '🔄',
+    logo: `${import.meta.env.BASE_URL}app-icons/kemm.svg`,
+    soon: true
+  },
+  {
+    id: 'eur',
+    name: 'Eur',
+    description: 'Cockpit productivité : minuteurs (Pomodoro…), suivi du temps, kanban, astuces bien-être.',
+    icon: '⏱️',
+    logo: `${import.meta.env.BASE_URL}app-icons/eur.svg`,
+    soon: true
   }
 ]
