@@ -14,7 +14,7 @@ export default defineConfig({
         short_name: 'Skouar',
         description:
           "Lanceur d'apps local-first — première app : Blocs, éditeur de blocs type Notion",
-        theme_color: '#4f46e5',
+        theme_color: '#0d9488',
         background_color: '#0f172a',
         display: 'standalone',
         start_url: '.',

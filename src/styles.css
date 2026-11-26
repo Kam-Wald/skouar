@@ -2170,6 +2170,8 @@ th.drag-over {
 }
 
 .launcher {
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, 0.3);
   background:
     radial-gradient(1100px 520px at 50% -12%, var(--accent-soft), transparent 62%),
     var(--bg);
@@ -4415,7 +4417,7 @@ th.drag-over {
   width: 84px;
   height: 84px;
   border-radius: 22px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 14px 48px -12px var(--accent-soft);
   flex: 0 0 auto;
 }
 
@@ -4452,6 +4454,7 @@ th.drag-over {
 
 .launcher-title-dot {
   color: var(--accent);
+  text-shadow: 0 0 22px var(--accent);
 }
 
 @media print {
