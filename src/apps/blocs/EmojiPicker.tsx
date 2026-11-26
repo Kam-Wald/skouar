@@ -13,13 +13,6 @@ export const EMOJIS = [
   '🧲','🧽','🪄','🤖','🎰','🎪','🧸','🪁','🛸','🚁','🌵','👍','🤝','🐙','🦀','🐋','🦄','🐹','🐹','🦔','🥑','🍉'
 ]
 
-export const PICTS = [
-  '▲','△','●','○','■','□','◆','◇','★','☆','☾','♠','♣','♦','♞','♜','♟','♚',
-  '⚙','✚','➤','➔','⇧','⇩','⇦','⇨','⌘','⌥','⏏','⎋','♺','♻',
-  '≡','≠','≤','≥','±','×','÷','∞','∑','√','∫','π','Ω','∆','∇','∂','µ',
-  '→','←','↑','↓','↔','∴','∵','∩','∪','∈','⊂'
-]
-
 export default function EmojiPicker({
   currentColor,
   onPick,
@@ -51,15 +44,7 @@ export default function EmojiPicker({
           </button>
         ))}
       </div>
-      <div className="emoji-sec">Pictos (recolorables)</div>
-      <div className="emoji-grid">
-        {PICTS.map((e) => (
-          <button key={e} style={color !== 'transparent' ? { color } : undefined} onClick={() => onPick(e, color)}>
-            {e}
-          </button>
-        ))}
-      </div>
-      <div className="emoji-sec">Icônes (Lucide)</div>
+      <div className="emoji-sec">Icônes</div>
       <div className="emoji-grid">
         {LUCIDE_NAMES.map((n) => {
           const C = LUCIDE[n]

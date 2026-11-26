@@ -29,7 +29,7 @@ import ThemeButton from '../../ThemeButton'
 import GraphView from './GraphView'
 import DashboardView from './DashboardView'
 import { exportPageHtml } from './share'
-import AppIcon from './Icon'
+import AppIcon, { isEmojiIcon } from './Icon'
 import { notify } from './notify'
 import { exportPagePdf } from './pdf'
 
@@ -85,7 +85,6 @@ export default function BlocsApp() {
   const [tplOpen, setTplOpen] = useState(false)
   const [showTrash, setShowTrash] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
-  const [bellOpen, setBellOpen] = useState(false)
   const [dashOpen, setDashOpen] = useState(false)
   const [sideW, setSideW] = useState(() => {
     const v = Number(localStorage.getItem('skouar:sidebarW'))
@@ -403,7 +402,6 @@ export default function BlocsApp() {
   useDismiss('icon', iconOpen, () => setIconOpen(false))
   useDismiss('tags', tagsOpen, () => setTagsOpen(false))
   useDismiss('cover', !!coverMenu, () => setCoverMenu(null))
-  useDismiss('bell', bellOpen, () => setBellOpen(false))
   useDismiss('tpl', tplOpen, () => setTplOpen(false))
   useDismiss('slash', slashOpen, () => setSlashDismissed(true))
   useDismiss('mention', mentionOpen, () => setMentionDismissed(true))
@@ -906,16 +904,31 @@ export default function BlocsApp() {
             ))}
           </select>
         )}
-        <button
+        <div
           className={`rappels-row${soon48.length > 0 ? ' has-soon' : ''}`}
-          data-pop="bell"
-          onClick={() => setBellOpen((o) => !o)}
           title={`${dueTodos.length} rappel(s) — ${overdue.length} en retard, ${soon48.length} dans les 48 h`}
         >
           <span className="rappels-dot" />
           <span>🔔 Rappels</span>
           {dueTodos.length > 0 && <span className="db-type">{dueTodos.length}</span>}
-        </button>
+        </div>
+        {!showTrash && dueTodos.length > 0 && (
+          <div className="rappels-list">
+            {dueTodos.map(({ page, block }) => (
+              <button
+                key={block.id}
+                className="link-item rappels-item"
+                onClick={() => {
+                  setState((s) => (s ? { ...s, currentPageId: page.id } : s))
+                  setSidebarOpen(false)
+                  setTimeout(() => document.getElementById(`bloc-${block.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+                }}
+              >
+                ⏰ {block.due?.replace('T', ' ')} — {stripHtml(block.text) || 'Tâche'} <span className="db-type">({stripHtml(page.title).trim() || 'page'})</span>
+              </button>
+            ))}
+          </div>
+        )}
         {!showTrash && pinnedPages.length > 0 && (
           <>
             <div className="blocs-side-label">Favoris</div>
@@ -992,7 +1005,7 @@ export default function BlocsApp() {
                         className={`blocs-page-item${p.id === current.id ? ' selected' : ''}`}
                         onClick={() => setState((s) => (s ? { ...s, currentPageId: p.id } : s))}
                       >
-                        {p.icon && <span className="blocs-page-icon" style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}><AppIcon icon={p.icon} size={14} color={p.iconColor ?? undefined} /></span>}
+                        {p.icon && <span className="blocs-page-icon" style={p.iconColor && isEmojiIcon(p.icon) ? { backgroundColor: p.iconColor } : undefined}><AppIcon icon={p.icon} size={14} color={p.iconColor ?? undefined} /></span>}
                         {stripHtml(p.title).trim() || 'Sans titre'}
                       </button>
                     </div>
@@ -1043,8 +1056,11 @@ export default function BlocsApp() {
             </button>
           </>
         )}
+        <div className="saved-line">
+          <span className={`saved-check${savedAt ? ' on' : ''}`}>✓</span> enregistré
+          {savedAt && <span className="saved-time">{relTime(savedAt)}</span>}
+        </div>
         <div className="blocs-sidebar-foot">
-          <span className="saved-ind" title={savedAt ? `Dernier enregistrement : ${relTime(savedAt)}` : 'Enregistrement…'}>✓</span>
           <ThemeButton />
           <div className="sync-wrap" data-pop="sync">
             <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P (code de salon)">
@@ -1134,7 +1150,7 @@ export default function BlocsApp() {
           <div className="page-icon-wrap" data-pop="icon">
             <button
               className="page-icon-btn"
-              style={current.iconColor ? { backgroundColor: current.iconColor } : undefined}
+              style={current.iconColor && isEmojiIcon(current.icon ?? '') ? { backgroundColor: current.iconColor } : undefined}
               title="Icône de la page"
               onClick={() => setIconOpen((o) => !o)}
             >
@@ -1378,29 +1394,6 @@ export default function BlocsApp() {
             onSelect={(c) => updatePage(current.id, { cover: c })}
             onClose={() => setCoverMenu(null)}
           />
-        )}
-        {bellOpen && (
-          <div className="tpl-pop bell-pop" data-pop="bell">
-            <div className="tpl-head">
-              <strong>🔔 Rappels (tâches avec date)</strong>
-              <button className="db-btn" onClick={() => setBellOpen(false)}>✕</button>
-            </div>
-            {dueTodos.length === 0 && <p className="db-empty">Aucune tâche avec rappel — clique ⏰ sur une tâche</p>}
-            {dueTodos.map(({ page, block }) => (
-              <button
-                key={block.id}
-                className="link-item"
-                onClick={() => {
-                  setState((s) => (s ? { ...s, currentPageId: page.id } : s))
-                  setBellOpen(false)
-                  setSidebarOpen(false)
-                  setTimeout(() => document.getElementById(`bloc-${block.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
-                }}
-              >
-                ⏰ {block.due?.replace('T', ' ')} — {stripHtml(block.text) || 'Tâche'} <span className="db-type">({stripHtml(page.title).trim() || 'page'})</span>
-              </button>
-            ))}
-          </div>
         )}
         {graphOpen && (
           <GraphView

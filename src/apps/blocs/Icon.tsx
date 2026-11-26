@@ -23,6 +23,13 @@ export function isLucideIcon(icon: string): boolean {
   return icon.startsWith('lucide:')
 }
 
+export function isEmojiIcon(icon: string): boolean {
+  return (
+    !icon.startsWith('lucide:') &&
+    /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{25A0}-\u{25FF}\u{2190}-\u{21FF}\u{2B50}-\u{2B55}]/u.test(icon)
+  )
+}
+
 export default function AppIcon({
   icon,
   size = 18,
@@ -32,10 +39,11 @@ export default function AppIcon({
   size?: number
   color?: string | null
 }) {
+  const glyphColor = isEmojiIcon(icon) ? undefined : color ?? undefined
   if (isLucideIcon(icon)) {
     const C = LUCIDE[icon.slice(7)]
-    if (C) return <C size={size} strokeWidth={2} style={color ? { color } : undefined} />
+    if (C) return <C size={size} strokeWidth={2} style={glyphColor ? { color: glyphColor } : undefined} />
     return <span>{icon.slice(7)}</span>
   }
-  return <span style={color && !/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u.test(icon) ? { color } : undefined}>{icon}</span>
+  return <span style={glyphColor ? { color: glyphColor } : undefined}>{icon}</span>
 }

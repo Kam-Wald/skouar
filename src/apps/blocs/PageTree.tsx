@@ -1,6 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import type { Page } from './types'
-import AppIcon from './Icon'
+import AppIcon, { isEmojiIcon } from './Icon'
 
 export default function PageTree({
   pages,
@@ -73,7 +73,7 @@ export default function PageTree({
                 {p.icon && (
                   <span
                     className="blocs-page-icon"
-                    style={p.iconColor ? { backgroundColor: p.iconColor } : undefined}
+                    style={p.iconColor && isEmojiIcon(p.icon ?? '') ? { backgroundColor: p.iconColor } : undefined}
                   >
                     <AppIcon icon={p.icon} size={14} color={p.iconColor ?? undefined} />
                   </span>
