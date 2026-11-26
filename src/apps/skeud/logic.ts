@@ -96,6 +96,25 @@ export interface FrameParams {
   letterbox: boolean
   bars: number
   circle: boolean
+  double: boolean
+  torn: boolean
+  burnt: boolean
+  tape: boolean
+  corners: boolean
+  cornerColor: string
+  sketch: boolean
+  stamp: boolean
+  stampColor: string
+  film: boolean
+  shadow: boolean
+  neon: boolean
+  neonColor: string
+  wood: boolean
+  gold: boolean
+  lace: boolean
+  splatter: boolean
+  splatColor: string
+  scan: boolean
 }
 
 export const DEFAULT_FRAME: FrameParams = {
@@ -103,7 +122,49 @@ export const DEFAULT_FRAME: FrameParams = {
   rounded: false, radius: 24,
   vignette: false, vig: 0.45,
   mat: false, matColor: '#ffffff', matSize: 48,
-  polaroid: false, letterbox: false, bars: 0.12, circle: false
+  polaroid: false, letterbox: false, bars: 0.12, circle: false, double: false, torn: false, burnt: false,
+  tape: false, corners: false, cornerColor: '#f3e2b3', sketch: false,
+  stamp: false, stampColor: '#f6efe2', film: false, shadow: false,
+  neon: false, neonColor: '#39ffd8', wood: false, gold: false, lace: false,
+  splatter: false, splatColor: '#1a1a2e', scan: false
+}
+
+export interface FrameMargins {
+  side: number
+  top: number
+  bottom: number
+  edge: number
+}
+
+export function frameMargins(w: number, h: number, frame: FrameParams): FrameMargins {
+  const edge = frame.torn || frame.burnt ? Math.max(10, Math.round(Math.min(w, h) * 0.04)) : 0
+  const mat = frame.mat ? frame.matSize : 0
+  let side = mat + edge
+  let top = side
+  let bottom = (frame.polaroid ? mat * 2.5 : mat) + edge
+  if (frame.stamp) {
+    const m = Math.max(16, Math.round(Math.min(w, h) * 0.06))
+    side += m
+    top += m
+    bottom += m
+  }
+  if (frame.lace) {
+    const m = Math.max(12, Math.round(Math.min(w, h) * 0.045))
+    side += m
+    top += m
+    bottom += m
+  }
+  if (frame.shadow) {
+    side += 26
+    top += 22
+    bottom += 34
+  }
+  if (frame.film) {
+    side += Math.max(22, Math.round(h * 0.09))
+    top += 8
+    bottom += 8
+  }
+  return { side, top, bottom, edge }
 }
 
 export interface FrameGeom {
@@ -117,26 +178,26 @@ export interface FrameGeom {
   circle: boolean
   bars: number
   vig: number
+  edge: number
 }
 
 export function frameGeom(w: number, h: number, frame: FrameParams): FrameGeom {
-  const side = frame.mat ? frame.matSize : 0
-  const top = side
-  const bottom = frame.polaroid ? side * 2.5 : side
+  const m = frameMargins(w, h, frame)
   const bars = frame.letterbox ? Math.round(h * frame.bars) : 0
   const iw = w
   const ih = h
   return {
-    W: iw + 2 * side,
-    H: ih + top + bottom + 2 * bars,
-    ix: side,
-    iy: top + bars,
+    W: iw + 2 * m.side,
+    H: ih + m.top + m.bottom + 2 * bars,
+    ix: m.side,
+    iy: m.top + bars,
     iw,
     ih,
     radius: frame.rounded ? Math.min(frame.radius, Math.min(w, h) / 2) : 0,
     circle: frame.circle,
     bars,
-    vig: frame.vignette ? frame.vig : 0
+    vig: frame.vignette ? frame.vig : 0,
+    edge: m.edge
   }
 }
 
@@ -235,7 +296,17 @@ export const FILTER_PRESETS: FilterPreset[] = [
   { label: 'Dramatique', icon: '🎭', filter: { ...DEFAULT_FILTERS, contrast: 1.35, saturation: 1.15, brightness: 0.95 } },
   { label: 'Doux', icon: '🌫️', filter: { ...DEFAULT_FILTERS, brightness: 1.1, contrast: 0.85, saturation: 0.85, blur: 0.6 } },
   { label: 'Éclatant', icon: '🌈', filter: { ...DEFAULT_FILTERS, saturation: 1.5, contrast: 1.1 } },
-  { label: 'Rétro', icon: '📼', filter: { ...DEFAULT_FILTERS, sepia: 0.5, hue: -25, contrast: 1.1, saturation: 0.8 } }
+  { label: 'Rétro', icon: '📼', filter: { ...DEFAULT_FILTERS, sepia: 0.5, hue: -25, contrast: 1.1, saturation: 0.8 } },
+  { label: 'Coucher de soleil', icon: '🌇', filter: { ...DEFAULT_FILTERS, sepia: 0.45, hue: -35, saturation: 1.4, contrast: 1.12, brightness: 1.02 } },
+  { label: 'Menthe', icon: '🌿', filter: { ...DEFAULT_FILTERS, hue: 110, saturation: 0.75, brightness: 1.06 } },
+  { label: 'Lavande', icon: '💜', filter: { ...DEFAULT_FILTERS, hue: 265, saturation: 0.65, brightness: 1.07 } },
+  { label: 'Glacier', icon: '🧊', filter: { ...DEFAULT_FILTERS, hue: 185, saturation: 0.55, brightness: 1.12, contrast: 0.95 } },
+  { label: 'Négatif', icon: '🔃', filter: { ...DEFAULT_FILTERS, invert: 1 } },
+  { label: 'Flou artistique', icon: '🎨', filter: { ...DEFAULT_FILTERS, blur: 3, contrast: 0.9, saturation: 0.9 } },
+  { label: 'Pastel', icon: '🍦', filter: { ...DEFAULT_FILTERS, saturation: 0.5, brightness: 1.12, contrast: 0.92 } },
+  { label: 'Photo ancienne', icon: '🪞', filter: { ...DEFAULT_FILTERS, sepia: 0.85, contrast: 0.85, brightness: 1.05, blur: 0.4 } },
+  { label: 'Noir & or', icon: '🏅', filter: { ...DEFAULT_FILTERS, grayscale: 1, sepia: 0.3, contrast: 1.4, brightness: 1.02 } },
+  { label: 'Néon', icon: '💡', filter: { ...DEFAULT_FILTERS, saturation: 2, contrast: 1.25, brightness: 1.06, hue: 300 } }
 ]
 
 export interface FramePreset {
@@ -251,27 +322,37 @@ const F = (o: Partial<FrameParams>): FrameParams => ({ ...DEFAULT_FRAME, ...o })
 
 export const FRAME_PRESETS: FramePreset[] = [
   { id: 'none', label: 'Aucun', icon: '⬜', hint: 'Image telle quelle', frame: F({}) },
-  { id: 'border-white', label: 'Filet blanc', icon: '▭', hint: 'Bordure = fine ligne collée SUR le bord de l’image', frame: F({ border: true, borderColor: '#ffffff', borderWidth: 8 }) },
-  { id: 'border-black', label: 'Filet noir', icon: '▬', hint: 'Ligne noire fine sur le bord', frame: F({ border: true, borderColor: '#111111', borderWidth: 8 }) },
-  { id: 'border-accent', label: 'Filet accent', icon: '🟪', hint: 'Ligne couleur primaire', frame: F({ border: true, borderColor: '#4f46e5', borderWidth: 12 }) },
-  { id: 'border-thick', label: 'Cadre épais', icon: '🟥', hint: 'Grosse bordure noire', frame: F({ border: true, borderColor: '#111111', borderWidth: 28 }) },
-  { id: 'rounded-soft', label: 'Coins doux', icon: '◻️', hint: 'Coins arrondis 24 px', frame: F({ rounded: true, radius: 24 }) },
-  { id: 'rounded-strong', label: 'Coins forts', icon: '🔲', hint: 'Coins arrondis 80 px', frame: F({ rounded: true, radius: 80 }) },
-  { id: 'rounded-pill', label: 'Pilule', icon: '💊', hint: 'Coins au maximum (ovale)', frame: F({ rounded: true, radius: 9999 }) },
-  { id: 'vignette-soft', label: 'Vignette douce', icon: '🌑', hint: 'Assombrissement léger des bords', frame: F({ vignette: true, vig: 0.3 }) },
-  { id: 'vignette-strong', label: 'Vignette forte', icon: '⚫', hint: 'Bords bien assombris', frame: F({ vignette: true, vig: 0.7 }) },
-  { id: 'mat-white', label: 'Passe-partout blanc', icon: '🖼️', hint: 'Passe-partout = MARGE autour de l’image (façon encadré)', frame: F({ mat: true, matColor: '#ffffff', matSize: 48 }) },
-  { id: 'mat-cream', label: 'Passe-partout crème', icon: '🟨', hint: 'Marge crème, style ancien', frame: F({ mat: true, matColor: '#f5f0e6', matSize: 64 }) },
-  { id: 'mat-black', label: 'Passe-partout noir', icon: '⬛', hint: 'Marge noire, galerie', frame: F({ mat: true, matColor: '#111111', matSize: 48 }) },
-  { id: 'polaroid', label: 'Polaroid', icon: '📸', hint: 'Marge blanche épaisse en bas, façon photo instantanée', frame: F({ mat: true, matColor: '#ffffff', matSize: 36, polaroid: true }) },
-  { id: 'letterbox', label: 'Cinémascope', icon: '🎬', hint: 'Bandes noires haut/bas (16:9 → 2.35:1)', frame: F({ letterbox: true, bars: 0.12 }) },
-  { id: 'circle', label: 'Cercle', icon: '⭕', hint: 'Image découpée en disque', frame: F({ circle: true }) },
-  { id: 'frame-rounded', label: 'Cadre + coins', icon: '🪞', hint: 'Bordure noire + coins arrondis', frame: F({ border: true, borderColor: '#111111', borderWidth: 10, rounded: true, radius: 32 }) },
-  { id: 'mat-border', label: 'Encastré', icon: '🗃️', hint: 'Marge blanche + filet intérieur', frame: F({ mat: true, matColor: '#ffffff', matSize: 40, border: true, borderColor: '#111111', borderWidth: 4 }) },
+  { id: 'border', label: 'Filet', icon: '▭', hint: 'Ligne SUR le bord — couleur et épaisseur réglables à côté', frame: F({ border: true, borderColor: '#111111', borderWidth: 8 }) },
+  { id: 'double', label: 'Double cadre décalé', icon: '🪟', hint: 'Deux filets décalés, effet galerie', frame: F({ border: true, borderColor: '#111111', borderWidth: 6, double: true }) },
+  { id: 'rounded', label: 'Coins arrondis', icon: '◻️', hint: 'Rayon réglable à côté (9999 = pilule)', frame: F({ rounded: true, radius: 32 }) },
+  { id: 'vignette', label: 'Vignette', icon: '🌑', hint: 'Bords assombris — intensité réglable', frame: F({ vignette: true, vig: 0.45 }) },
+  { id: 'mat', label: 'Passe-partout', icon: '🖼️', hint: 'MARGE autour de l’image — couleur et taille réglables', frame: F({ mat: true, matColor: '#ffffff', matSize: 48 }) },
+  { id: 'polaroid', label: 'Polaroid', icon: '📸', hint: 'Marge blanche épaisse en bas', frame: F({ mat: true, matColor: '#ffffff', matSize: 36, polaroid: true }) },
+  { id: 'letterbox', label: 'Cinémascope', icon: '🎬', hint: 'Bandes noires haut/bas', frame: F({ letterbox: true, bars: 0.12 }) },
+  { id: 'circle', label: 'Cercle', icon: '⭕', hint: 'Image en disque', frame: F({ circle: true }) },
+  { id: 'torn', label: 'Papier déchiré', icon: '📄', hint: 'Bord déchiqueté façon papier arraché', frame: F({ torn: true }) },
+  { id: 'burnt', label: 'Papier brûlé', icon: '🕯️', hint: 'Bord brûlé, cendré', frame: F({ burnt: true }) },
+  { id: 'mat-border', label: 'Encastré', icon: '🗃️', hint: 'Marge + filet intérieur', frame: F({ mat: true, matColor: '#ffffff', matSize: 40, border: true, borderColor: '#111111', borderWidth: 4 }) },
   { id: 'vintage-frame', label: 'Vintage', icon: '🕰️', hint: 'Sépia + vignette + filet crème', frame: F({ vignette: true, vig: 0.4, border: true, borderColor: '#f5f0e6', borderWidth: 6 }), filter: { ...DEFAULT_FILTERS, sepia: 0.45, contrast: 0.95, brightness: 1.05 } },
   { id: 'noir-dramatique', label: 'Noir dramatique', icon: '🎞️', hint: 'N&B + contraste + vignette', frame: F({ vignette: true, vig: 0.55 }), filter: { ...DEFAULT_FILTERS, grayscale: 1, contrast: 1.3, brightness: 0.95 } }
+,
+  { id: 'tape', label: 'Ruban adhésif', icon: '🖇️', hint: 'Morceaux de scotch aux 4 coins', frame: F({ tape: true }) },
+  { id: 'corners', label: 'Coins photo', icon: '📐', hint: 'Triangles d’album aux coins', frame: F({ corners: true, cornerColor: '#f3e2b3' }) },
+  { id: 'sketch', label: 'Griffonné', icon: '✏️', hint: 'Contour dessiné à main levée', frame: F({ sketch: true, borderColor: '#222222' }) },
+  { id: 'stamp', label: 'Timbre postal', icon: '💌', hint: 'Marge couleur + perforations', frame: F({ stamp: true, stampColor: '#f6efe2' }) },
+  { id: 'film', label: 'Pellicule 35 mm', icon: '🎞️', hint: 'Bandes noires + perforations latérales', frame: F({ film: true }) },
+  { id: 'shadow', label: 'Ombre portée', icon: '🌑', hint: 'Ombre douce sous la photo', frame: F({ shadow: true }) },
+  { id: 'neon', label: 'Néon', icon: '💡', hint: 'Lueur colorée sur fond sombre', frame: F({ neon: true, neonColor: '#39ffd8' }) },
+  { id: 'wood', label: 'Cadre bois', icon: '🪵', hint: 'Anneau en dégradé bois', frame: F({ wood: true, borderWidth: 26 }) },
+  { id: 'gold', label: 'Doré', icon: '👑', hint: 'Filet dégradé or + double filet', frame: F({ gold: true, borderWidth: 14, double: true }) },
+  { id: 'lace', label: 'Dentelle', icon: '🧵', hint: 'Bord festonné façon napperon', frame: F({ lace: true }) },
+  { id: 'splatter', label: 'Éclaboussures', icon: '🖌️', hint: 'Taches d’encre + contour griffonné', frame: F({ splatter: true, splatColor: '#1a1a2e', sketch: true }) },
+  { id: 'scan', label: 'Rétro TV', icon: '📺', hint: 'Lignes de balayage + coins arrondis + vignette', frame: F({ scan: true, rounded: true, radius: 18, vignette: true, vig: 0.3 }) },
+  { id: 'instax', label: 'Instax', icon: '⬜', hint: 'Bord blanc épais, coins arrondis', frame: F({ mat: true, matColor: '#ffffff', matSize: 16, rounded: true, radius: 14 }) },
+  { id: 'comic', label: 'BD', icon: '💥', hint: 'Gros filet noir sur marge blanche', frame: F({ mat: true, matColor: '#ffffff', matSize: 8, border: true, borderColor: '#111111', borderWidth: 14 }) },
+  { id: 'grunge', label: 'Grunge', icon: '🗞️', hint: 'Déchiré + griffonné + taches', frame: F({ torn: true, sketch: true, splatter: true, splatColor: '#2b2b2b' }) },
+  { id: 'mat-gold', label: 'Passe-partout doré', icon: '🏅', hint: 'Marge crème + filet doré', frame: F({ mat: true, matColor: '#f7f2e7', matSize: 42, gold: true, borderWidth: 8 }) }
 ]
-
 export const framePresetOf = (frame: FrameParams): FramePreset | undefined =>
   FRAME_PRESETS.find((p) => JSON.stringify(p.frame) === JSON.stringify(frame))
 

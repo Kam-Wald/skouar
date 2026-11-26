@@ -38,6 +38,16 @@ const FILTER_SLIDERS: { key: 'brightness' | 'contrast' | 'saturation' | 'sepia' 
   { key: 'sharpen', label: 'Netteté', min: 0, max: 1, step: 0.05, unit: '' }
 ]
 
+type TabId = 'ajuster' | 'filtres' | 'cadres' | 'calques' | 'exporter'
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'ajuster', label: 'Ajuster', icon: '✂️' },
+  { id: 'filtres', label: 'Filtres', icon: '🎨' },
+  { id: 'cadres', label: 'Cadres', icon: '🖼️' },
+  { id: 'calques', label: 'Calques', icon: '🧩' },
+  { id: 'exporter', label: 'Exporter', icon: '⬇️' }
+]
+
 export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): JSX.Element {
   const [bmp, setBmp] = useState<ImageBitmap | null>(null)
   const [st, setSt] = useState<EditState>({ ...DEFAULT_EDIT, filter: { ...DEFAULT_EDIT.filter }, frame: { ...DEFAULT_EDIT.frame }, layers: [] })
@@ -56,6 +66,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
   const [selLayer, setSelLayer] = useState<string | null>(null)
   const [dragLayer, setDragLayer] = useState<{ id: string; offX: number; offY: number } | null>(null)
   const [estSize, setEstSize] = useState('')
+  const [tab, setTab] = useState<TabId>('ajuster')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const geomRef = useRef<{ g: FrameGeom; s: number; fit: number } | null>(null)
@@ -103,7 +114,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
     const c = canvasRef.current
     c.width = Math.max(1, Math.round(preview.width * s))
     c.height = Math.max(1, Math.round(preview.height * s))
-    geomRef.current = { g: { W: preview.width, H: preview.height, ix: 0, iy: 0, iw: preview.width, ih: preview.height, radius: 0, circle: false, bars: 0, vig: 0 }, s, fit }
+    geomRef.current = { g: { W: preview.width, H: preview.height, ix: 0, iy: 0, iw: preview.width, ih: preview.height, radius: 0, circle: false, bars: 0, vig: 0, edge: 0 }, s, fit }
     const cx = c.getContext('2d')!
     cx.imageSmoothingQuality = 'high'
     cx.clearRect(0, 0, c.width, c.height)
@@ -351,7 +362,17 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
           </button>
         </div>
         <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
+        <div className="sk-tabs">
+          {TABS.map((t) => (
+            <button key={t.id} className={`sk-tab-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'ajuster' && (
+        <div className="sk-panel">
           <button
             className={`sk-btn${cropMode ? ' primary' : ''}`}
             disabled={st.rot !== 0}
@@ -377,54 +398,73 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
               ✕ Annuler le recadrage ({st.crop.w}×{st.crop.h})
             </button>
           )}
-        </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
+          <div className="sk-tb-sep" />
           <button className="sk-btn" title="Pivoter 90°" onClick={() => push({ ...st, rot: ((st.rot + 90) % 360) as EditState['rot'] })}>⟳ 90°</button>
           <button className="sk-btn" title="Miroir horizontal" onClick={() => push({ ...st, flipH: !st.flipH })}>🪞 H</button>
           <button className="sk-btn" title="Miroir vertical" onClick={() => push({ ...st, flipV: !st.flipV })}>🪞 V</button>
+          <div className="sk-tb-sep" />
+          <label className="sk-num">
+            Largeur
+            <input
+              type="number"
+              min={1}
+              max={16000}
+              placeholder={String(img.w)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const w = Number((e.target as HTMLInputElement).value)
+                  if (w > 0) push({ ...st, size: { w, h: Math.round((img.h / img.w) * w) } })
+                }
+              }}
+            />
+          </label>
+          {st.size && (
+            <button className="sk-btn ghost" onClick={() => push({ ...st, size: null })}>Taille d'origine</button>
+          )}
         </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
-          <button className="sk-btn" title="Ajouter un calque texte" onClick={addText}>T Texte</button>
-          <button className="sk-btn" title="Ajouter un sticker" onClick={() => addSticker(STICKERS[0])}>😄 Sticker</button>
-          {st.layers.length > 0 && <span className="sk-tb-label">{st.layers.length} calque(s) — glisse-les sur l’image</span>}
+      )}
+
+      {tab === 'filtres' && (
+        <div className="sk-panel sk-panel-col">
+          <span className="sk-preset-row sk-preset-wrap">
+            {FILTER_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                className={`sk-preset${JSON.stringify(st.filter) === JSON.stringify(p.filter) ? ' active' : ''}`}
+                title={`Filtre ${p.label}`}
+                onClick={() => push({ ...st, filter: { ...p.filter } })}
+              >
+                {p.icon} {p.label}
+              </button>
+            ))}
+          </span>
+          <details className="sk-fine">
+            <summary className="sk-tb-label sk-fine-sum">Réglages fins ▾</summary>
+            <div className="sk-filters">
+              {FILTER_SLIDERS.map((sl) => (
+                <label key={sl.key} className="sk-slider">
+                  <span>{sl.label}</span>
+                  <input
+                    type="range"
+                    min={sl.min}
+                    max={sl.max}
+                    step={sl.step}
+                    value={st.filter[sl.key]}
+                    onChange={(e) => push({ ...st, filter: { ...st.filter, [sl.key]: Number(e.target.value) } })}
+                  />
+                  <span className="sk-slider-val">
+                    {sl.key === 'hue' ? `${Math.round(st.filter.hue)}°` : sl.key === 'temp' ? `${st.filter.temp > 0 ? '+' : ''}${Math.round(st.filter.temp)}` : sl.key === 'sharpen' ? Math.round(st.filter.sharpen * 100) + '%' : `${Math.round(st.filter[sl.key] * 100)}${sl.unit}`}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
         </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group sk-presets">
-          {FILTER_PRESETS.map((p) => (
-            <button
-              key={p.label}
-              className={`sk-preset${JSON.stringify(st.filter) === JSON.stringify(p.filter) ? ' active' : ''}`}
-              title={`Filtre ${p.label}`}
-              onClick={() => push({ ...st, filter: { ...p.filter } })}
-            >
-              {p.icon} {p.label}
-            </button>
-          ))}
-        </div>
-        <div className="sk-tb-group sk-filters">
-          {FILTER_SLIDERS.map((sl) => (
-            <label key={sl.key} className="sk-slider">
-              <span>{sl.label}</span>
-              <input
-                type="range"
-                min={sl.min}
-                max={sl.max}
-                step={sl.step}
-                value={st.filter[sl.key]}
-                onChange={(e) => push({ ...st, filter: { ...st.filter, [sl.key]: Number(e.target.value) } })}
-              />
-              <span className="sk-slider-val">
-                {sl.key === 'hue' ? `${Math.round(st.filter.hue)}°` : sl.key === 'temp' ? `${st.filter.temp > 0 ? '+' : ''}${Math.round(st.filter.temp)}` : sl.key === 'sharpen' ? Math.round(st.filter.sharpen * 100) + '%' : `${Math.round(st.filter[sl.key] * 100)}${sl.unit}`}
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group sk-frames">
-          <span className="sk-tb-label">Cadre</span>
-          <span className="sk-preset-row">
+      )}
+
+      {tab === 'cadres' && (
+        <div className="sk-panel sk-panel-col">
+          <span className="sk-preset-row sk-preset-wrap">
             {FRAME_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -436,8 +476,8 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
               </button>
             ))}
           </span>
-          <span className="sk-frame-hint">Bordure = filet SUR l’image · Passe-partout = marge AUTOUR</span>
-          {(st.frame.border || st.frame.rounded || st.frame.vignette || st.frame.mat) && (
+          <span className="sk-frame-hint">Filet = ligne SUR l’image · Passe-partout = marge AUTOUR · Déchiré / Brûlé = bord irrégulier</span>
+          {(st.frame.border || st.frame.rounded || st.frame.vignette || st.frame.mat || st.frame.double || st.frame.torn || st.frame.burnt) && (
             <span className="sk-frame-custom">
               {st.frame.border && (
                 <>
@@ -458,44 +498,49 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
                   <label className="sk-check"><input type="checkbox" checked={st.frame.polaroid} onChange={(e) => push({ ...st, frame: { ...st.frame, polaroid: e.target.checked } })} /> polaroid</label>
                 </>
               )}
+              <label className="sk-check"><input type="checkbox" checked={st.frame.double} onChange={(e) => push({ ...st, frame: { ...st.frame, double: e.target.checked } })} /> double</label>
+              <label className="sk-check"><input type="checkbox" checked={st.frame.torn} onChange={(e) => push({ ...st, frame: { ...st.frame, torn: e.target.checked } })} /> déchiré</label>
+              <label className="sk-check"><input type="checkbox" checked={st.frame.burnt} onChange={(e) => push({ ...st, frame: { ...st.frame, burnt: e.target.checked } })} /> brûlé</label>
             </span>
           )}
         </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
-          <label className="sk-num">
-            Largeur
-            <input
-              type="number"
-              min={1}
-              max={16000}
-              placeholder={String(img.w)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const w = Number((e.target as HTMLInputElement).value)
-                  if (w > 0) push({ ...st, size: { w, h: Math.round((img.h / img.w) * w) } })
-                }
-              }}
-            />
-          </label>
-          {st.size && (
-            <button className="sk-btn ghost" onClick={() => push({ ...st, size: null })}>Taille d'origine</button>
+      )}
+
+      {tab === 'calques' && (
+        <div className="sk-panel">
+          <button className="sk-btn" title="Ajouter un calque texte" onClick={addText}>T Texte</button>
+          <button className="sk-btn" title="Ajouter un sticker" onClick={() => addSticker(STICKERS[0])}>😄 Sticker</button>
+          {st.layers.length > 0 && (
+            <>
+              <div className="sk-tb-sep" />
+              <span className="sk-preset-row sk-preset-wrap">
+                {st.layers.map((l) => (
+                  <button key={l.id} className={`sk-preset${selLayer === l.id ? ' active' : ''}`} title="Sélectionner ce calque" onClick={() => setSelLayer(l.id)}>
+                    {l.kind === 'text' ? 'T' : l.emoji} {l.kind === 'text' ? ((l as TextLayer).text.split('\n')[0].slice(0, 18) || 'Texte') : 'sticker'}
+                  </button>
+                ))}
+              </span>
+              <span className="sk-frame-hint">Sélectionne un calque, puis glisse-le sur l’image</span>
+            </>
           )}
         </div>
-        <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
+      )}
+
+      {tab === 'exporter' && (
+        <div className="sk-panel">
           <select className="sk-input" value={fmtIdx} onChange={(e) => setFmtIdx(Number(e.target.value))} title="Format d'export">
             {EXPORT_FORMATS.map((f, i) => (
               <option key={f.ext} value={i}>{f.label}</option>
             ))}
           </select>
-          <button className="sk-btn primary" onClick={() => void exportCurrent(false)}>⬇ Exporter{estSize ? ` ≈ ${estSize}` : ''}</button>
+          <button className="sk-btn primary" onClick={() => void exportCurrent(false)}>
+            ⬇ Exporter{estSize ? ` ≈ ${estSize}` : ''}
+          </button>
           <button className="sk-btn" title="Remplacer l'image dans la bibliothèque (l'original est conservé)" onClick={() => void exportCurrent(true)}>
             💾 Enregistrer
           </button>
         </div>
-      </div>
-
+      )}
       {layer && (
         <div className="sk-layer-panel">
           <div className="sk-layer-head">

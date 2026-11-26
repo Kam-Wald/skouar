@@ -77,8 +77,8 @@ describe('skeud logic', () => {
 })
 
 describe('skeud v2 : presets', () => {
-  it('bibliothèque de filtres : 10 presets valides', () => {
-    expect(FILTER_PRESETS.length).toBe(10)
+  it('bibliothèque de filtres : 20 presets valides', () => {
+    expect(FILTER_PRESETS.length).toBe(20)
     for (const p of FILTER_PRESETS) {
       expect(p.label && p.icon).toBeTruthy()
       expect(cssFilter(p.filter)).toBeTruthy()
@@ -86,9 +86,14 @@ describe('skeud v2 : presets', () => {
     expect(cssFilter(FILTER_PRESETS[0].filter)).toBe('none')
     expect(cssFilter(FILTER_PRESETS.find((p) => p.label === 'N&B')!.filter)).toContain('grayscale(1)')
   })
-  it('vingtaine de cadres originaux : 20 presets, ids uniques, géométries cohérentes', () => {
-    expect(FRAME_PRESETS.length).toBe(20)
-    expect(new Set(FRAME_PRESETS.map((p) => p.id)).size).toBe(20)
+  it('cadres : 30 presets dont les stylés (double/torn/burnt + 16 effets v4), ids uniques, géométries cohérentes', () => {
+    expect(FRAME_PRESETS.length).toBe(30)
+    for (const id of ['double', 'torn', 'burnt', 'tape', 'corners', 'sketch', 'stamp', 'film', 'shadow', 'neon', 'wood', 'gold', 'lace', 'splatter', 'scan', 'instax', 'comic', 'grunge', 'mat-gold', 'polaroid', 'letterbox', 'circle']) {
+      expect(FRAME_PRESETS.some((p) => p.id === id)).toBe(true)
+    }
+    const torn = FRAME_PRESETS.find((p) => p.id === 'torn')!
+    expect(frameGeom(400, 200, torn.frame).W).toBeGreaterThan(400)
+    expect(new Set(FRAME_PRESETS.map((p) => p.id)).size).toBe(30)
     for (const p of FRAME_PRESETS) {
       const g = frameGeom(400, 200, p.frame)
       expect(g.W).toBeGreaterThanOrEqual(400 - 2 * (p.frame.border ? p.frame.borderWidth : 0) - 1)
@@ -134,5 +139,66 @@ describe('skeud v3 : calques, température, presets étendus', () => {
   })
   it('DEFAULT_EDIT a layers vide', () => {
     expect(DEFAULT_EDIT.layers).toEqual([])
+  })
+})
+
+describe('skeud v4 : onglets + presets doublés + cadres stylés', () => {
+  it('20 filtres caractéristiques, tous produisant un cssFilter valide et non vide (sauf Naturel)', () => {
+    expect(FILTER_PRESETS.length).toBe(20)
+    const labels = FILTER_PRESETS.map((p) => p.label)
+    expect(new Set(labels).size).toBe(20)
+    for (const p of FILTER_PRESETS) {
+      expect(cssFilter(p.filter)).toBeTruthy()
+    }
+    expect(cssFilter(FILTER_PRESETS[0].filter)).toBe('none')
+    expect(cssFilter(FILTER_PRESETS.find((p) => p.label === 'Négatif')!.filter)).toBe('invert(1)')
+    expect(cssFilter(FILTER_PRESETS.find((p) => p.label === 'Coucher de soleil')!.filter)).toContain('sepia(0.45)')
+  })
+  it('cadres stylés : double/torn/burnt ont les bons flags et géométrie', () => {
+    const dbl = FRAME_PRESETS.find((p) => p.id === 'double')!
+    expect(dbl.frame.double && dbl.frame.border).toBe(true)
+    expect(frameGeom(400, 200, dbl.frame)).toMatchObject({ W: 400, H: 200 })
+    const torn = FRAME_PRESETS.find((p) => p.id === 'torn')!
+    expect(torn.frame.torn).toBe(true)
+    const g = frameGeom(400, 200, torn.frame)
+    expect(g.W).toBeGreaterThan(400)
+    expect(g.ix).toBeGreaterThan(0)
+    const burnt = FRAME_PRESETS.find((p) => p.id === 'burnt')!
+    expect(burnt.frame.burnt).toBe(true)
+    expect(framePresetOf(burnt.frame)?.id).toBe('burnt')
+  })
+  it('frameGeom v4 : marges stamp/film/lace/shadow s’ajoutent et restent symétriques', () => {
+    for (const id of ['stamp', 'film', 'lace', 'shadow']) {
+      const pr = FRAME_PRESETS.find((p) => p.id === id)!
+      const g = frameGeom(400, 200, pr.frame)
+      expect(g.W).toBeGreaterThan(400)
+      expect(g.H).toBeGreaterThan(200)
+      expect(g.ix).toBeGreaterThan(0)
+      expect(g.iy).toBeGreaterThan(0)
+      expect(g.ix + g.iw).toBeLessThan(g.W)
+      expect(g.iy + g.ih).toBeLessThan(g.H)
+      expect(framePresetOf(pr.frame)?.id).toBe(id)
+    }
+    const sh = frameGeom(400, 200, { ...DEFAULT_FRAME, shadow: true })
+    expect(sh.H - sh.ih).toBe(22 + 34)
+    const film = frameGeom(400, 200, { ...DEFAULT_FRAME, film: true })
+    expect(film.W - film.iw).toBeGreaterThan(2 * 22 - 1)
+  })
+  it('frameGeom : edge marquera les bords déchirés/brûlés, symétrique, et 0 sinon', () => {
+    const base = frameGeom(400, 200, DEFAULT_FRAME)
+    expect(base.edge).toBe(0)
+    expect(base.W).toBe(400)
+    expect(base.H).toBe(200)
+    const torn = frameGeom(400, 200, { ...DEFAULT_FRAME, torn: true })
+    expect(torn.edge).toBeGreaterThanOrEqual(10)
+    expect(torn.W).toBe(400 + 2 * torn.edge)
+    expect(torn.H).toBe(200 + 2 * torn.edge)
+    expect(torn.ix).toBe(torn.edge)
+    expect(torn.iy).toBe(torn.edge)
+    const burnt = frameGeom(400, 200, { ...DEFAULT_FRAME, burnt: true })
+    expect(burnt.edge).toBe(torn.edge)
+    const matTorn = frameGeom(400, 200, { ...DEFAULT_FRAME, mat: true, matSize: 40, torn: true })
+    expect(matTorn.ix).toBe(40 + torn.edge)
+    expect(matTorn.W).toBe(400 + 2 * (40 + torn.edge))
   })
 })
