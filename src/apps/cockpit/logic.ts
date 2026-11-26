@@ -161,6 +161,8 @@ export function adviceFor(input: {
   if (wipExceeded(doing.length)) out.push({ icon: '🚧', text: `Tu as ${doing.length} tâches en cours (limite ${WIP_LIMIT}) : termine-en une avant d'en commencer une autre.` })
   const twoMin = todo.filter((t) => t.estMin <= 2)
   if (twoMin.length) out.push({ icon: '⚡', text: `Règle des 2 minutes : ${twoMin.length} tâche(s) à ≤ 2 min dans ta liste — fais-les maintenant.` })
+  const todayInt = sessions.filter((s) => s.kind === 'interrupt' && dayKey(new Date(s.at)) === today).length
+  if (todayInt >= 3) out.push({ icon: '\ud83d\ude35', text: `${todayInt} interruptions aujourd’hui : essaie un bloc de 25 min avec le téléphone éteint.` })
   const prev = input.days[input.days.length - 2]
   if (prev && !shutdownDays.includes(prev) && !shutdownDays.includes(today)) out.push({ icon: '🌙', text: 'Pas de rituel de fermeture hier : ce soir, note juste la prochaine action de demain.' })
   const todayFocus = sessions.filter((s) => s.kind === 'focus' && dayKey(new Date(s.at)) === today).reduce((a, s) => a + s.actualSec, 0) / 60
@@ -192,3 +194,112 @@ export const BREATH = [
   { label: 'Retiens', sec: 7 },
   { label: 'Expire', sec: 8 }
 ] as const
+
+export const weekStartOf = (d = new Date()): string => {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const dow = (x.getDay() + 6) % 7
+  x.setDate(x.getDate() - dow)
+  return dayKey(x)
+}
+
+export type DueChip = 'today' | 'late' | 'future' | null
+
+export const dueChip = (t: { due?: string | null }, today: string): DueChip => {
+  if (!t.due) return null
+  if (t.due === today) return 'today'
+  return t.due < today ? 'late' : 'future'
+}
+
+export function interruptionsByDay(sessions: SessLike[], days: string[]): { day: string; n: number }[] {
+  const map = new Map<string, number>()
+  for (const d of days) map.set(d, 0)
+  for (const s of sessions) {
+    if (s.kind !== 'interrupt') continue
+    const k = dayKey(new Date(s.at))
+    if (map.has(k)) map.set(k, (map.get(k) ?? 0) + 1)
+  }
+  return days.map((day) => ({ day, n: map.get(day) ?? 0 }))
+}
+
+export interface RecurLike {
+  id: string
+  title: string
+  col: string
+  estMin: number
+  urgent?: boolean
+  important?: boolean
+  color?: string
+  value?: number
+  tags?: string[]
+  due?: string | null
+  goalId?: string | null
+  recur?: string | null
+  doneAt?: number | null
+  actualMin?: number
+  createdAt: number
+}
+
+export function nextRecurAt(recur: string, afterAt: number): number | null {
+  const d = new Date(afterAt)
+  const atMidnight = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  if (recur === 'daily') return atMidnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1))
+  const wd = Number(recur)
+  if (!Number.isInteger(wd) || wd < 0 || wd > 6) return null
+  let add = (wd - d.getDay() + 7) % 7
+  if (add === 0) add = 7
+  return atMidnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + add))
+}
+
+export function spawnRecurring<T extends RecurLike>(tasks: T[], now = Date.now(), uidFn: () => string = () => Math.random().toString(36).slice(2)): T[] {
+  const out: T[] = []
+  for (const t of tasks) {
+    if (t.col !== 'done' || !t.recur || !t.doneAt) continue
+    const next = nextRecurAt(t.recur, t.doneAt)
+    if (next === null || next > now) continue
+    const openClone = tasks.some((x) => x.id !== t.id && x.col !== 'done' && x.title === t.title && (x.recur ?? null) === t.recur)
+    if (openClone) continue
+    out.push({ ...t, id: uidFn(), col: 'todo', createdAt: now, doneAt: null, actualMin: 0, due: null } as T)
+  }
+  return out
+}
+
+export function goalProgress(
+  goals: { id: string; weekStart: string; label: string }[],
+  tasks: { goalId?: string | null; col: string }[],
+  weekStart: string
+): { id: string; label: string; done: number; total: number; pct: number }[] {
+  return goals
+    .filter((g) => g.weekStart === weekStart)
+    .map((g) => {
+      const linked = tasks.filter((t) => t.goalId === g.id)
+      const done = linked.filter((t) => t.col === 'done').length
+      return { id: g.id, label: g.label, done, total: linked.length, pct: linked.length ? done / linked.length : 0 }
+    })
+}
+
+export const breathPos = (phaseIdx: number, remaining: number, total: number): number => {
+  if (total <= 0) return 0
+  if (phaseIdx === 0) return 1 - remaining / total
+  if (phaseIdx === 1) return 1
+  return remaining / total
+}
+
+export const parseTaskLines = (text: string): string[] =>
+  text
+    .split('\n')
+    .map((l) => l.trim().replace(/^[-*•]\s*/, '').trim())
+    .filter(Boolean)
+
+export const allTags = (tasks: { tags?: string[] }[]): string[] =>
+  [...new Set(tasks.flatMap((t) => t.tags ?? []))].sort((a, b) => a.localeCompare(b))
+
+export const RECUR_LABELS: Record<string, string> = {
+  daily: 'Tous les jours',
+  '0': 'Dimanche',
+  '1': 'Lundi',
+  '2': 'Mardi',
+  '3': 'Mercredi',
+  '4': 'Jeudi',
+  '5': 'Vendredi',
+  '6': 'Samedi'
+}

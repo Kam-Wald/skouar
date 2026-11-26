@@ -15,7 +15,16 @@ import {
   bestEnergyHour,
   adviceFor,
   reviewSummary,
-  BREATH
+  BREATH,
+  weekStartOf,
+  nextRecurAt,
+  spawnRecurring,
+  dueChip,
+  interruptionsByDay,
+  goalProgress,
+  breathPos,
+  parseTaskLines,
+  allTags
 } from '../src/apps/cockpit/logic'
 
 const at = (y: number, m: number, d: number, h = 10): number => new Date(y, m - 1, d, h, 0, 0).getTime()
@@ -196,5 +205,84 @@ describe('reviewSummary', () => {
 describe('BREATH', () => {
   it('4-7-8', () => {
     expect(BREATH.map((b) => b.sec)).toEqual([4, 7, 8])
+  })
+})
+
+describe('v2 : semaine, récurrences, échéances', () => {
+  it('weekStartOf renvoie le lundi', () => {
+    expect(weekStartOf(new Date(2025, 5, 11))).toBe('2025-06-09')
+    expect(weekStartOf(new Date(2025, 5, 15))).toBe('2025-06-09')
+    expect(weekStartOf(new Date(2025, 5, 9))).toBe('2025-06-09')
+  })
+  it('nextRecurAt daily et hebdo', () => {
+    const tue = at(2025, 6, 10, 15)
+    expect(dayKey(new Date(nextRecurAt('daily', tue)!))).toBe('2025-06-11')
+    expect(dayKey(new Date(nextRecurAt('3', tue)!))).toBe('2025-06-11')
+    const wed = at(2025, 6, 11, 10)
+    expect(dayKey(new Date(nextRecurAt('3', wed)!))).toBe('2025-06-18')
+    expect(nextRecurAt('bidon', tue)).toBeNull()
+  })
+  it('spawnRecurring ne duplique que quand dû et sans clone ouvert', () => {
+    const now = at(2025, 6, 12, 9)
+    const base = { id: 'a', title: 'Sport', col: 'done', estMin: 30, recur: 'daily', doneAt: at(2025, 6, 10, 18), createdAt: 1 }
+    const spawned = spawnRecurring([base as never], now, () => 'new1')
+    expect(spawned.length).toBe(1)
+    expect((spawned[0] as { col: string }).col).toBe('todo')
+    expect((spawned[0] as { doneAt: null }).doneAt).toBeNull()
+    expect(spawnRecurring([base as never], at(2025, 6, 10, 20), () => 'x').length).toBe(0)
+    const withClone = [base, { id: 'b', title: 'Sport', col: 'todo', estMin: 30, recur: 'daily', doneAt: null, createdAt: 2 }]
+    expect(spawnRecurring(withClone as never, now, () => 'x').length).toBe(0)
+  })
+  it('dueChip', () => {
+    expect(dueChip({ due: '2025-06-10' }, '2025-06-10')).toBe('today')
+    expect(dueChip({ due: '2025-06-09' }, '2025-06-10')).toBe('late')
+    expect(dueChip({ due: '2025-06-11' }, '2025-06-10')).toBe('future')
+    expect(dueChip({ due: null }, '2025-06-10')).toBeNull()
+    expect(dueChip({}, '2025-06-10')).toBeNull()
+  })
+  it('interruptionsByDay', () => {
+    const days = [dayKey(new Date(2025, 5, 10)), dayKey(new Date(2025, 5, 11))]
+    const r = interruptionsByDay(
+      [
+        { kind: 'interrupt', actualSec: 0, at: at(2025, 6, 10, 9) },
+        { kind: 'interrupt', actualSec: 0, at: at(2025, 6, 10, 11) },
+        { kind: 'focus', actualSec: 100, at: at(2025, 6, 10, 10) }
+      ],
+      days
+    )
+    expect(r[0].n).toBe(2)
+    expect(r[1].n).toBe(0)
+  })
+  it('goalProgress', () => {
+    const goals = [{ id: 'g1', weekStart: '2025-06-09', label: 'Finir le rapport' }]
+    const tasks = [
+      { goalId: 'g1', col: 'done' },
+      { goalId: 'g1', col: 'todo' },
+      { goalId: 'g1', col: 'done' },
+      { goalId: 'other', col: 'done' }
+    ]
+    const gp = goalProgress(goals, tasks, '2025-06-09')
+    expect(gp).toEqual([{ id: 'g1', label: 'Finir le rapport', done: 2, total: 3, pct: 2 / 3 }])
+  })
+  it('breathPos : inspire →, retiens fixe, ← expire', () => {
+    expect(breathPos(0, 4, 4)).toBe(0)
+    expect(breathPos(0, 0, 4)).toBe(1)
+    expect(breathPos(1, 7, 7)).toBe(1)
+    expect(breathPos(2, 8, 8)).toBe(1)
+    expect(breathPos(2, 0, 8)).toBe(0)
+    expect(breathPos(0, 0, 0)).toBe(0)
+  })
+  it('parseTaskLines nettoie les puces', () => {
+    expect(parseTaskLines('- a\nb\n• c\n\n  - d  \n')).toEqual(['a', 'b', 'c', 'd'])
+  })
+  it('allTags unique et trié', () => {
+    expect(allTags([{ tags: ['pro', 'urgent'] }, { tags: ['pro'] }, {}])).toEqual(['pro', 'urgent'])
+  })
+  it('adviceFor signale les interruptions (>= 3)', () => {
+    const today = dayKey(new Date(2025, 5, 10))
+    const days = lastDays(7, new Date(2025, 5, 10, 20))
+    const sessions = [1, 2, 3].map((h) => ({ kind: 'interrupt', actualSec: 0, at: at(2025, 6, 10, 8 + h) }))
+    const advices = adviceFor({ tasks: [], sessions, days, today, shutdownDays: [today, days[5]] })
+    expect(advices.some((a) => a.text.includes('3 interruptions'))).toBe(true)
   })
 })
