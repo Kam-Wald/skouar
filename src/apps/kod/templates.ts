@@ -139,6 +139,76 @@ export const KOD_TEMPLATES: KodTemplate[] = [
     icon: '✅',
     path: 'todo.md',
     content: '# To-do — {{titre}}\n\n- [ ] tâche 1\n- [ ] tâche 2\n- [x] tâche faite\n'
+  },
+  {
+    group: 'Config',
+    label: 'tsconfig.json',
+    icon: '🧾',
+    path: 'tsconfig.json',
+    content: '{\n  "compilerOptions": {\n    "target": "ES2022",\n    "module": "ESNext",\n    "moduleResolution": "bundler",\n    "strict": true,\n    "jsx": "react-jsx",\n    "noEmit": true,\n    "skipLibCheck": true\n  },\n  "include": ["src"]\n}\n'
+  },
+  {
+    group: 'Config',
+    label: '.env.example',
+    icon: '📝',
+    path: '.env.example',
+    content: "# Variables d'environnement (exemple)\nAPP_NAME=mon-app\nAPI_URL=http://localhost:3000\n# Ne pas commiter les vraies valeurs ici\n"
+  },
+  {
+    group: 'Config',
+    label: '.eslintrc.json',
+    icon: '🔍',
+    path: '.eslintrc.json',
+    content: '{\n  "root": true,\n  "env": { "browser": true, "es2022": true },\n  "extends": ["eslint:recommended"],\n  "parserOptions": { "ecmaVersion": "latest", "sourceType": "module" },\n  "rules": {}\n}\n'
+  },
+  {
+    group: 'Config',
+    label: 'nginx.conf (SPA)',
+    icon: '🌐',
+    path: 'nginx.conf',
+    content: '# {{titre}}\nserver {\n  listen 80;\n  server_name exemple.fr;\n  root /var/www/app;\n  index index.html;\n\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n'
+  },
+  {
+    group: 'Extraits',
+    label: 'Composant React (TSX)',
+    icon: '⚛️',
+    path: 'modele.tsx',
+    content: 'type Props = {\n  titre: string\n}\n\nexport default function MonComposant({ titre }: Props) {\n  return (\n    <section>\n      <h2>{titre}</h2>\n    </section>\n  )\n}\n'
+  },
+  {
+    group: 'Extraits',
+    label: 'Hook React useFetch',
+    icon: '🪝',
+    path: 'use-fetch.ts',
+    content: "import { useEffect, useState } from 'react'\n\nexport function useFetch<T>(url: string) {\n  const [data, setData] = useState<T | null>(null)\n  const [error, setError] = useState<Error | null>(null)\n\n  useEffect(() => {\n    let actif = true\n    fetch(url)\n      .then((r) => r.json())\n      .then((d) => actif && setData(d))\n      .catch((e) => actif && setError(e))\n    return () => {\n      actif = false\n    }\n  }, [url])\n\n  return { data, error }\n}\n"
+  },
+  {
+    group: 'Extraits',
+    label: 'Route Express',
+    icon: '🛣️',
+    path: 'route-express.ts',
+    content: "import { Router } from 'express'\n\nconst router = Router()\n\nrouter.get('/', (req, res) => {\n  res.json({ ok: true })\n})\n\nrouter.post('/', (req, res) => {\n  const { name } = req.body\n  res.status(201).json({ id: Date.now(), name })\n})\n\nexport default router\n"
+  },
+  {
+    group: 'Extraits',
+    label: 'Test unitaire (vitest)',
+    icon: '🧪',
+    path: 'modele.test.ts',
+    content: "import { describe, expect, it } from 'vitest'\n\ndescribe('maFonction', () => {\n  it('retourne la bonne valeur', () => {\n    expect(maFonction(2)).toBe(4)\n  })\n})\n"
+  },
+  {
+    group: 'Extraits',
+    label: 'Classe Python',
+    icon: '🏛️',
+    path: 'modele-classe.py',
+    content: 'class Compte:\n    def __init__(self, titulaire: str, solde: float = 0.0):\n        self.titulaire = titulaire\n        self.solde = solde\n\n    def deposer(self, montant: float) -> None:\n        if montant <= 0:\n            raise ValueError("Le montant doit etre positif")\n        self.solde += montant\n\n    def __repr__(self) -> str:\n        return f"Compte({self.titulaire!r}, solde={self.solde})"\n'
+  },
+  {
+    group: 'Extraits',
+    label: 'Requêtes SQL utiles',
+    icon: '🔎',
+    path: 'requetes.sql',
+    content: '-- {{titre}} : requetes utiles\n\n-- Jointure avec agregation\nSELECT c.nom, COUNT(p.id) AS nb, SUM(p.prix) AS total\nFROM categories c\nLEFT JOIN produits p ON p.categorie_id = c.id\nGROUP BY c.nom\nORDER BY total DESC\n\n-- Mise a jour prudente (toujours un WHERE)\nUPDATE produits SET prix = prix * 1.10 WHERE categorie_id = 3\n'
   }
 ]
 
