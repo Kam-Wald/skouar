@@ -44,6 +44,10 @@ describe('Cockpit (smoke jsdom)', () => {
       'Checklist du jour',
       'Techniques guidées',
       'Rituel de fermeture',
+      'Tâche du jour',
+      'Rappels',
+      'Tout effacer',
+      'Routines',
       'min de focus aujourd’hui',
       'tâches en cours'
     ]) {

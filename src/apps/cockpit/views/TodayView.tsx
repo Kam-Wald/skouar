@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CkCtx } from '../CockpitApp'
-import { BREATH, fmt, pomodoroPlan, type PomSegment } from '../logic'
+import { BREATH, breathPos, dueChip, fmt, pomodoroPlan, type PomSegment } from '../logic'
 import { notify } from '../../../shared/notify'
 import { useDismiss } from '../../../shared/useDismiss'
+import { beep, notifyOS, askNotifPermission } from '../fx'
 import { uid, type CkSession } from '../store'
 
 type Mode = 'pomodoro' | 'countdown' | 'chrono' | 'breath'
@@ -25,81 +26,11 @@ const IDLE: TimerState = { mode: 'pomodoro', running: false, label: 'Prêt', rem
 const R = 52
 const CIRC = 2 * Math.PI * R
 
-function beep(): void {
-  try {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ac = new AC()
-    const play = (f: number, t0: number) => {
-      const o = ac.createOscillator()
-      const g = ac.createGain()
-      o.connect(g)
-      g.connect(ac.destination)
-      o.frequency.value = f
-      g.gain.setValueAtTime(0.12, ac.currentTime + t0)
-      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t0 + 0.3)
-      o.start(ac.currentTime + t0)
-      o.stop(ac.currentTime + t0 + 0.32)
-    }
-    play(880, 0)
-    play(1174, 0.18)
-  } catch {
-    /* audio indisponible */
-  }
-}
-
-function notifyOS(title: string): void {
-  try {
-    if ('Notification' in window && Notification.permission === 'granted') new Notification(title)
-  } catch {
-    /* notifications indisponibles */
-  }
-}
-
-const TECHNIQUES: { label: string; desc: string; icon: string; run: (api: { setMode: (m: Mode) => void; startPomodoro: () => void; startCountdown: (min: number) => void; startChrono: () => void; startBreath: () => void; setFocusMin: (n: number) => void; setPauseMin: (n: number) => void; setLongMin: (n: number) => void; setCycles: (n: number) => void }) => void }[] = [
-  {
-    label: 'Pomodoro 25/5',
-    desc: '4 cycles, longue pause 15 min',
-    icon: '🍅',
-    run: (a) => {
-      a.setFocusMin(25)
-      a.setPauseMin(5)
-      a.setLongMin(15)
-      a.setCycles(4)
-      a.setMode('pomodoro')
-      a.startPomodoro()
-    }
-  },
-  {
-    label: '52/17',
-    desc: '2 cycles de focus profond',
-    icon: '🎯',
-    run: (a) => {
-      a.setFocusMin(52)
-      a.setPauseMin(17)
-      a.setLongMin(30)
-      a.setCycles(2)
-      a.setMode('pomodoro')
-      a.startPomodoro()
-    }
-  },
-  {
-    label: 'Respiration 4-7-8',
-    desc: 'Inspire 4 s, retiens 7 s, expire 8 s',
-    icon: '🌬️',
-    run: (a) => {
-      a.setMode('breath')
-      a.startBreath()
-    }
-  },
-  {
-    label: 'Timebox 10 min',
-    desc: 'Compte à rebours pour une petite tâche',
-    icon: '⏳',
-    run: (a) => {
-      a.setMode('countdown')
-      a.startCountdown(10)
-    }
-  }
+const TECHNIQUES: { label: string; desc: string; icon: string; run: (api: { setMode: (m: Mode) => void; startPomodoro: () => void; startCountdown: (min: number) => void; startBreath: () => void; setFocusMin: (n: number) => void; setPauseMin: (n: number) => void; setLongMin: (n: number) => void; setCycles: (n: number) => void }) => void }[] = [
+  { label: 'Pomodoro 25/5', desc: '4 cycles, longue pause 15 min', icon: '🍅', run: (a) => { a.setFocusMin(25); a.setPauseMin(5); a.setLongMin(15); a.setCycles(4); a.setMode('pomodoro'); a.startPomodoro() } },
+  { label: '52/17', desc: '2 cycles de focus profond', icon: '🎯', run: (a) => { a.setFocusMin(52); a.setPauseMin(17); a.setLongMin(30); a.setCycles(2); a.setMode('pomodoro'); a.startPomodoro() } },
+  { label: 'Respiration 4-7-8', desc: 'Inspire 4 s, retiens 7 s, expire 8 s', icon: '🌬️', run: (a) => { a.setMode('breath'); a.startBreath() } },
+  { label: 'Timebox 10 min', desc: 'Compte à rebours pour une petite tâche', icon: '⏳', run: (a) => { a.setMode('countdown'); a.startCountdown(10) } }
 ]
 
 export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
@@ -114,26 +45,24 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
   const [pendingEnergy, setPendingEnergy] = useState<string | null>(null)
   const [newRoutine, setNewRoutine] = useState('')
   const [newIcon, setNewIcon] = useState('🧘')
+  const [newItem, setNewItem] = useState('')
+  const [blanks, setBlanks] = useState(0)
   const [showShutdown, setShowShutdown] = useState(false)
   const [shChecks, setShChecks] = useState([false, false, false])
   const [shNote, setShNote] = useState('')
+  const [remAt, setRemAt] = useState('')
+  const [remMsg, setRemMsg] = useState('')
   const tRef = useRef(t)
   tRef.current = t
   const taskIdRef = useRef(taskId)
   taskIdRef.current = taskId
+  const todayTaskRef = useRef(ctx.todayTask)
+  todayTaskRef.current = ctx.todayTask
   useDismiss('ck-shutdown', showShutdown, () => setShowShutdown(false))
 
   const saveSession = async (kind: CkSession['kind'], label: string, plannedSec: number, actualSec: number): Promise<CkSession> => {
-    const s: CkSession = {
-      id: uid(),
-      taskId: kind === 'focus' && taskIdRef.current ? taskIdRef.current : null,
-      label,
-      kind,
-      plannedSec,
-      actualSec,
-      at: Date.now(),
-      energy: null
-    }
+    const linked = kind === 'focus' ? taskIdRef.current || todayTaskRef.current : null
+    const s: CkSession = { id: uid(), taskId: linked || null, label, kind, plannedSec, actualSec, at: Date.now(), energy: null }
     await ctx.addSess(s)
     if (s.taskId) {
       const task = ctx.tasks.find((x) => x.id === s.taskId)
@@ -187,22 +116,21 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
     return () => clearInterval(iv)
   }, [t.running])
 
-  const startPomodoro = (): void => {
-    const plan = pomodoroPlan(focusMin, pauseMin, longMin, cycles)
-    startSeg(plan, 0)
-  }
+  const startChronoAtRef = useRef(0)
+  const startPomodoro = (): void => startSeg(pomodoroPlan(focusMin, pauseMin, longMin, cycles), 0)
   const startCountdown = (min: number): void => {
     const sec = Math.max(1, Math.round(min)) * 60
     setT({ ...IDLE, mode: 'countdown', running: true, label: 'Compte à rebours', remaining: sec, total: sec, endAt: Date.now() + sec * 1000 })
   }
-  const startChrono = (): void => {
-    setT({ ...IDLE, mode: 'chrono', running: true, label: 'Chrono', remaining: 0, total: 0, endAt: Number.MAX_SAFE_INTEGER })
+  const startChrono = (): void => setT({ ...IDLE, mode: 'chrono', running: true, label: 'Chrono', remaining: 0, total: 0, endAt: Number.MAX_SAFE_INTEGER })
+  const doStartChrono = (): void => {
+    startChronoAtRef.current = Date.now()
+    startChrono()
   }
   const startBreath = (): void => {
     const ph = BREATH[0]
     setT({ ...IDLE, mode: 'breath', running: true, label: ph.label, remaining: ph.sec, total: ph.sec, endAt: Date.now() + ph.sec * 1000 })
   }
-  const startChronoAtRef = useRef(0)
   const stopTimer = async (): Promise<void> => {
     const cur = tRef.current
     if (cur.mode === 'chrono') {
@@ -212,9 +140,10 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
     }
     setT({ ...IDLE, mode: cur.mode, label: 'En pause' })
   }
-  const doStartChrono = (): void => {
-    startChronoAtRef.current = Date.now()
-    startChrono()
+
+  const logInterrupt = async (): Promise<void> => {
+    await ctx.addSess({ id: uid(), taskId: taskIdRef.current || todayTaskRef.current || null, label: 'Interruption', kind: 'interrupt', plannedSec: 0, actualSec: 0, at: Date.now(), energy: null })
+    notify('Interruption notée 😵')
   }
 
   const pickEnergy = async (n: number): Promise<void> => {
@@ -225,41 +154,36 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
     notify(`Énergie notée : ${n}/5`)
   }
 
-  const askNotif = async (): Promise<void> => {
-    try {
-      const p = await Notification.requestPermission()
-      if (p === 'granted') notify('Notifications activées 🔔')
-    } catch {
-      /* ignoré */
-    }
-  }
-
   const frac = t.total > 0 ? t.remaining / t.total : t.mode === 'chrono' ? 1 : 0
   const chronoElapsed = t.mode === 'chrono' && t.running ? Math.max(0, Math.round((Date.now() - startChronoAtRef.current) / 1000)) : t.remaining
   const display = t.mode === 'chrono' ? fmt(chronoElapsed) : fmt(t.remaining)
+
+  useEffect(() => {
+    document.title = t.running ? `${display} · ${t.label} — Cockpit` : 'Cockpit · Skouar'
+    return () => {
+      document.title = 'Cockpit · Skouar'
+    }
+  }, [t.running, display, t.label])
+
   const openTasks = ctx.tasks.filter((x) => x.col === 'todo' || x.col === 'doing')
+  const dueToday = openTasks.filter((x) => x.due && dueChip(x, ctx.today) !== 'future').sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
+  const todayTaskObj = ctx.tasks.find((x) => x.id === ctx.todayTask)
   const checkOf = (rid: string): boolean => !!ctx.checks.find((c) => c.day === ctx.today && c.routineId === rid && c.done)
+  const focusRunning = t.running && t.mode === 'pomodoro' && t.plan[t.segIdx]?.kind === 'focus'
+  const upcoming = ctx.reminders.filter((r) => !r.done && r.at > Date.now()).slice(0, 6)
+  const todayInt = ctx.sessions.filter((s) => s.kind === 'interrupt' && new Date(s.at).toDateString() === new Date().toDateString()).length
+
+  const doReset = async (): Promise<void> => {
+    await ctx.resetToday()
+    setBlanks(2)
+  }
 
   return (
     <div className="ck-today">
       <section className="ck-card ck-timer-card">
         <div className="ck-modes">
-          {(
-            [
-              ['pomodoro', '🍅 Pomodoro'],
-              ['countdown', '⏳ Compte à rebours'],
-              ['chrono', '▶️ Chrono'],
-              ['breath', '🌬️ Respiration']
-            ] as [Mode, string][]
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              className={`ck-chip${mode === m ? ' active' : ''}`}
-              onClick={() => {
-                setMode(m)
-                setT({ ...IDLE, mode: m })
-              }}
-            >
+          {([['pomodoro', '🍅 Pomodoro'], ['countdown', '⏳ Compte à rebours'], ['chrono', '▶️ Chrono'], ['breath', '🌬️ Respiration']] as [Mode, string][]).map(([m, label]) => (
+            <button key={m} className={`ck-chip${mode === m ? ' active' : ''}`} onClick={() => { setMode(m); setT({ ...IDLE, mode: m }) }}>
               {label}
             </button>
           ))}
@@ -267,97 +191,71 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
 
         {mode === 'pomodoro' && !t.running && (
           <div className="ck-pomo-params">
-            <label>
-              Focus
-              <input type="number" min={1} max={180} value={focusMin} onChange={(e) => setFocusMin(Number(e.target.value))} /> min
-            </label>
-            <label>
-              Pause
-              <input type="number" min={1} max={60} value={pauseMin} onChange={(e) => setPauseMin(Number(e.target.value))} /> min
-            </label>
-            <label>
-              Longue
-              <input type="number" min={1} max={120} value={longMin} onChange={(e) => setLongMin(Number(e.target.value))} /> min
-            </label>
-            <label>
-              Cycles
-              <input type="number" min={1} max={8} value={cycles} onChange={(e) => setCycles(Number(e.target.value))} />
-            </label>
+            <label>Focus<input type="number" min={1} max={180} value={focusMin} onChange={(e) => setFocusMin(Number(e.target.value))} /> min</label>
+            <label>Pause<input type="number" min={1} max={60} value={pauseMin} onChange={(e) => setPauseMin(Number(e.target.value))} /> min</label>
+            <label>Longue<input type="number" min={1} max={120} value={longMin} onChange={(e) => setLongMin(Number(e.target.value))} /> min</label>
+            <label>Cycles<input type="number" min={1} max={8} value={cycles} onChange={(e) => setCycles(Number(e.target.value))} /></label>
           </div>
         )}
         {mode === 'countdown' && !t.running && (
           <div className="ck-pomo-params">
-            <label>
-              Durée
-              <input type="number" min={1} max={240} value={cdMin} onChange={(e) => setCdMin(Number(e.target.value))} /> min
-            </label>
+            <label>Durée<input type="number" min={1} max={240} value={cdMin} onChange={(e) => setCdMin(Number(e.target.value))} /> min</label>
           </div>
         )}
 
-        <div className="ck-ring-wrap">
-          <svg viewBox="0 0 120 120" className="ck-ring">
-            <circle cx="60" cy="60" r={R} className="ck-ring-bg" />
-            <circle
-              cx="60"
-              cy="60"
-              r={R}
-              className={`ck-ring-fg${t.running ? ' on' : ''}`}
-              strokeDasharray={CIRC}
-              strokeDashoffset={CIRC * (1 - frac)}
-              transform="rotate(-90 60 60)"
-            />
-          </svg>
-          <div className="ck-ring-center">
+        {t.mode === 'breath' ? (
+          <div className="ck-breath">
             <div className="ck-time">{display}</div>
+            <div className="ck-breath-track">
+              <div className="ck-breath-dot" style={{ left: `${breathPos(t.phaseIdx, t.remaining, t.total) * 100}%` }} />
+            </div>
             <div className="ck-timer-label">{t.label}</div>
-            {t.mode === 'breath' && <div className="ck-timer-sub">cycle {t.cycles + 1}</div>}
-            {t.mode === 'pomodoro' && t.plan.length > 0 && <div className="ck-timer-sub">segment {t.segIdx + 1}/{t.plan.length}</div>}
+            <div className="ck-timer-sub">cycle {t.cycles + 1} · inspire → · retiens · ← expire</div>
           </div>
-        </div>
+        ) : (
+          <div className="ck-ring-wrap">
+            <svg viewBox="0 0 120 120" className="ck-ring">
+              <circle cx="60" cy="60" r={R} className="ck-ring-bg" />
+              <circle cx="60" cy="60" r={R} className={`ck-ring-fg${t.running ? ' on' : ''}`} strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - frac)} transform="rotate(-90 60 60)" />
+            </svg>
+            <div className="ck-ring-center">
+              <div className="ck-time">{display}</div>
+              <div className="ck-timer-label">{t.label}</div>
+              {t.mode === 'pomodoro' && t.plan.length > 0 && <div className="ck-timer-sub">segment {t.segIdx + 1}/{t.plan.length}</div>}
+            </div>
+          </div>
+        )}
 
         <div className="ck-timer-controls">
           {!t.running ? (
-            <button
-              className="ck-btn primary"
-              onClick={() => {
-                if (mode === 'pomodoro') startPomodoro()
-                else if (mode === 'countdown') startCountdown(cdMin)
-                else if (mode === 'chrono') doStartChrono()
-                else startBreath()
-              }}
-            >
+            <button className="ck-btn primary" onClick={() => {
+              if (mode === 'pomodoro') startPomodoro()
+              else if (mode === 'countdown') startCountdown(cdMin)
+              else if (mode === 'chrono') doStartChrono()
+              else startBreath()
+            }}>
               ▶ Démarrer
             </button>
           ) : (
-            <button className="ck-btn" onClick={() => void stopTimer()}>
-              ⏸ Arrêter
+            <button className="ck-btn" onClick={() => void stopTimer()}>⏸ Arrêter</button>
+          )}
+          {focusRunning && (
+            <button className="ck-btn ghost" title="Noter une interruption" onClick={() => void logInterrupt()}>
+              😵 interruption{todayInt > 0 ? ` (${todayInt})` : ''}
             </button>
           )}
           {t.running && t.mode !== 'chrono' && (
-            <button
-              className="ck-btn ghost"
-              onClick={() => {
-                const cur = tRef.current
-                setT({ ...cur, endAt: Date.now() + 1000 })
-              }}
-            >
-              ⏭ Passer
-            </button>
+            <button className="ck-btn ghost" onClick={() => { const cur = tRef.current; setT({ ...cur, endAt: Date.now() + 1000 }) }}>⏭ Passer</button>
           )}
-          <button className="ck-btn ghost" onClick={() => setT({ ...IDLE, mode })}>
-            ↺ Reset
-          </button>
+          <button className="ck-btn ghost" onClick={() => setT({ ...IDLE, mode })}>↺ Reset</button>
         </div>
 
         <label className="ck-task-pick">
-          Tâche liée
+          Tâche liée au minuteur
           <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-            <option value="">— aucune —</option>
+            <option value="">{ctx.todayTask ? '— tâche du jour auto —' : '— aucune —'}</option>
             {openTasks.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.col === 'doing' ? '▶ ' : ''}
-                {x.title}
-              </option>
+              <option key={x.id} value={x.id}>{x.col === 'doing' ? '▶ ' : ''}{x.title}</option>
             ))}
           </select>
         </label>
@@ -367,75 +265,137 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
             <span>Énergie pendant ce focus ?</span>
             <div className="ck-energy-btns">
               {[1, 2, 3, 4, 5].map((n) => (
-                <button key={n} className="ck-chip" onClick={() => void pickEnergy(n)}>
-                  {n}
-                </button>
+                <button key={n} className="ck-chip" onClick={() => void pickEnergy(n)}>{n}</button>
               ))}
-              <button className="ck-chip" onClick={() => setPendingEnergy(null)}>
-                ✕
-              </button>
+              <button className="ck-chip" onClick={() => setPendingEnergy(null)}>✕</button>
             </div>
           </div>
         )}
 
-        <button className="ck-btn ghost ck-notif" onClick={() => void askNotif()}>
-          🔔 Activer les notifications de fin de session
-        </button>
+        <button className="ck-btn ghost ck-notif" onClick={() => void askNotifPermission()}>🔔 Activer les notifications</button>
       </section>
 
       <div className="ck-today-side">
+        {todayTaskObj && (
+          <section className="ck-card ck-today-task">
+            <h3 className="ck-card-title">🎯 Tâche du jour</h3>
+            <div className="ck-today-task-body">
+              <span className="ck-dot" style={{ background: todayTaskObj.color }} />
+              <strong>{todayTaskObj.title}</strong>
+              {todayTaskObj.estMin > 0 && <span className="ck-chip-mini">⏱ {todayTaskObj.estMin} min</span>}
+              {todayTaskObj.actualMin > 0 && <span className="ck-chip-mini">✓ {todayTaskObj.actualMin} min</span>}
+            </div>
+            <button className="ck-btn ghost" onClick={() => void ctx.setTodayTask('')}>✕ Retirer</button>
+          </section>
+        )}
+        {!todayTaskObj && (
+          <section className="ck-card">
+            <h3 className="ck-card-title">🎯 Tâche du jour</h3>
+            <select className="ck-input" value="" onChange={(e) => { if (e.target.value) void ctx.setTodayTask(e.target.value) }}>
+              <option value="">Choisir la tâche prioritaire du jour…</option>
+              {openTasks.map((x) => (
+                <option key={x.id} value={x.id}>{x.title}</option>
+              ))}
+            </select>
+          </section>
+        )}
+
+        {dueToday.length > 0 && (
+          <section className="ck-card">
+            <h3 className="ck-card-title">📅 À faire aujourd’hui ou en retard</h3>
+            <ul className="ck-dues">
+              {dueToday.map((x) => (
+                <li key={x.id}>
+                  <button className="ck-due-row" onClick={() => setTaskId(x.id)} title="Lier au minuteur">
+                    <span className={`ck-due-chip ${dueChip(x, ctx.today)}`}>{dueChip(x, ctx.today) === 'late' ? '⚠️ retard' : '📅 aujourd’hui'}</span>
+                    <span className="ck-due-title">{x.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="ck-card">
-          <h3 className="ck-card-title">✅ Checklist du jour</h3>
-          <ul className="ck-checks">
-            {ctx.routines.map((r) => (
-              <li key={r.id} className="ck-check-row">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={checkOf(r.id)}
-                    onChange={(e) => void ctx.toggleCheck(r.id, e.target.checked)}
-                  />
-                  <span>
-                    {r.icon} {r.label}
-                  </span>
-                </label>
-                <button className="ck-mini" title="Supprimer la routine" onClick={() => void ctx.removeRoutine(r.id)}>
-                  ✕
-                </button>
+          <div className="ck-card-head-row">
+            <h3 className="ck-card-title">✅ Checklist du jour</h3>
+            <button className="ck-mini" title="Tout effacer (décoche les routines, vide les items du jour, laisse 2 cases)" onClick={() => void doReset()}>
+              🧹 Tout effacer
+            </button>
+          </div>
+          <div className="ck-check-cols">
+            <div>
+              <p className="ck-col-sub">Routines</p>
+              <ul className="ck-checks">
+                {ctx.routines.map((r) => (
+                  <li key={r.id} className="ck-check-row">
+                    <label>
+                      <input type="checkbox" checked={checkOf(r.id)} onChange={(e) => void ctx.toggleCheck(r.id, e.target.checked)} />
+                      <span>{r.icon} {r.label}</span>
+                    </label>
+                    <button className="ck-mini" title="Supprimer la routine" onClick={() => void ctx.removeRoutine(r.id)}>✕</button>
+                  </li>
+                ))}
+              </ul>
+              <div className="ck-add-row">
+                <input className="ck-input" placeholder="Nouvelle routine…" value={newRoutine} onChange={(e) => setNewRoutine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon); setNewRoutine('') } }} />
+                <input className="ck-input ck-icon-input" value={newIcon} maxLength={4} onChange={(e) => setNewIcon(e.target.value)} title="Picto" />
+                <button className="ck-btn" onClick={() => { if (newRoutine.trim()) { void ctx.addRoutine(newRoutine.trim(), newIcon); setNewRoutine('') } }}>+</button>
+              </div>
+            </div>
+            <div>
+              <p className="ck-col-sub">Aujourd’hui</p>
+              <ul className="ck-checks">
+                {ctx.dayItems.map((it) => (
+                  <li key={it.id} className="ck-check-row">
+                    <label>
+                      <input type="checkbox" checked={it.done} onChange={(e) => void ctx.toggleDayItem(it.id, e.target.checked)} />
+                      <span className={it.done ? 'ck-done' : ''}>{it.label}</span>
+                    </label>
+                    <button className="ck-mini" title="Supprimer" onClick={() => void ctx.removeDayItem(it.id)}>✕</button>
+                  </li>
+                ))}
+                {Array.from({ length: blanks }).map((_, i) => (
+                  <li key={`blank-${i}`} className="ck-check-row">
+                    <label>
+                      <input type="checkbox" disabled />
+                      <input className="ck-input ck-blank" placeholder="…" onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                          void ctx.addDayItem(e.currentTarget.value.trim())
+                          setBlanks((b) => Math.max(0, b - 1))
+                          e.currentTarget.value = ''
+                        }
+                      }} />
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="ck-add-row">
+                <input className="ck-input" placeholder="+ Item du jour…" value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newItem.trim()) { void ctx.addDayItem(newItem.trim()); setNewItem('') } }} />
+                <button className="ck-btn" onClick={() => { if (newItem.trim()) { void ctx.addDayItem(newItem.trim()); setNewItem('') } }}>+</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ck-card">
+          <h3 className="ck-card-title">🔔 Rappels</h3>
+          <ul className="ck-rem">
+            {upcoming.map((r) => (
+              <li key={r.id} className="ck-rem-row">
+                <span>🕐 {new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="ck-rem-msg">{r.msg}</span>
+                <button className="ck-mini" onClick={() => void ctx.removeReminder(r.id)}>✕</button>
               </li>
             ))}
+            {upcoming.length === 0 && <li className="ck-hint">Aucun rappel à venir.</li>}
           </ul>
           <div className="ck-add-row">
-            <input
-              className="ck-input"
-              placeholder="Nouvelle routine…"
-              value={newRoutine}
-              onChange={(e) => setNewRoutine(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newRoutine.trim()) {
-                  void ctx.addRoutine(newRoutine.trim(), newIcon)
-                  setNewRoutine('')
-                }
-              }}
-            />
-            <input
-              className="ck-input ck-icon-input"
-              value={newIcon}
-              maxLength={4}
-              onChange={(e) => setNewIcon(e.target.value)}
-              title="Picto"
-            />
-            <button
-              className="ck-btn"
-              onClick={() => {
-                if (newRoutine.trim()) {
-                  void ctx.addRoutine(newRoutine.trim(), newIcon)
-                  setNewRoutine('')
-                }
-              }}
-            >
-              +
-            </button>
+            <input className="ck-input ck-rem-at" type="datetime-local" value={remAt} onChange={(e) => setRemAt(e.target.value)} />
+            <input className="ck-input" placeholder="Message du rappel…" value={remMsg} onChange={(e) => setRemMsg(e.target.value)} />
+            <button className="ck-btn" onClick={() => {
+              if (remAt && remMsg.trim()) { void ctx.addReminder(new Date(remAt).getTime(), remMsg.trim()); setRemAt(''); setRemMsg('') }
+            }}>+</button>
           </div>
         </section>
 
@@ -443,23 +403,7 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
           <h3 className="ck-card-title">🧰 Techniques guidées</h3>
           <div className="ck-tech-grid">
             {TECHNIQUES.map((tc) => (
-              <button
-                key={tc.label}
-                className="ck-tech"
-                onClick={() =>
-                  tc.run({
-                    setMode,
-                    startPomodoro,
-                    startCountdown,
-                    startChrono: doStartChrono,
-                    startBreath,
-                    setFocusMin,
-                    setPauseMin,
-                    setLongMin,
-                    setCycles
-                  })
-                }
-              >
+              <button key={tc.label} className="ck-tech" onClick={() => tc.run({ setMode, startPomodoro, startCountdown, startBreath, setFocusMin, setPauseMin, setLongMin, setCycles })}>
                 <span className="ck-tech-icon">{tc.icon}</span>
                 <span className="ck-tech-label">{tc.label}</span>
                 <span className="ck-tech-desc">{tc.desc}</span>
@@ -474,17 +418,13 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
             <div className="ck-shutdown-done">
               <p>Fait aujourd’hui ✅</p>
               {ctx.shutdown.note && <p className="ck-shutdown-note">« {ctx.shutdown.note} »</p>}
-              <button className="ck-btn ghost" onClick={() => setShowShutdown(true)}>
-                Modifier
-              </button>
+              <button className="ck-btn ghost" onClick={() => setShowShutdown(true)}>Modifier</button>
             </div>
           ) : (
             <p className="ck-hint">Termine ta journée proprement : note la prochaine action de demain.</p>
           )}
           {!ctx.shutdown?.done && (
-            <button className="ck-btn primary" onClick={() => setShowShutdown(true)}>
-              🌙 Faire mon rituel de fermeture
-            </button>
+            <button className="ck-btn primary" onClick={() => setShowShutdown(true)}>🌙 Faire mon rituel de fermeture</button>
           )}
         </section>
       </div>
@@ -493,39 +433,16 @@ export default function TodayView({ ctx }: { ctx: CkCtx }): JSX.Element {
         <div className="ck-pop-backdrop">
           <div className="ck-pop" data-pop="ck-shutdown">
             <h3>🌙 Rituel de fermeture</h3>
-            {[
-              'La prochaine action de demain est notée',
-              'J’ai vidé ma tête (tout est noté dans Cockpit)',
-              'J’ai fermé mes onglets et conversations en cours'
-            ].map((label, i) => (
+            {['La prochaine action de demain est notée', 'J’ai vidé ma tête (tout est noté dans Cockpit)', 'J’ai fermé mes onglets et conversations en cours'].map((label, i) => (
               <label key={i} className="ck-check-row">
-                <input
-                  type="checkbox"
-                  checked={shChecks[i]}
-                  onChange={(e) => setShChecks((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))}
-                />
+                <input type="checkbox" checked={shChecks[i]} onChange={(e) => setShChecks((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))} />
                 <span>{label}</span>
               </label>
             ))}
-            <textarea
-              className="ck-input ck-note"
-              placeholder="Prochaine action de demain…"
-              value={shNote}
-              onChange={(e) => setShNote(e.target.value)}
-            />
+            <textarea className="ck-input ck-note" placeholder="Prochaine action de demain…" value={shNote} onChange={(e) => setShNote(e.target.value)} />
             <div className="ck-pop-actions">
-              <button className="ck-btn ghost" onClick={() => setShowShutdown(false)}>
-                Annuler
-              </button>
-              <button
-                className="ck-btn primary"
-                onClick={() => {
-                  void ctx.saveShutdown(true, shNote)
-                  setShowShutdown(false)
-                }}
-              >
-                Terminer ma journée ✅
-              </button>
+              <button className="ck-btn ghost" onClick={() => setShowShutdown(false)}>Annuler</button>
+              <button className="ck-btn primary" onClick={() => { void ctx.saveShutdown(true, shNote); setShowShutdown(false) }}>Terminer ma journée ✅</button>
             </div>
           </div>
         </div>

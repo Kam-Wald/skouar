@@ -6567,3 +6567,195 @@ th.drag-over {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Cockpit v2 ===== */
+.ck-breath {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 0 6px;
+}
+.ck-breath-track {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  height: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.ck-breath-dot {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--panel);
+  transform: translate(-50%, -50%);
+  transition: left 0.25s linear;
+  box-shadow: 0 0 12px var(--accent-soft);
+}
+.ck-today-task-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.ck-dues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ck-due-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+.ck-due-row:hover {
+  border-color: var(--accent);
+}
+.ck-due-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex: none;
+}
+.ck-due-chip.today {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ck-due-chip.late {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.ck-due-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ck-card-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ck-card-head-row .ck-card-title {
+  margin-bottom: 12px;
+}
+.ck-check-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.ck-col-sub {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ck-blank {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.ck-done {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.ck-rem {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ck-rem-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.ck-rem-msg {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ck-rem-at {
+  width: 170px;
+  flex: none;
+}
+.ck-kanban-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ck-tag-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ck-due-late {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.ck-due-today {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ck-goals {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ck-goal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.ck-int-dot {
+  font-size: 12px;
+  height: 12px;
+}
+.ck-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ck-subtasks {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+@media (max-width: 900px) {
+  .ck-check-cols {
+    grid-template-columns: 1fr;
+  }
+}
