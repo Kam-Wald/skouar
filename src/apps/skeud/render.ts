@@ -4,6 +4,32 @@ export async function loadBitmap(blob: Blob): Promise<ImageBitmap> {
   return createImageBitmap(blob, { imageOrientation: 'from-image' } as ImageBitmapOptions)
 }
 
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function jaggedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, amp: number, seed: number): void {
+  const rnd = mulberry32(seed)
+  const step = Math.max(5, Math.round(Math.min(w, h) / 36))
+  ctx.beginPath()
+  ctx.moveTo(x, y + rnd() * amp)
+  for (let px = x + step; px < x + w - step / 2; px += step) ctx.lineTo(px, y + rnd() * amp)
+  ctx.lineTo(x + w, y + rnd() * amp)
+  for (let py = y + step; py < y + h - step / 2; py += step) ctx.lineTo(x + w - rnd() * amp, py)
+  ctx.lineTo(x + w - rnd() * amp, y + h)
+  for (let px = x + w - step; px > x + step / 2; px -= step) ctx.lineTo(px, y + h - rnd() * amp)
+  ctx.lineTo(x, y + h - rnd() * amp)
+  for (let py = y + h - step; py > y + step / 2; py -= step) ctx.lineTo(x + rnd() * amp, py)
+  ctx.closePath()
+}
+
 function unsharp(canvas: HTMLCanvasElement, amount: number): void {
   const w = canvas.width
   const h = canvas.height
@@ -85,12 +111,44 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
   octx.filter = cssFilter(st.filter)
   octx.drawImage(bmp, crop.x, crop.y, crop.w, crop.h, 0, 0, g.iw, g.ih)
   if (st.filter.sharpen > 0) unsharp(off, st.filter.sharpen)
+  if (st.frame.scan) {
+    octx.filter = 'none'
+    octx.fillStyle = 'rgba(0,0,0,0.09)'
+    for (let y = 0; y < g.ih; y += 3) octx.fillRect(0, y, g.iw, 1)
+  }
 
   const canvas = document.createElement('canvas')
   canvas.width = g.W
   canvas.height = g.H
   const ctx = canvas.getContext('2d')!
-  if (st.frame.mat) {
+  const tornEdge = st.frame.torn || st.frame.burnt
+  const seed = (w * 733 + h * 131) >>> 0
+  if (st.frame.burnt) {
+    const bg = ctx.createLinearGradient(0, 0, g.W, g.H)
+    bg.addColorStop(0, '#241609')
+    bg.addColorStop(0.5, '#120b06')
+    bg.addColorStop(1, '#2b1a0c')
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.torn) {
+    const bg = ctx.createLinearGradient(0, 0, 0, g.H)
+    bg.addColorStop(0, '#faf7f0')
+    bg.addColorStop(1, '#efe9dc')
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.film) {
+    ctx.fillStyle = '#141414'
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.stamp) {
+    ctx.fillStyle = st.frame.stampColor
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.lace) {
+    ctx.fillStyle = '#fdfbf7'
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.neon) {
+    ctx.fillStyle = '#0b0b14'
+    ctx.fillRect(0, 0, g.W, g.H)
+  } else if (st.frame.mat) {
     ctx.fillStyle = st.frame.matColor
     ctx.fillRect(0, 0, g.W, g.H)
   } else if (st.frame.letterbox) {
@@ -98,25 +156,227 @@ export function renderEdit(bmp: ImageBitmap, st: EditState, maxW = 0): HTMLCanva
     ctx.fillRect(0, 0, g.W, g.H)
   }
   ctx.save()
-  if (g.circle) {
+  if (tornEdge) {
+    jaggedRect(ctx, g.ix, g.iy, g.iw, g.ih, g.edge, seed)
+    ctx.clip()
+  } else if (g.circle) {
     ctx.beginPath()
     ctx.arc(g.ix + g.iw / 2, g.iy + g.ih / 2, Math.min(g.iw, g.ih) / 2, 0, Math.PI * 2)
     ctx.clip()
-  } else if (g.radius > 0) {
+  } else if (g.radius > 0 && !st.frame.shadow) {
     ctx.beginPath()
     ctx.roundRect(g.ix, g.iy, g.iw, g.ih, g.radius * (g.iw / w))
     ctx.clip()
+  }
+  if (st.frame.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.45)'
+    ctx.shadowBlur = 18
+    ctx.shadowOffsetY = 10
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(g.ix, g.iy, g.iw, g.ih)
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
   }
   ctx.translate(g.ix + g.iw / 2, g.iy + g.ih / 2)
   ctx.rotate((st.rot * Math.PI) / 180)
   ctx.scale(st.flipH ? -1 : 1, st.flipV ? -1 : 1)
   ctx.drawImage(off, -g.iw / 2, -g.ih / 2)
   ctx.restore()
-  if (st.frame.border) {
+  if (tornEdge) {
+    jaggedRect(ctx, g.ix, g.iy, g.iw, g.ih, g.edge, seed)
+    if (st.frame.burnt) {
+      ctx.save()
+      ctx.shadowColor = 'rgba(255,122,26,0.85)'
+      ctx.shadowBlur = g.edge * 1.6
+      ctx.strokeStyle = 'rgba(255,140,40,0.9)'
+      ctx.lineWidth = Math.max(2, g.edge * 0.22)
+      ctx.stroke()
+      ctx.restore()
+      jaggedRect(ctx, g.ix, g.iy, g.iw, g.ih, g.edge, seed)
+      ctx.strokeStyle = 'rgba(20,10,4,0.85)'
+      ctx.lineWidth = Math.max(3, g.edge * 0.4)
+      ctx.stroke()
+    } else {
+      ctx.save()
+      ctx.shadowColor = 'rgba(60,45,20,0.4)'
+      ctx.shadowBlur = g.edge * 0.7
+      ctx.shadowOffsetY = g.edge * 0.18
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+      ctx.restore()
+    }
+  }
+  if (st.frame.border || st.frame.double) {
     const bw = st.frame.borderWidth * (g.W / w)
     ctx.strokeStyle = st.frame.borderColor
     ctx.lineWidth = bw
     ctx.strokeRect(g.ix + bw / 2, g.iy + bw / 2, g.iw - bw, g.ih - bw)
+    if (st.frame.double) {
+      const gap = Math.max(6, Math.round(g.iw * 0.03))
+      const lw = Math.max(2, bw / 2)
+      ctx.lineWidth = lw
+      ctx.strokeRect(g.ix + gap + lw / 2, g.iy + gap + lw / 2, g.iw - 2 * gap - lw, g.ih - 2 * gap - lw)
+    }
+  }
+  if (st.frame.stamp || st.frame.lace || st.frame.film) {
+    ctx.save()
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.beginPath()
+    if (st.frame.stamp) {
+      for (let x = g.ix - 4; x <= g.ix + g.iw + 4; x += 10) {
+        ctx.moveTo(x + 3.5, g.iy - 2)
+        ctx.arc(x, g.iy - 2, 3.5, 0, Math.PI * 2)
+        ctx.moveTo(x + 3.5, g.iy + g.ih + 2)
+        ctx.arc(x, g.iy + g.ih + 2, 3.5, 0, Math.PI * 2)
+      }
+      for (let y = g.iy - 4; y <= g.iy + g.ih + 4; y += 10) {
+        ctx.moveTo(g.ix - 2, y + 3.5)
+        ctx.arc(g.ix - 2, y, 3.5, 0, Math.PI * 2)
+        ctx.moveTo(g.ix + g.iw + 2, y + 3.5)
+        ctx.arc(g.ix + g.iw + 2, y, 3.5, 0, Math.PI * 2)
+      }
+    }
+    if (st.frame.lace) {
+      const r = 5
+      for (let x = 2; x <= g.W - 2; x += 12) {
+        ctx.moveTo(x + r, 1)
+        ctx.arc(x, 1, r, 0, Math.PI * 2)
+        ctx.moveTo(x + r, g.H - 1)
+        ctx.arc(x, g.H - 1, r, 0, Math.PI * 2)
+      }
+      for (let y = 2; y <= g.H - 2; y += 12) {
+        ctx.moveTo(1, y + r)
+        ctx.arc(1, y, r, 0, Math.PI * 2)
+        ctx.moveTo(g.W - 1, y + r)
+        ctx.arc(g.W - 1, y, r, 0, Math.PI * 2)
+      }
+    }
+    if (st.frame.film) {
+      const fm = Math.max(22, Math.round(h * 0.09))
+      for (let y = g.iy + 6; y < g.iy + g.ih - 8; y += 16) {
+        ctx.rect(g.ix - fm + 5, y, fm - 10, 8)
+        ctx.rect(g.ix + g.iw + 5, y, fm - 10, 8)
+      }
+    }
+    ctx.fill()
+    ctx.restore()
+  }
+  if (st.frame.wood) {
+    const bw = st.frame.borderWidth * (g.W / w)
+    const grad = ctx.createLinearGradient(0, 0, g.W, g.H)
+    grad.addColorStop(0, '#9c6b35')
+    grad.addColorStop(0.35, '#6e4525')
+    grad.addColorStop(0.65, '#b07a42')
+    grad.addColorStop(1, '#5a3a1f')
+    ctx.strokeStyle = grad
+    ctx.lineWidth = bw
+    ctx.strokeRect(g.ix + bw / 2, g.iy + bw / 2, g.iw - bw, g.ih - bw)
+    if (g.iw > bw * 2 + 8 && g.ih > bw * 2 + 8) {
+      ctx.strokeStyle = 'rgba(40,20,5,0.6)'
+      ctx.lineWidth = 2
+      ctx.strokeRect(g.ix + bw + 2, g.iy + bw + 2, g.iw - 2 * bw - 4, g.ih - 2 * bw - 4)
+    }
+  }
+  if (st.frame.gold) {
+    const bw = st.frame.borderWidth * (g.W / w)
+    const grad = ctx.createLinearGradient(0, 0, g.W, g.H)
+    grad.addColorStop(0, '#f6d878')
+    grad.addColorStop(0.4, '#caa22f')
+    grad.addColorStop(0.7, '#8a6a14')
+    grad.addColorStop(1, '#e9c766')
+    ctx.strokeStyle = grad
+    ctx.lineWidth = bw
+    ctx.strokeRect(g.ix + bw / 2, g.iy + bw / 2, g.iw - bw, g.ih - bw)
+    if (st.frame.double) {
+      const gap = Math.max(6, Math.round(g.iw * 0.03))
+      ctx.strokeStyle = '#7a5c10'
+      ctx.lineWidth = Math.max(2, bw / 3)
+      ctx.strokeRect(g.ix + gap + bw / 4, g.iy + gap + bw / 4, g.iw - 2 * gap - bw / 2, g.ih - 2 * gap - bw / 2)
+    }
+  }
+  if (st.frame.neon) {
+    ctx.save()
+    ctx.shadowColor = st.frame.neonColor
+    ctx.shadowBlur = 18
+    ctx.strokeStyle = st.frame.neonColor
+    ctx.lineWidth = 3
+    ctx.strokeRect(g.ix + 1.5, g.iy + 1.5, g.iw - 3, g.ih - 3)
+    ctx.globalAlpha = 0.5
+    ctx.lineWidth = 7
+    ctx.strokeRect(g.ix + 3.5, g.iy + 3.5, g.iw - 7, g.ih - 7)
+    ctx.restore()
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(g.ix + 1.5, g.iy + 1.5, g.iw - 3, g.ih - 3)
+  }
+  if (st.frame.sketch) {
+    const amp = Math.max(3, Math.round(Math.min(w, h) * 0.008))
+    ctx.strokeStyle = st.frame.borderColor
+    ctx.lineWidth = 2
+    jaggedRect(ctx, g.ix, g.iy, g.iw, g.ih, amp, seed)
+    ctx.stroke()
+    ctx.globalAlpha = 0.6
+    ctx.lineWidth = 1.2
+    jaggedRect(ctx, g.ix + 1.5, g.iy + 1.5, g.iw - 3, g.ih - 3, amp, seed + 7)
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }
+  if (st.frame.corners) {
+    const cs = Math.max(20, Math.round(Math.min(g.iw, g.ih) * 0.07))
+    ctx.fillStyle = st.frame.cornerColor
+    ctx.beginPath()
+    ctx.moveTo(g.ix, g.iy)
+    ctx.lineTo(g.ix + cs, g.iy)
+    ctx.lineTo(g.ix, g.iy + cs)
+    ctx.moveTo(g.ix + g.iw, g.iy)
+    ctx.lineTo(g.ix + g.iw - cs, g.iy)
+    ctx.lineTo(g.ix + g.iw, g.iy + cs)
+    ctx.moveTo(g.ix, g.iy + g.ih)
+    ctx.lineTo(g.ix + cs, g.iy + g.ih)
+    ctx.lineTo(g.ix, g.iy + g.ih - cs)
+    ctx.moveTo(g.ix + g.iw, g.iy + g.ih)
+    ctx.lineTo(g.ix + g.iw - cs, g.iy + g.ih)
+    ctx.lineTo(g.ix + g.iw, g.iy + g.ih - cs)
+    ctx.fill()
+  }
+  if (st.frame.tape) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(250,240,190,0.6)'
+    ctx.shadowColor = 'rgba(0,0,0,0.15)'
+    ctx.shadowBlur = 4
+    ctx.shadowOffsetY = 2
+    const pts: [number, number, number][] = [
+      [g.ix, g.iy, -0.6],
+      [g.ix + g.iw, g.iy, 0.6],
+      [g.ix, g.iy + g.ih, 0.6],
+      [g.ix + g.iw, g.iy + g.ih, -0.6]
+    ]
+    for (const [cx, cy, rot] of pts) {
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(rot)
+      ctx.fillRect(-26, -9, 52, 18)
+      ctx.restore()
+    }
+    ctx.restore()
+  }
+  if (st.frame.splatter) {
+    const rnd = mulberry32((seed ^ 0x9e3779b9) >>> 0)
+    ctx.fillStyle = st.frame.splatColor
+    for (let i = 0; i < 12; i++) {
+      const c = Math.floor(rnd() * 4)
+      const cx = c % 2 === 0 ? g.ix : g.ix + g.iw
+      const cy = c < 2 ? g.iy : g.iy + g.ih
+      const px = cx + (rnd() * 56 - 28)
+      const py = cy + (rnd() * 56 - 28)
+      ctx.globalAlpha = 0.55 + rnd() * 0.4
+      ctx.beginPath()
+      ctx.arc(px, py, 1 + rnd() * 4.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
   }
   for (const l of st.layers) {
     if (l.kind === 'text') drawTextLayer(ctx, l, g)
