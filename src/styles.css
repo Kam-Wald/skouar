@@ -3752,3 +3752,39 @@ th.drag-over {
   height: 26px;
   max-width: 165px;
 }
+
+.skrid-toolbar {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  row-gap: 4px;
+}
+
+.skrid-select {
+  max-width: 150px;
+}
+
+.skrid-font-sel {
+  max-width: 175px;
+}
+
+.skrid-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.skrid-fiche-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.skrid-fiche-field .db-input {
+  width: 150px;
+}

@@ -7,6 +7,9 @@ import { buildPdf, downloadPdf, wrap, type PdfLine, type PdfOpts } from '../bloc
 import { exportFile } from '../blocs/markdown'
 import {
   createDoc,
+  docIcon,
+  FICHE_TYPES,
+  ficheTypeOf,
   loadSkrid,
   loadSkridHistory,
   orderedDocs,
@@ -383,6 +386,19 @@ export default function SkridApp() {
     })
   }
 
+  const addAnnexe = (kind: 'fiche' | 'memo') => {
+    setState((s) => {
+      if (!s) return s
+      const d = createDoc(kind === 'memo' ? 'Nouveau mémo' : 'Nouvelle fiche')
+      d.kind = kind
+      if (kind === 'fiche') d.ficheType = 'perso'
+      return { ...s, docs: [...s.docs, d], currentId: d.id }
+    })
+  }
+
+  const addFiche = () => addAnnexe('fiche')
+  const addMemo = () => addAnnexe('memo')
+
   const deleteDoc = (id: string) => {
     const snap = state
     setState((s) => {
@@ -744,7 +760,7 @@ export default function SkridApp() {
     } else {
       exportFile(`${fname}.doc`, wordHtml(title, current.content), 'application/msword')
     }
-    setToast({ key: Date.now(), msg: `Chapitre exporté (${format.toUpperCase()}) ⬇` })
+    setToast({ key: Date.now(), msg: `${kindLabel} exporté (${format.toUpperCase()}) ⬇` })
     setExpOpen(false)
   }
 
@@ -774,8 +790,10 @@ export default function SkridApp() {
 
   const words = current ? wordCount(current.content) : 0
   const target = current?.wordTarget ?? 0
-  const totalWords = state ? orderedDocs(state.docs).reduce((a, d) => a + wordCount(d.content), 0) : 0
-  const docsOrdered = state ? orderedDocs(state.docs) : []
+  const chapters = state ? state.docs.filter((d) => !d.kind || d.kind === 'chapter') : []
+  const annexes = state ? state.docs.filter((d) => d.kind === 'fiche' || d.kind === 'memo') : []
+  const totalWords = chapters.reduce((a, d) => a + wordCount(d.content), 0)
+  const docsOrdered = orderedDocs(chapters)
   const maxW = Math.max(1, ...docsOrdered.map((d) => wordCount(d.content)))
   const daily = state?.daily ?? {}
   const days14 = lastNDays(daily, 14)
@@ -784,6 +802,7 @@ export default function SkridApp() {
   const streak = streakOf(daily)
   const chapIdx = docsOrdered.findIndex((d) => d.id === current?.id)
   const comCount = Object.keys(current?.comments ?? {}).length
+  const kindLabel = current?.kind === 'memo' ? 'Mémo' : current?.kind === 'fiche' ? 'Fiche' : 'Chapitre'
 
   const exportBook = () => {
     if (!state) return
@@ -791,7 +810,7 @@ export default function SkridApp() {
       { text: state.bookTitle || 'Mon livre', size: 26, font: 2, indent: 0, gapBefore: 0 },
       { text: `Skrid — Skouar · ${new Date().toLocaleDateString('fr-FR')} · ${totalWords} mots`, size: 10, font: 1, indent: 0, gapBefore: 8 }
     ]
-    orderedDocs(state.docs).forEach((d, i) => {
+    orderedDocs(state.docs.filter((d) => !d.kind || d.kind === 'chapter')).forEach((d, i) => {
       lines.push({ text: '', size: 8, font: 1, indent: 0, gapBefore: i === 0 ? 40 : 90 })
       lines.push({ text: d.title.trim() || 'Sans titre', size: 18, font: 2, indent: 0, gapBefore: 0, chapter: d.title.trim() || 'Sans titre' })
       htmlToLines(d.content, lines)
@@ -858,7 +877,7 @@ export default function SkridApp() {
           <div className="blocs-sidebar-scroll">
             <ul className="blocs-page-list">
               <DocTree
-                docs={state.docs}
+                docs={chapters}
                 parentId={null}
                 depth={0}
                 currentId={current.id}
@@ -879,6 +898,36 @@ export default function SkridApp() {
                   setDragOverId(null)
                 }}
               />
+            </ul>
+            <div className="blocs-sidebar-head" style={{ marginTop: 12 }}>
+              <span>Fiches & mémos</span>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <button className="blocs-new-page" onClick={addFiche} title="Nouvelle fiche">
+                  ＋
+                </button>
+                <button className="blocs-new-page" onClick={addMemo} title="Nouveau mémo">
+                  🗒️
+                </button>
+              </div>
+            </div>
+            <ul className="blocs-page-list">
+              {annexes.map((d) => (
+                <li key={d.id}>
+                  <div className="blocs-page-row">
+                    <button
+                      className={`blocs-page-item${d.id === current.id ? ' selected' : ''}`}
+                      onClick={() => setState((s) => (s ? { ...s, currentId: d.id } : s))}
+                    >
+                      <span className="skrid-doc-count">{wordCount(d.content)}</span>
+                      <span style={{ marginRight: 5 }}>{docIcon(d)}</span>
+                      {d.title.trim() || 'Sans titre'}
+                    </button>
+                    <button className="blocs-page-del" title="Supprimer" onClick={() => deleteDoc(d.id)}>
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
             </ul>
           </div>
           <button className="blocs-side-link" onClick={() => addDoc(null)}>
@@ -1004,10 +1053,10 @@ export default function SkridApp() {
         )}
         {expOpen && (
           <div className="skrid-pop skrid-exp" data-pop="skexp">
-            <button className="skrid-exp-btn" onClick={() => exportChapter('pdf')}>⬇ Chapitre en PDF</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('html')}>⬇ Chapitre en HTML</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('md')}>⬇ Chapitre en Markdown</button>
-            <button className="skrid-exp-btn" onClick={() => exportChapter('doc')}>⬇ Chapitre en .doc</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('pdf')}>⬇ {kindLabel} en PDF</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('html')}>⬇ {kindLabel} en HTML</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('md')}>⬇ {kindLabel} en Markdown</button>
+            <button className="skrid-exp-btn" onClick={() => exportChapter('doc')}>⬇ {kindLabel} en .doc</button>
             <div className="skrid-exp-sep" />
             <button className="skrid-exp-btn" onClick={exportBook}>⬇ Livre entier en PDF</button>
             <label className="skrid-exp-opt">
@@ -1134,11 +1183,15 @@ export default function SkridApp() {
                 <input
                   className="blocs-title"
                   value={current.title}
-                  placeholder="Titre du chapitre"
+                  placeholder={!current.kind || current.kind === 'chapter' ? 'Titre du chapitre' : current.kind === 'memo' ? 'Titre du mémo' : 'Nom de la fiche'}
                   onChange={(e) => updateDoc(current.id, { title: e.target.value })}
                 />
                 <div className="page-head-actions">
-                  <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
+                  {!current.kind || current.kind === 'chapter' ? (
+                    <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
+                  ) : (
+                    <span className="mono skrid-chap-num">{current.kind === 'memo' ? '🗒️ mémo' : `fiche ${ficheTypeOf(current).icon} ${ficheTypeOf(current).label.toLowerCase()}`}</span>
+                  )}
                   <button
                     className="page-cover-btn"
                     title={focus ? 'Quitter le mode focus' : 'Mode focus (sans sidebar ni barre)'}
@@ -1158,6 +1211,32 @@ export default function SkridApp() {
                   </button>
                 </div>
               </div>
+              {current.kind === 'fiche' && (
+                <div className="skrid-fiche">
+                  <select
+                    className="skrid-select"
+                    title="Type de fiche"
+                    value={current.ficheType ?? 'perso'}
+                    onChange={(e) => updateDoc(current.id, { ficheType: e.target.value, fields: {} })}
+                  >
+                    {FICHE_TYPES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.icon} {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  {ficheTypeOf(current).fields.map((f) => (
+                    <label className="skrid-fiche-field" key={f}>
+                      <span>{f}</span>
+                      <input
+                        className="db-input"
+                        value={current.fields?.[f] ?? ''}
+                        onChange={(e) => updateDoc(current.id, { fields: { ...(current.fields ?? {}), [f]: e.target.value } })}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
               <div className="skrid-toolbar-wrap">
                 <div className="skrid-toolbar">
                   <button className="tool" title="Annuler (Ctrl+Z)" onMouseDown={(e) => e.preventDefault()} onClick={undo}>
@@ -1167,24 +1246,23 @@ export default function SkridApp() {
                     <Redo2 size={15} />
                   </button>
                   <span className="sel-sep" />
-                  <select className="skrid-select" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
+                  <select className="skrid-select skrid-font-sel" title="Police d'écriture (polices système)" value="" onChange={(e) => e.target.value && fmtFromUi('fontName', e.target.value)}>
                     <option value="" disabled>Police…</option>
-                    <option value="'Iowan Old Style', Georgia, serif">Iowan (défaut)</option>
-                    <option value="Inter, system-ui, sans-serif">Inter</option>
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
-                    <option value="Georgia, serif">Georgia</option>
-                    <option value="'Times New Roman', serif">Times New Roman</option>
-                    <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
-                    <option value="'Book Antiqua', Palatino, serif">Book Antiqua</option>
-                    <option value="Garamond, serif">Garamond</option>
-                    <option value="Verdana, sans-serif">Verdana</option>
-                    <option value="Tahoma, sans-serif">Tahoma</option>
-                    <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
-                    <option value="'Courier New', monospace">Courier New</option>
-                    <option value="'Lucida Console', monospace">Lucida Console</option>
-                    <option value="'Comic Sans MS', cursive">Comic Sans</option>
-                    <option value="Impact, sans-serif">Impact</option>
+                    <option value="'Iowan Old Style', Georgia, serif" style={{ fontFamily: "'Iowan Old Style', Georgia, serif" }}>Iowan (défaut)</option>
+                    <option value="Inter, system-ui, sans-serif" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Inter</option>
+                    <option value="Arial, sans-serif" style={{ fontFamily: 'Arial, sans-serif' }}>Arial</option>
+                    <option value="'Segoe UI', system-ui, sans-serif" style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}>Segoe UI</option>
+                    <option value="Georgia, serif" style={{ fontFamily: 'Georgia, serif' }}>Georgia</option>
+                    <option value="'Times New Roman', serif" style={{ fontFamily: "'Times New Roman', serif" }}>Times New Roman</option>
+                    <option value="'Palatino Linotype', Palatino, serif" style={{ fontFamily: "'Palatino Linotype', Palatino, serif" }}>Palatino</option>
+                    <option value="'Book Antiqua', Palatino, serif" style={{ fontFamily: "'Book Antiqua', Palatino, serif" }}>Book Antiqua</option>
+                    <option value="Garamond, serif" style={{ fontFamily: 'Garamond, serif' }}>Garamond</option>
+                    <option value="Verdana, sans-serif" style={{ fontFamily: 'Verdana, sans-serif' }}>Verdana</option>
+                    <option value="Tahoma, sans-serif" style={{ fontFamily: 'Tahoma, sans-serif' }}>Tahoma</option>
+                    <option value="'Trebuchet MS', sans-serif" style={{ fontFamily: "'Trebuchet MS', sans-serif" }}>Trebuchet</option>
+                    <option value="'Courier New', monospace" style={{ fontFamily: "'Courier New', monospace" }}>Courier New</option>
+                    <option value="'Lucida Console', monospace" style={{ fontFamily: "'Lucida Console', monospace" }}>Lucida Console</option>
+                    <option value="Impact, sans-serif" style={{ fontFamily: 'Impact, sans-serif' }}>Impact</option>
                   </select>
                   <select className="skrid-select" title="Style de bloc" value="" onChange={(e) => e.target.value && fmtFromUi('formatBlock', e.target.value)}>
                     <option value="" disabled>¶ Titre…</option>
