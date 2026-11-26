@@ -1,10 +1,12 @@
+import ColorSwatches from '../../shared/ColorSwatches'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AppShell, { AppSkeleton } from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import { useDismiss } from '../../shared/useDismiss'
 import { zipFiles } from '../kod/zip'
 import { delImage, listImages, putImage, uid, type SkImage } from './store'
-import { batchName, DEFAULT_EDIT, EXPORT_FORMATS, fmtBytes, FRAME_PRESETS, framePresetOf, type EditState } from './logic'
+import { batchName, DEFAULT_EDIT, EXPORT_FORMATS, fmtBytes, FRAME_PRESETS, framePresetOf, MONTAGE_LAYOUTS, type EditState } from './logic'
+import { renderMontage } from './render'
 import { canvasToBlob, downloadBlob, loadBitmap, renderEdit } from './render'
 import EditorView from './views/EditorView'
 
@@ -31,6 +33,10 @@ export default function SkeudApp(): JSX.Element {
   const [showBatch, setShowBatch] = useState(false)
   const [batchState, setBatchState] = useState<EditState>(DEFAULT_EDIT)
   const [batchFormat, setBatchFormat] = useState(1)
+  const [batchMode, setBatchMode] = useState<'lot' | 'montage'>('lot')
+  const [montageLayout, setMontageLayout] = useState('g4')
+  const [montageGap, setMontageGap] = useState(14)
+  const [montageBg, setMontageBg] = useState('#f5f5f0')
   const fileRef = useRef<HTMLInputElement>(null)
   useDismiss('sk-batch', showBatch, () => setShowBatch(false))
 
@@ -121,6 +127,31 @@ export default function SkeudApp(): JSX.Element {
       notify(`${entries.length} image(s) exportées en ZIP 📦`)
     }
   }, [images, sel, batchState])
+
+  const runMontage = useCallback(async () => {
+    const targets = images.filter((x) => sel.includes(x.id))
+    const layout = MONTAGE_LAYOUTS.find((l) => l.id === montageLayout) ?? MONTAGE_LAYOUTS[2]
+    if (targets.length < 2) return
+    setShowBatch(false)
+    notify(`Montage de ${targets.length} image(s)… 🧩`)
+    try {
+      const bmps: ImageBitmap[] = []
+      for (const im of targets.slice(0, layout.cols * layout.rows)) bmps.push(await loadBitmap(im.orig))
+      const canvas = renderMontage(bmps, layout.cols, layout.rows, montageGap, montageBg)
+      bmps.forEach((b) => b.close())
+      const blob = await canvasToBlob(canvas, 'image/png', 0.92)
+      const img: SkImage = {
+        id: uid(), name: `montage-${targets.length}photos.png`, type: 'image/png', size: blob.size,
+        w: canvas.width, h: canvas.height, blob, orig: blob, createdAt: Date.now(), updatedAt: Date.now()
+      }
+      await putImage(img)
+      setImages((prev) => [...prev, img].sort((a, b) => a.createdAt - b.createdAt))
+      setCurrentId(img.id)
+      notify(`Planche ${canvas.width}×${canvas.height} enregistrée 🖼️`)
+    } catch {
+      notify('Montage impossible (image illisible ?)')
+    }
+  }, [images, sel, montageLayout, montageGap, montageBg])
 
   const current = images.find((x) => x.id === currentId) ?? null
 
@@ -219,8 +250,11 @@ export default function SkeudApp(): JSX.Element {
       {sel.length >= 2 && (
         <div className="sk-batch-bar">
           <span>☑ {sel.length} image(s) sélectionnée(s)</span>
-          <button className="sk-btn primary" onClick={() => setShowBatch(true)}>
+          <button className="sk-btn primary" onClick={() => { setBatchMode('lot'); setShowBatch(true) }}>
             ⚙️ Traiter par lot
+          </button>
+          <button className="sk-btn" onClick={() => { setBatchMode('montage'); setShowBatch(true) }}>
+            🧩 Montage
           </button>
           <button className="sk-btn ghost" onClick={() => setSel([])}>
             ✕ Tout désélectionner
@@ -231,8 +265,37 @@ export default function SkeudApp(): JSX.Element {
       {showBatch && (
         <div className="ck-pop-backdrop">
           <div className="ck-pop" data-pop="sk-batch">
-            <h3>⚙️ Traitement par lot ({sel.length} images)</h3>
-            <p className="sk-hint">Applique les réglages ci-dessous à chaque image sélectionnée (depuis leur original), exportées en ZIP.</p>
+            <h3>{batchMode === 'montage' ? `🧩 Montage (${sel.length} images)` : `⚙️ Traitement par lot (${sel.length} images)`}</h3>
+            <label className="sk-field">
+              Mode
+              <select className="sk-input" value={batchMode} onChange={(e) => setBatchMode(e.target.value as 'lot' | 'montage')}>
+                <option value="lot">Traitement par lot (ZIP)</option>
+                <option value="montage">Montage en planche</option>
+              </select>
+            </label>
+            {batchMode === 'montage' && (
+              <>
+                <label className="sk-field">
+                  Disposition
+                  <select className="sk-input" value={montageLayout} onChange={(e) => setMontageLayout(e.target.value)}>
+                    {MONTAGE_LAYOUTS.map((l) => (
+                      <option key={l.id} value={l.id}>{l.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="sk-field">
+                  Espacement (px)
+                  <input type="number" min={0} max={120} value={montageGap} onChange={(e) => setMontageGap(Math.min(120, Math.max(0, Number(e.target.value) || 0)))} />
+                </label>
+                <label className="sk-field">
+                  Fond de la planche
+                  <ColorSwatches value={montageBg} onChange={setMontageBg} title="Couleur de fond" />
+                </label>
+              </>
+            )}
+            {batchMode === 'lot' && <p className="sk-hint">Applique les réglages ci-dessous à chaque image sélectionnée (depuis leur original), exportées en ZIP.</p>}
+            {batchMode === 'lot' && (
+            <>
             <label className="sk-field">
               Format de sortie
               <select className="sk-input" value={batchFormat} onChange={(e) => setBatchFormat(Number(e.target.value))}>
@@ -280,9 +343,15 @@ export default function SkeudApp(): JSX.Element {
                 onChange={(e) => setBatchState({ ...batchState, filter: { ...batchState.filter, saturation: Number(e.target.value) } })}
               />
             </label>
+            </>
+            )}
             <div className="ck-pop-actions">
               <button className="sk-btn ghost" onClick={() => setShowBatch(false)}>Annuler</button>
-              <button className="sk-btn primary" onClick={() => void runBatch(batchFormat)}>Lancer le lot 🚀</button>
+              {batchMode === 'montage' ? (
+                <button className="sk-btn primary" onClick={() => void runMontage()}>Générer la planche 🖼️</button>
+              ) : (
+                <button className="sk-btn primary" onClick={() => void runBatch(batchFormat)}>Lancer le lot 🚀</button>
+              )}
             </div>
           </div>
         </div>

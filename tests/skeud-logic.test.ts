@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { TEMPLATES, applyTemplate, extractPalette, MONTAGE_LAYOUTS } from '../src/apps/skeud/logic'
 import {
   cssFilter,
   DEFAULT_FILTERS,
@@ -119,10 +120,15 @@ describe('skeud v3 : calques, température, presets étendus', () => {
     expect(cssFilter({ ...DEFAULT_FILTERS, temp: -60 })).toBe('hue-rotate(20deg) saturate(0.76)')
     expect(cssFilter({ ...DEFAULT_FILTERS, sharpen: 0.8 })).toBe('none')
   })
-  it('FONTS : 20 polices (plus que les 16 de Skrid), STICKERS : 48', () => {
-    expect(FONTS.length).toBe(20)
+  it('FONTS : 38 polices embarquées triées par ordre alphabétique + 20 système, STICKERS : 52', () => {
+    expect(FONTS.length).toBe(58)
     expect(STICKERS.length).toBe(52)
     expect(FONTS.some((f) => f.label.includes('Impact'))).toBe(true)
+    for (const name of ['Alegreya', 'Playfair', 'Atkinson', 'Roboto', 'Open Sans', 'Bitter', 'Cinzel', 'JetBrains Mono', 'Special Elite', 'Pacifico', 'Permanent Marker', 'Great Vibes', 'Orbitron', 'Raleway', 'Rubik', 'Archivo', 'Bodoni Moda', 'Abril Fatface', 'Instrument Serif', 'Josefin Sans', 'Newsreader', 'Inconsolata']) {
+      expect(FONTS.some((f) => f.label.includes(name))).toBe(true)
+    }
+    const emb = FONTS.slice(0, 38).map((f) => f.label.toLowerCase())
+    expect([...emb].sort()).toEqual(emb)
   })
   it('newTextLayer/newStickerLayer + layerDims', () => {
     const t = newTextLayer('a')
@@ -200,5 +206,53 @@ describe('skeud v4 : onglets + presets doublés + cadres stylés', () => {
     const matTorn = frameGeom(400, 200, { ...DEFAULT_FRAME, mat: true, matSize: 40, torn: true })
     expect(matTorn.ix).toBe(40 + torn.edge)
     expect(matTorn.W).toBe(400 + 2 * (40 + torn.edge))
+  })
+})
+
+describe('skeud v5 : templates, palette, montage', () => {
+  it('TEMPLATES : 6 templates avec aspect/size/cadre valides', () => {
+    expect(TEMPLATES.length).toBe(6)
+    for (const t of TEMPLATES) {
+      expect(t.aspect).toBeGreaterThan(0)
+      expect(t.sizeW).toBeGreaterThanOrEqual(1080)
+      expect(FRAME_PRESETS.some((p) => p.id === t.frameId)).toBe(true)
+    }
+  })
+  it('applyTemplate : recadrage centré au bon ratio + taille + cadre + texte optionnel', () => {
+    const st = { ...DEFAULT_EDIT }
+    const story = TEMPLATES.find((t) => t.id === 'story')!
+    const r = applyTemplate(st, 1000, 500, story, 'L1')
+    expect(r.crop).not.toBeNull()
+    expect(Math.abs(r.crop!.w / r.crop!.h - 9 / 16)).toBeLessThan(0.02)
+    expect(r.crop!.x).toBeGreaterThanOrEqual(0)
+    expect(r.size).toEqual({ w: 1080, h: 1920 })
+    expect(r.layers.length).toBe(0)
+    const carte = TEMPLATES.find((t) => t.id === 'carte')!
+    const r2 = applyTemplate(st, 1000, 500, carte, 'L2')
+    expect(r2.frame.polaroid).toBe(true)
+    expect(r2.layers.length).toBe(1)
+    expect(r2.layers[0].kind).toBe('text')
+  })
+  it('extractPalette : 5 hex valides, dominants d’abord', () => {
+    const w = 8
+    const h = 8
+    const px = new Uint8ClampedArray(w * h * 4)
+    for (let i = 0; i < w * h; i++) {
+      px[i * 4] = i < 48 ? 200 : 20
+      px[i * 4 + 1] = i < 48 ? 30 : 40
+      px[i * 4 + 2] = i < 48 ? 30 : 220
+      px[i * 4 + 3] = 255
+    }
+    const pal = extractPalette(px, w, h, 5)
+    expect(pal.length).toBe(2)
+    expect(pal[0]).toMatch(/^#[0-9a-f]{6}$/)
+    expect(pal[0]).toBe('#c81e1e')
+    expect(pal[1]).toBe('#1428dc')
+  })
+  it('MONTAGE_LAYOUTS : 5 dispositions, cols*rows cohérents', () => {
+    expect(MONTAGE_LAYOUTS.length).toBe(5)
+    for (const l of MONTAGE_LAYOUTS) {
+      expect(l.cols * l.rows).toBeGreaterThanOrEqual(2)
+    }
   })
 })

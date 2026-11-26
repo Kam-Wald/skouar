@@ -4446,8 +4446,6 @@ th.drag-over {
 .launcher-mark {
   width: 84px;
   height: 84px;
-  border-radius: 22px;
-  box-shadow: var(--shadow), 0 14px 48px -12px var(--accent-soft);
   flex: 0 0 auto;
 }
 
@@ -4475,7 +4473,7 @@ th.drag-over {
   color: #17202e;
 }
 :root[data-theme='light'] .launcher-title-dot {
-  color: #3d7a7a;
+  color: #155b60;
   text-shadow: none;
 }
 
@@ -4486,13 +4484,13 @@ th.drag-over {
   top: 4px;
   z-index: -1;
   color: transparent;
-  -webkit-text-stroke: 1.5px var(--accent);
+  -webkit-text-stroke: 1.5px #155b60;
   opacity: 0.9;
 }
 
 .launcher-title-dot {
-  color: #83b8b8;
-  text-shadow: 0 0 22px rgba(131, 184, 184, 0.85);
+  color: #155b60;
+  text-shadow: 0 0 22px rgba(21, 91, 96, 0.85);
 }
 
 @media print {
@@ -7442,4 +7440,64 @@ th.drag-over {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 4px 16px;
+}
+
+/* ===== Sélecteur de couleur partagé (palette fixe + récents + pipette) ===== */
+.cs-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 360px;
+}
+.cs-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+.cs-swatch:hover {
+  transform: scale(1.12);
+}
+.cs-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cs-recent {
+  border-style: dashed;
+}
+.cs-custom {
+  width: 30px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 1px;
+  cursor: pointer;
+}
+
+/* ===== Skeud v5 : templates, palette, animé ===== */
+.sk-palette {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.sk-pal-swatch {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 7px;
+  cursor: copy;
+}
+
+.settings-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
 }

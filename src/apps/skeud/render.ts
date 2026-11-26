@@ -1,4 +1,4 @@
-import { cssFilter, frameGeom, layerDims, layerFont, type EditState, type Layer, type Rect } from './logic'
+import { cssFilter, extractPalette, frameGeom, layerDims, layerFont, type EditState, type Layer, type Rect } from './logic'
 
 export async function loadBitmap(blob: Blob): Promise<ImageBitmap> {
   return createImageBitmap(blob, { imageOrientation: 'from-image' } as ImageBitmapOptions)
@@ -414,4 +414,78 @@ export async function downloadBlob(blob: Blob, name: string): Promise<void> {
 
 export function fitScale(imgW: number, imgH: number, maxW: number, maxH: number): number {
   return Math.min(1, maxW / imgW, maxH / imgH)
+}
+
+export function renderMontage(bmps: ImageBitmap[], cols: number, rows: number, gap: number, bg: string, cellW = 640): HTMLCanvasElement {
+  const cellH = Math.round(cellW * 0.75)
+  const W = cols * cellW + (cols + 1) * gap
+  const H = rows * cellH + (rows + 1) * gap
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, W, H)
+  bmps.slice(0, cols * rows).forEach((bmp, i) => {
+    const cx = gap + (i % cols) * (cellW + gap)
+    const cy = gap + Math.floor(i / cols) * (cellH + gap)
+    const sc = Math.max(cellW / bmp.width, cellH / bmp.height)
+    const dw = bmp.width * sc
+    const dh = bmp.height * sc
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(cx, cy, cellW, cellH)
+    ctx.clip()
+    ctx.drawImage(bmp, cx + (cellW - dw) / 2, cy + (cellH - dh) / 2, dw, dh)
+    ctx.restore()
+  })
+  return canvas
+}
+
+export function paletteOf(bmp: ImageBitmap, n = 5): string[] {
+  const target = 96
+  const sc = Math.min(1, target / Math.max(bmp.width, bmp.height))
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(bmp.width * sc))
+  c.height = Math.max(1, Math.round(bmp.height * sc))
+  const ctx = c.getContext('2d')!
+  ctx.drawImage(bmp, 0, 0, c.width, c.height)
+  const d = ctx.getImageData(0, 0, c.width, c.height)
+  return extractPalette(d.data, c.width, c.height, n)
+}
+
+export async function exportAnimated(bmp: ImageBitmap, st: EditState, seconds: number, onFrame?: (t: number) => void): Promise<Blob> {
+  const base = renderEdit(bmp, st)
+  const canvas = document.createElement('canvas')
+  canvas.width = base.width
+  canvas.height = base.height
+  const ctx = canvas.getContext('2d')!
+  const fps = 30
+  const frames = Math.max(8, Math.round(seconds * fps))
+  let mime = 'video/webm;codecs=vp9'
+  if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mime)) mime = 'video/webm'
+  const rec = new MediaRecorder(canvas.captureStream(fps), { mimeType: mime })
+  const chunks: Blob[] = []
+  rec.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data)
+  }
+  rec.start()
+  for (let f = 0; f <= frames; f++) {
+    const t = f / frames
+    const w = Math.sin(t * Math.PI * 2)
+    const anim: EditState = {
+      ...st,
+      filter: { ...st.filter, brightness: st.filter.brightness * (1 + 0.22 * w), hue: st.filter.hue + 45 * w, contrast: st.filter.contrast * (1 + 0.12 * w) }
+    }
+    const fr = renderEdit(bmp, anim)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(fr, 0, 0)
+    onFrame?.(t)
+    await new Promise((r) => setTimeout(r, 1000 / fps))
+  }
+  await new Promise<void>((res) => {
+    rec.onstop = () => res()
+    rec.stop()
+  })
+  return new Blob(chunks, { type: 'video/webm' })
 }

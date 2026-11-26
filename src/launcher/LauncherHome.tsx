@@ -1,18 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppTile from '../shared/AppTile'
+import { launcherBgCss, loadLauncherBg, type LauncherBg } from '../shared/launcherBg'
 import { apps } from '../apps/registry'
 import ThemeButton from '../ThemeButton'
 import SettingsButton from '../Settings'
 
 export default function LauncherHome() {
   const [q, setQ] = useState('')
+  const [bg, setBg] = useState<LauncherBg | null>(() => loadLauncherBg())
+  useEffect(() => {
+    const on = () => setBg(loadLauncherBg())
+    window.addEventListener('skouar:settings', on)
+    return () => window.removeEventListener('skouar:settings', on)
+  }, [])
   const query = q.trim().toLowerCase()
   const visible = query
     ? apps.filter((a) => `${a.name} ${a.description}`.toLowerCase().includes(query))
     : apps
 
   return (
-    <div className="launcher">
+    <div className="launcher" style={bg ? { background: launcherBgCss(bg) } : undefined}>
       <a className="skip-link" href="#launcher-main">
         Aller au contenu
       </a>
