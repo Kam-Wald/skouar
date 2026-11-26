@@ -30,10 +30,10 @@ export const apps: AppMeta[] = [
   {
     id: 'ler',
     name: 'Ler',
-    description: 'Visionneuse et annotatrice de PDF (surlignage, notes, fusion de fichiers).',
+    description: 'Visionneuse et annotatrice de PDF 100 % local (recherche, surlignage, texte, signature, fusion/extraction de pages).',
     icon: '📕',
     logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`,
-    soon: true
+    component: lazy(() => import('./ler/LerApp'))
   },
   {
     id: 'skeud',
