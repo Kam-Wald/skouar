@@ -431,6 +431,11 @@ export default function SkridApp() {
     })
   }
 
+  const goChapter = (dir: -1 | 1) => {
+    const n = docsOrdered[chapIdx + dir]
+    if (n) setState((s) => (s ? { ...s, currentId: n.id } : s))
+  }
+
   const moveDoc = (id: string, dir: -1 | 1) => {
     setState((s) => {
       if (!s) return s
@@ -932,6 +937,7 @@ export default function SkridApp() {
             </button>
           </div>
           <div className="blocs-side-sep" />
+          {view === 'writer' && (
           <div className="blocs-sidebar-head">
             <span>Chapitres</span>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -947,7 +953,9 @@ export default function SkridApp() {
               </button>
             </div>
           </div>
+          )}
           <div className="blocs-sidebar-scroll">
+            {view === 'writer' && (
             <ul className="blocs-page-list">
               <DocTree
                 docs={chapters}
@@ -972,6 +980,7 @@ export default function SkridApp() {
                 }}
               />
             </ul>
+            )}
             <div className="blocs-sidebar-head" style={{ marginTop: 12 }}>
               <span>Fiches & mémos</span>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1014,9 +1023,11 @@ export default function SkridApp() {
               ))}
             </ul>
           </div>
+          {view === 'writer' && (
           <button className="blocs-side-link" onClick={() => addDoc(null)}>
             <span className="blocs-side-link-ic">＋</span> Nouveau chapitre
           </button>
+          )}
           <button className="blocs-side-link" data-pop="tplsk" onClick={() => setTplOpen(true)}>
             <span className="blocs-side-link-ic">📋</span> Templates ({SKRID_TEMPLATES.length})
           </button>
@@ -1289,7 +1300,17 @@ export default function SkridApp() {
                 />
                 <div className="page-head-actions">
                   {!current.kind || current.kind === 'chapter' ? (
-                    <span className="mono skrid-chap-num">chapitre {chapIdx + 1}/{docsOrdered.length}</span>
+                    <>
+                      <button className="page-cover-btn" title="Chapitre précédent" disabled={chapIdx <= 0} onClick={() => goChapter(-1)}>
+                        ‹
+                      </button>
+                      <button className="mono skrid-chap-num skrid-chap-link" title="Voir le plan du livre (vue Écrivain)" onClick={() => setView('writer')}>
+                        chapitre {chapIdx + 1}/{docsOrdered.length}
+                      </button>
+                      <button className="page-cover-btn" title="Chapitre suivant" disabled={chapIdx >= docsOrdered.length - 1} onClick={() => goChapter(1)}>
+                        ›
+                      </button>
+                    </>
                   ) : (
                     <>
                       <label className="skrid-dot-btn" title="Couleur">
@@ -1528,6 +1549,21 @@ export default function SkridApp() {
               </div>
             </div>
             )}
+            <div className="skrid-sheet-col">
+              <div className="skrid-ruler-h">
+                {Array.from({ length: 22 }, (_, i) => (
+                  <span key={i} className={`skrid-tick-h${i % 5 === 0 ? ' major' : ''}`} style={{ left: `${(i / 21) * 100}%` }}>
+                    {i % 5 === 0 ? i : ''}
+                  </span>
+                ))}
+              </div>
+              <div className="skrid-sheet-row">
+                <div className="skrid-ruler-v">
+                  {Array.from({ length: 30 }, (_, i) => (
+                    <span key={i} className={`skrid-tick-v${i % 5 === 0 ? ' major' : ''}`} style={{ top: `${(i / 29) * 100}%` }} />
+                  ))}
+                </div>
+                <div className="skrid-sheet">
             <div
               ref={editorRef}
               className="skrid-editor"
@@ -1562,6 +1598,9 @@ export default function SkridApp() {
                 }
               }}
             />
+                </div>
+              </div>
+            </div>
             {!read && (
             <div className="skrid-status">
               <span className="mono">

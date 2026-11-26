@@ -3874,3 +3874,104 @@ th.drag-over {
 .skrid-pin.on {
   opacity: 1;
 }
+
+.skrid-sheet-col {
+  width: min(820px, 100%);
+  margin: 0 auto;
+}
+
+.skrid-app.reading .skrid-sheet-col {
+  width: min(940px, 100%);
+}
+
+.skrid-ruler-h {
+  position: relative;
+  height: 20px;
+  margin-left: 22px;
+}
+
+.skrid-tick-h {
+  position: absolute;
+  top: 0;
+  height: 7px;
+  border-left: 1px solid var(--muted);
+  opacity: 0.65;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted);
+  padding-left: 3px;
+}
+
+.skrid-tick-h.major {
+  height: 13px;
+}
+
+.skrid-sheet-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.skrid-ruler-v {
+  position: relative;
+  width: 22px;
+  flex: 0 0 auto;
+}
+
+.skrid-tick-v {
+  position: absolute;
+  left: 0;
+  width: 7px;
+  border-top: 1px solid var(--muted);
+  opacity: 0.65;
+}
+
+.skrid-tick-v.major {
+  width: 13px;
+}
+
+.skrid-sheet {
+  flex: 1;
+  min-height: 1123px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 88px 92px;
+  overflow-wrap: break-word;
+}
+
+.skrid-sheet .skrid-editor {
+  flex: none;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 2rem;
+}
+
+.page-cover-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.skrid-chap-link {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.skrid-chap-link:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 640px) {
+  .skrid-sheet {
+    padding: 40px 22px;
+    min-height: 0;
+  }
+  .skrid-ruler-h,
+  .skrid-ruler-v {
+    display: none;
+  }
+}
