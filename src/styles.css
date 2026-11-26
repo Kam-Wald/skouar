@@ -4028,3 +4028,269 @@ th.drag-over {
     display: none;
   }
 }
+
+.ler-main {
+  padding: 1rem clamp(0.5rem, 3vw, 2.5rem);
+}
+
+.ler-app.drag-over .ler-main {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+
+.ler-lib {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.ler-empty {
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.ler-empty:hover {
+  border-color: var(--accent);
+}
+
+.ler-empty-ic {
+  font-size: 2.4rem;
+}
+
+.ler-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+  margin-top: 1rem;
+}
+
+.ler-card {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.ler-card:hover {
+  border-color: var(--accent);
+}
+
+.ler-card-thumb {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ler-thumb-cv {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.ler-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ler-card-body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ler-card-meta {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.ler-card-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.ler-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 0 60px;
+}
+
+.ler-page {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+}
+
+.ler-page.flash {
+  outline: 3px solid var(--accent);
+}
+
+.ler-cv {
+  display: block;
+  border-radius: 4px;
+}
+
+.ler-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  cursor: crosshair;
+}
+
+.ler-note {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px 6px 6px 0;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.ler-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ler-tools button {
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ler-tools button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ler-colors {
+  display: flex;
+  gap: 6px;
+  padding: 6px 2px;
+}
+
+.ler-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.ler-dot.on {
+  border-color: var(--text);
+}
+
+.ler-pagenav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.ler-page-in {
+  width: 64px;
+}
+
+.ler-annots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ler-annot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.ler-annot-row:hover {
+  background: var(--accent-soft);
+}
+
+.ler-annot-row .blocs-page-del {
+  margin-left: auto;
+}
+
+.ler-annot-row > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ler-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ler-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.ler-thumb.on {
+  border-color: var(--accent);
+}
+
+.ler-thumb canvas {
+  border-radius: 4px;
+}
+
+.ler-thumb .mono {
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+.ler-del {
+  color: var(--muted);
+}
+
+.ler-note-pop {
+  z-index: 90;
+}
