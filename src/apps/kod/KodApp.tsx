@@ -22,6 +22,9 @@ import {
 } from './store'
 import { highlight, langOf } from './highlight'
 import { renderPreview } from './preview'
+import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../Settings'
+import SettingsButton from '../../Settings'
+import { KOD_TEMPLATES, templateGroups } from './templates'
 
 declare global {
   interface Window {
@@ -95,13 +98,7 @@ const flattenReal = (entries: RealEntry[], acc: RealEntry[] = []): RealEntry[] =
   return acc
 }
 
-const HL_THEMES = [
-  { id: 'default', label: 'Par défaut' },
-  { id: 'dracula', label: 'Dracula' },
-  { id: 'nord', label: 'Nord' },
-  { id: 'solarized', label: 'Solarized' },
-  { id: 'one-light', label: 'One Light' }
-]
+import { HL_THEMES } from './themes'
 
 const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
 
@@ -147,7 +144,9 @@ export default function KodApp() {
   const [probsOpen, setProbsOpen] = useState(false)
   const [fpOpen, setFpOpen] = useState(false)
   const [fpQ, setFpQ] = useState('')
-  const [zen, setZen] = useState(false)
+  const [focus, setFocus] = useState(false)
+  const [newTabOpen, setNewTabOpen] = useState(false)
+  const [tplOpen, setTplOpen] = useState(false)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const hlRef = useRef<HTMLPreElement | null>(null)
   const gutterRef = useRef<HTMLDivElement | null>(null)
@@ -168,6 +167,32 @@ export default function KodApp() {
   const activeName = activeNode?.name ?? activeReal?.name ?? ''
   const lang = langOf(activeName)
   const content = buf?.content ?? ''
+
+  useEffect(() => {
+    const apply = (): void => {
+      const s = loadAppSettings('kod')
+      if (s.mini !== undefined) setMini(s.mini !== false)
+      setUi((prev) =>
+        prev
+          ? {
+              ...prev,
+              fontSize: Number(s.fontSize ?? prev.fontSize),
+              tabSize: Number(s.tabSize ?? prev.tabSize),
+              wrap: s.wrap === true,
+              hlTheme: String(s.hlTheme ?? prev.hlTheme)
+            }
+          : prev
+      )
+    }
+    apply()
+    window.addEventListener(SETTINGS_EVENT, apply)
+    return () => window.removeEventListener(SETTINGS_EVENT, apply)
+  }, [])
+
+  useEffect(() => {
+    if (!ui) return
+    saveAppSettings('kod', { fontSize: ui.fontSize, tabSize: ui.tabSize, wrap: ui.wrap, hlTheme: ui.hlTheme, mini }, false)
+  }, [ui?.fontSize, ui?.tabSize, ui?.wrap, ui?.hlTheme, mini])
 
   useEffect(() => {
     let alive = true
@@ -249,6 +274,8 @@ export default function KodApp() {
   useDismiss('khist', histOpen, () => setHistOpen(false))
   useDismiss('kprob', probsOpen, () => setProbsOpen(false))
   useDismiss('kfp', fpOpen, () => setFpOpen(false))
+  useDismiss('knew', newTabOpen, () => setNewTabOpen(false))
+  useDismiss('ktpl', tplOpen, () => setTplOpen(false))
   useDismiss('kglob', gOpen, () => setGOpen(false))
 
   const syncScroll = (): void => {
@@ -836,7 +863,7 @@ export default function KodApp() {
     { id: 'goto', label: '\u2C7C Aller \u00e0 la ligne\u2026', arg: true, run: () => {} },
     { id: 'fp', label: '\U0001F4C4 Aller au fichier\u2026 (Ctrl+P)', run: () => { setPalOpen(false); setFpOpen(true); setFpQ('') } },
     { id: 'probs', label: `\u26A0\uFE0F Probl\u00e8mes (${probs.length})`, run: () => { setProbsOpen(true); setPalOpen(false) } },
-    { id: 'zen', label: `\U0001F9D8 ${zen ? 'Quitter' : 'Activer'} le mode zen`, run: () => setZen((z) => !z) },
+    { id: 'focus', label: `\U0001F9D8 ${focus ? 'Quitter' : 'Activer'} le mode focus`, run: () => setFocus((z) => !z) },
     ...HL_THEMES.map((t) => ({ id: 'hl:' + t.id, label: `\U0001F3A8 Th\u00e8me de coloration : ${t.label}`, run: () => setUi((p) => (p ? { ...p, hlTheme: t.id } : p)) })),
     ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
   ]
@@ -1162,6 +1189,57 @@ export default function KodApp() {
 
   const filteredPal = paletteCmds().filter((c) => c.label.toLowerCase().includes(palQ.toLowerCase()))
 
+
+  const createQuickFile = async (ext: string): Promise<void> => {
+    if (!ui) return
+    let name = `sans-titre.${ext}`
+    let k = 1
+    while (nodesRef.current.some((n) => n.parentId === null && n.name === name)) {
+      name = `sans-titre-${k}.${ext}`
+      k++
+    }
+    const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content: '', updatedAt: Date.now() }
+    await putNode(node)
+    setNodes((prev) => [...(prev ?? []), node])
+    setBuffers((prev) => ({ ...prev, [node.id]: { content: '', dirty: false } }))
+    setUi({ ...ui, tabs: [...ui.tabs, node.id], active: node.id })
+    setNewTabOpen(false)
+    setTimeout(() => taRef.current?.focus(), 60)
+  }
+
+  const createFromTemplate = async (t: (typeof KOD_TEMPLATES)[number]): Promise<void> => {
+    if (!ui) return
+    const parts = t.path.split('/')
+    let parentId: string | null = null
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dirName = parts[i]
+      let dir = nodesRef.current.find((n) => n.parentId === parentId && n.kind === 'dir' && n.name === dirName)
+      if (!dir) {
+        const dn: KodNode = { id: uid(), parentId, name: dirName, kind: 'dir', updatedAt: Date.now() }
+        await putNode(dn)
+        setNodes((prev) => [...(prev ?? []), dn])
+        dir = dn
+      }
+      parentId = dir.id
+    }
+    let name = parts[parts.length - 1]
+    const base = name
+    let k = 1
+    while (nodesRef.current.some((n) => n.parentId === parentId && n.name === name)) {
+      name = base.replace(/(\.[^.]+)?$/, ` (${k})$1`)
+      k++
+    }
+    const content = t.content.replaceAll('{{titre}}', t.label)
+    const node: KodNode = { id: uid(), parentId, name, kind: 'file', content, updatedAt: Date.now() }
+    await putNode(node)
+    setNodes((prev) => [...(prev ?? []), node])
+    setBuffers((prev) => ({ ...prev, [node.id]: { content, dirty: false } }))
+    setUi({ ...ui, tabs: [...ui.tabs, node.id], active: node.id, expanded: parentId ? [...new Set([...ui.expanded, parentId])] : ui.expanded })
+    setTplOpen(false)
+    notify(`Mod\u00e8le \u00ab ${t.label} \u00bb cr\u00e9\u00e9 \ud83d\udccb`)
+    setTimeout(() => taRef.current?.focus(), 60)
+  }
+
   const onTaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (!active || !ui) return
     if (multi.length > 0 && (e.key === 'Backspace' || e.key === 'Delete' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey))) {
@@ -1412,7 +1490,7 @@ export default function KodApp() {
 
   return (
     <div
-      className={`blocs-app kod-app hl-${ui.hlTheme}${zen ? ' zen' : ''}`}
+      className={`blocs-app kod-app hl-${ui.hlTheme}${focus ? ' focus' : ''}`}
       style={{ '--side-w': `${sideW}px`, '--kod-fs': `${ui.fontSize}px`, '--kod-tab': ui.tabSize, '--chw': `${charW}px` } as CSSProperties}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
       onDrop={(e) => { if (e.dataTransfer.files?.length) { e.preventDefault(); void importFiles([...e.dataTransfer.files]) } }}
@@ -1444,6 +1522,9 @@ export default function KodApp() {
           </button>
           <button className="db-btn" onClick={() => void openFilePicker()} title="Ouvrir un fichier réel du disque">
             📂 Ouvrir un fichier…
+          </button>
+          <button className="db-btn" aria-label="Modèles de fichiers" title="Créer un fichier depuis un modèle (langages, projet, docs)" onClick={() => setTplOpen((o) => !o)}>
+            📋 Modèles
           </button>
           <button className="db-btn" onClick={() => setGOpen(true)} title="Rechercher dans tous les fichiers (Ctrl+Shift+F)">
             🔎 Tout chercher
@@ -1514,9 +1595,26 @@ export default function KodApp() {
             </div>
           </div>
         )}
+        {tplOpen && (
+          <div className="kod-tpl" data-pop="ktpl">
+            {templateGroups().map((g) => (
+              <div key={g}>
+                <div className="kod-tree-head">{g}</div>
+                {KOD_TEMPLATES.filter((t) => t.group === g).map((t) => (
+                  <button key={t.label} className="kod-tpl-item" onClick={() => void createFromTemplate(t)}>
+                    <span>{t.icon}</span>
+                    <span className="kod-tpl-label">{t.label}</span>
+                    <span className="kod-tpl-path">{t.path}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
         <input ref={fileInputRef} type="file" multiple hidden onChange={onFilesPicked} />
         <div className="blocs-sidebar-foot">
           <ThemeButton />
+          <SettingsButton appId="kod" appName="Kod" />
         </div>
       </aside>
       <div
@@ -1565,6 +1663,19 @@ export default function KodApp() {
               </div>
             )
           })}
+          <button className="kod-tab-add" aria-label="Nouveau fichier (nouvel onglet)" title="Nouveau fichier +" onClick={() => setNewTabOpen((o) => !o)}>
+            +
+          </button>
+          {newTabOpen && (
+            <div className="kod-panel kod-newtab" data-pop="knew">
+              <div className="kod-panel-head">+ Nouveau fichier</div>
+              {["md", "js", "ts", "html", "css", "py", "json", "yml", "sh", "sql", "txt"].map((ext) => (
+                <button key={ext} className="kod-panel-item" onClick={() => void createQuickFile(ext)}>
+                  📄 sans-titre.{ext}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="kod-tabs-tools">
             <button className="db-btn" title="Rechercher dans le fichier (Ctrl+F)" onClick={() => setFindOpen(true)}>
               🔍
@@ -1601,7 +1712,7 @@ export default function KodApp() {
             <button className="db-btn" aria-label="Historique des versions" title="Historique des versions" onClick={() => void openHist()}>🕘</button>
             <button className="db-btn" aria-label="Palette de commandes" title="Palette de commandes (Ctrl+K)" onClick={() => { setPalOpen(true); setPalQ(''); setPalArg(null) }}>⌘K</button>
             <button className="db-btn" aria-label="Problèmes" title={`Problèmes (${probs.length})`} onClick={() => setProbsOpen(true)}>⚠️</button>
-            <button className="db-btn" aria-label="Mode zen" title="Mode zen (sans sidebar, éditeur centré)" onClick={() => setZen((z) => !z)}>🧘</button>
+            <button className="db-btn" aria-label="Mode focus" title="Mode focus (sans sidebar, éditeur centré)" onClick={() => setFocus((z) => !z)}>🧘</button>
           </div>
         </div>
         {active ? (

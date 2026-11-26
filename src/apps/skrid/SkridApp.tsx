@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
+import SettingsButton from '../../Settings'
 import ThemeButton from '../../ThemeButton'
 import { useDismiss } from '../blocs/useDismiss'
 import { stripHtml } from '../blocs/tree'
@@ -1041,6 +1042,7 @@ export default function SkridApp() {
           </div>
           <div className="blocs-sidebar-foot">
             <ThemeButton />
+          <SettingsButton appId="skrid" appName="Skrid" />
           </div>
         </aside>
       )}

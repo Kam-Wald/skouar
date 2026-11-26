@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, rgb } from 'pdf-lib'
+import SettingsButton from '../../Settings'
 import ThemeButton from '../../ThemeButton'
 import { useDismiss } from '../blocs/useDismiss'
 import {
@@ -1148,6 +1149,7 @@ export default function LerApp() {
         </div>
         <div className="blocs-sidebar-foot">
           <ThemeButton />
+          <SettingsButton appId="ler" appName="Ler" />
         </div>
       </aside>
       <div
