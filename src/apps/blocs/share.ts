@@ -95,7 +95,7 @@ export function exportPageHtml(page: Page): void {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} — Calepin</title>
+<title>${esc(title)} — Karneto</title>
 <style>
   :root { color-scheme: light; }
   body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; color: #101828; background: #fff; line-height: 1.6; }
@@ -126,7 +126,7 @@ export function exportPageHtml(page: Page): void {
 <header class="page-head"><span class="page-icon">${page.icon ?? '📓'}</span><h1>${esc(title)}</h1></header>
 ${coverBar}
 ${page.blocks.map(blockHtml).join('\n')}
-<footer>Page partagée depuis Calepin — Skouar · local-first · ${new Date().toLocaleDateString('fr-FR')}</footer>
+<footer>Page partagée depuis Karneto — Skouar · local-first · ${new Date().toLocaleDateString('fr-FR')}</footer>
 </body>
 </html>`
   exportFile(`${title.replace(/[\\/:*?"<>|]/g, '-')}.html`, html, 'text/html')
