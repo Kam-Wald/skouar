@@ -92,11 +92,6 @@ a {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #0d1420;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 22px;
-  padding: 16px 22px;
-  box-shadow: var(--shadow);
 }
 
 .launcher-header h1 {
@@ -118,9 +113,7 @@ a {
   margin: 0.25rem 0 0;
   color: var(--muted);
 }
-.launcher-header .launcher-subtitle {
-  color: #9fb0c3;
-}
+
 
 .launcher-grid {
   display: grid;
@@ -4477,6 +4470,13 @@ th.drag-over {
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: -0.035em;
+}
+:root[data-theme='light'] .launcher-header .launcher-title {
+  color: #17202e;
+}
+:root[data-theme='light'] .launcher-title-dot {
+  color: #3d7a7a;
+  text-shadow: none;
 }
 
 .launcher-header .launcher-title::before {
