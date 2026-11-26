@@ -116,6 +116,10 @@ a {
   font-weight: 600;
   font-size: 1.1rem;
 }
+.app-tile-tag {
+  color: var(--muted);
+  font-weight: 400;
+}
 
 .app-tile-desc {
   color: var(--muted);
