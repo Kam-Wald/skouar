@@ -41,7 +41,7 @@ export const apps: AppMeta[] = [
     description: 'Visionneuse + retouche d’images (recadrage, filtres, cadres, traitement par lot).',
     icon: '🖼️',
     logo: `${import.meta.env.BASE_URL}app-icons/skeud.svg`,
-    soon: true
+    component: lazy(() => import('./skeud/SkeudApp'))
   },
   {
     id: 'taol',
