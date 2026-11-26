@@ -95,6 +95,16 @@ const flattenReal = (entries: RealEntry[], acc: RealEntry[] = []): RealEntry[] =
   return acc
 }
 
+const HL_THEMES = [
+  { id: 'default', label: 'Par défaut' },
+  { id: 'dracula', label: 'Dracula' },
+  { id: 'nord', label: 'Nord' },
+  { id: 'solarized', label: 'Solarized' },
+  { id: 'one-light', label: 'One Light' }
+]
+
+const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
+
 export default function KodApp() {
   const [nodes, setNodes] = useState<KodNode[] | null>(null)
   const [ui, setUi] = useState<KodUI | null>(null)
@@ -131,10 +141,18 @@ export default function KodApp() {
   const [palQ, setPalQ] = useState('')
   const [palArg, setPalArg] = useState<string | null>(null)
   const [palVal, setPalVal] = useState('')
+  const [folds, setFolds] = useState<{ start: number; saved: string[] }[]>([])
+  const [pair, setPair] = useState<{ a: { line: number; col: number }; b: { line: number; col: number } } | null>(null)
+  const [charW, setCharW] = useState(8)
+  const [probsOpen, setProbsOpen] = useState(false)
+  const [fpOpen, setFpOpen] = useState(false)
+  const [fpQ, setFpQ] = useState('')
+  const [zen, setZen] = useState(false)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const hlRef = useRef<HTMLPreElement | null>(null)
   const gutterRef = useRef<HTMLDivElement | null>(null)
   const miniRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const nodesRef = useRef<KodNode[]>([])
   const buffersRef = useRef<Record<string, Buffer>>({})
   const uiRef = useRef<KodUI | null>(null)
@@ -229,6 +247,8 @@ export default function KodApp() {
   useDismiss('kpal', palOpen, () => { setPalOpen(false); setPalArg(null) })
   useDismiss('kout', outlineOpen, () => setOutlineOpen(false))
   useDismiss('khist', histOpen, () => setHistOpen(false))
+  useDismiss('kprob', probsOpen, () => setProbsOpen(false))
+  useDismiss('kfp', fpOpen, () => setFpOpen(false))
   useDismiss('kglob', gOpen, () => setGOpen(false))
 
   const syncScroll = (): void => {
@@ -250,6 +270,7 @@ export default function KodApp() {
     const line = before.split('\n').length
     const col = sel - before.lastIndexOf('\n')
     setLineCol({ line, col })
+    setPair(findPair(ta.value, sel))
   }
 
   const openNode = (n: KodNode): void => {
@@ -813,6 +834,10 @@ export default function KodApp() {
     { id: 'outline', label: `\u2630 ${outlineOpen ? 'Cacher' : 'Afficher'} le plan`, run: () => { setOutlineOpen((o) => !o); setPalOpen(false) } },
     { id: 'hist', label: '\U0001F558 Historique des versions', run: () => void openHist() },
     { id: 'goto', label: '\u2C7C Aller \u00e0 la ligne\u2026', arg: true, run: () => {} },
+    { id: 'fp', label: '\U0001F4C4 Aller au fichier\u2026 (Ctrl+P)', run: () => { setPalOpen(false); setFpOpen(true); setFpQ('') } },
+    { id: 'probs', label: `\u26A0\uFE0F Probl\u00e8mes (${probs.length})`, run: () => { setProbsOpen(true); setPalOpen(false) } },
+    { id: 'zen', label: `\U0001F9D8 ${zen ? 'Quitter' : 'Activer'} le mode zen`, run: () => setZen((z) => !z) },
+    ...HL_THEMES.map((t) => ({ id: 'hl:' + t.id, label: `\U0001F3A8 Th\u00e8me de coloration : ${t.label}`, run: () => setUi((p) => (p ? { ...p, hlTheme: t.id } : p)) })),
     ...(SNIPPETS[lang] ?? []).map((s) => ({ id: 'snip:' + s.label, label: `\u2702\uFE0F Extrait : ${s.label}`, run: () => { setPalOpen(false); insertText(s.body) } }))
   ]
 
@@ -837,11 +862,330 @@ export default function KodApp() {
     notify('Version restaur\u00e9e (Ctrl+S pour valider)')
   }
 
+
+  const offToLC = (v: string, off: number): { line: number; col: number } => {
+    const before = v.slice(0, off)
+    const line = before.split('\n').length - 1
+    const col = off - (before.lastIndexOf('\n') + 1)
+    return { line, col }
+  }
+
+  const findPair = (v: string, pos: number): { a: { line: number; col: number }; b: { line: number; col: number } } | null => {
+    const open = '([{'
+    const close = ')]}'
+    let i = -1
+    if (pos > 0 && open.includes(v[pos - 1])) i = pos - 1
+    else if (pos < v.length && close.includes(v[pos])) i = pos
+    if (i < 0) return null
+    const fwd = open.includes(v[i])
+    const oc = fwd ? v[i] : close[open.indexOf(v[i])]
+    const cc = fwd ? close[open.indexOf(v[i])] : v[i]
+    let depth = 0
+    if (fwd) {
+      for (let j = i; j < v.length; j++) {
+        if (v[j] === oc) depth++
+        else if (v[j] === cc) {
+          depth--
+          if (!depth) return { a: offToLC(v, i), b: offToLC(v, j) }
+        }
+      }
+    } else {
+      for (let j = i; j >= 0; j--) {
+        if (v[j] === oc) depth++
+        else if (v[j] === cc) {
+          depth--
+          if (!depth) return { a: offToLC(v, j), b: offToLC(v, i) }
+        }
+      }
+    }
+    return null
+  }
+
+  useEffect(() => {
+    const ctx = document.createElement('canvas').getContext('2d')
+    if (!ctx) return
+    const fs = ui?.fontSize ?? 13
+    ctx.font = `${fs}px ui-monospace, Menlo, Consolas, monospace`
+    const w = ctx.measureText('M').width
+    if (w > 0) setCharW(w)
+  }, [ui?.fontSize])
+
+  const commentToken = (): string => {
+    if (['html', 'xml'].includes(lang)) return '<!--'
+    if (['css'].includes(lang)) return '/*'
+    if (['python', 'ruby', 'bash', 'yaml', 'toml', 'ini'].includes(lang)) return '#'
+    if (lang === 'sql') return '--'
+    if (['markdown', 'text', 'json', 'diff'].includes(lang)) return ''
+    return '//'
+  }
+
+  const toggleComment = (): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const tok = commentToken()
+    if (!tok) return
+    const v = ta.value
+    const s = ta.selectionStart
+    const e = ta.selectionEnd
+    const ls = v.slice(0, s).split('\n').length - 1
+    const le = v.slice(0, e).split('\n').length - 1
+    const arr = v.split('\n')
+    const seg = arr.slice(ls, le + 1)
+    const nonEmpty = seg.filter((l) => l.trim())
+    const closing = tok === '<!--' ? '-->' : tok === '/*' ? '*/' : ''
+    const allCommented = nonEmpty.length > 0 && nonEmpty.every((l) => l.trimStart().startsWith(tok))
+    const next = seg.map((l) => {
+      if (!l.trim()) return l
+      const ind = l.match(/^\s*/)?.[0] ?? ''
+      if (allCommented) return ind + l.trimStart().slice(tok.length).replace(/^\s?/, '') + (closing && l.trimEnd().endsWith(closing) ? '' : '')
+      return ind + tok + ' ' + l.trimStart() + (closing ? ' ' + closing : '')
+    })
+    arr.splice(ls, le - ls + 1, ...next)
+    const nv = arr.join('\n')
+    setBuf(active, nv)
+    ta.value = nv
+    ta.setSelectionRange(s, s + (nv.length - v.length))
+    syncScroll()
+    updateLineCol()
+  }
+
+  const moveLines = (dir: -1 | 1): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const v = ta.value
+    const s = ta.selectionStart
+    const e = ta.selectionEnd
+    const ls = v.slice(0, s).split('\n').length - 1
+    const le = v.slice(0, e).split('\n').length - 1
+    const arr = v.split('\n')
+    const to = dir === -1 ? ls - 1 : le + 1
+    if (to < 0 || to >= arr.length) return
+    const block = arr.slice(ls, le + 1)
+    arr.splice(ls, le - ls + 1)
+    const at = dir === -1 ? to : ls + (dir === 1 ? 1 : 0) + (le - ls) - (le - ls)
+    arr.splice(dir === -1 ? to : le + 1, 0, ...block)
+    const nv = arr.join('\n')
+    setBuf(active, nv)
+    ta.value = nv
+    const nl = dir === -1 ? ls - 1 : ls + 1
+    const off = nv.split('\n').slice(0, nl).reduce((a, l) => a + l.length + 1, 0)
+    ta.setSelectionRange(off, off + (le - ls + 1 > 1 ? block.join('\n').length : 0))
+    ta.focus()
+    syncScroll()
+    updateLineCol()
+  }
+
+  const duplicateSel = (): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const v = ta.value
+    const s = ta.selectionStart
+    const e = ta.selectionEnd
+    let ins: string
+    let pos: number
+    if (s === e) {
+      const ls = v.slice(0, s).split('\n').length - 1
+      ins = '\n' + v.split('\n')[ls]
+      pos = s + ins.length
+    } else {
+      ins = v.slice(s, e)
+      pos = e + ins.length
+    }
+    const nv = v.slice(0, e) + ins + v.slice(e)
+    setBuf(active, nv)
+    ta.value = nv
+    ta.setSelectionRange(pos, pos)
+    ta.focus()
+    syncScroll()
+    updateLineCol()
+  }
+
+  const handleAutoPair = (ch: string): void => {
+    const ta = taRef.current
+    if (!ta || !active) return
+    const v = ta.value
+    const s = ta.selectionStart
+    const e = ta.selectionEnd
+    const close = PAIRS[ch]
+    if (!close) return
+    if (v[e] === close && s === e) {
+      ta.setSelectionRange(s + 1, s + 1)
+      updateLineCol()
+      return
+    }
+    if ((ch === '"' || ch === "'") && s === e && /[\w\u00C0-\u024F]/.test(v[s - 1] ?? '')) {
+      const nv = v.slice(0, s) + ch + v.slice(e)
+      setBuf(active, nv)
+      ta.value = nv
+      ta.setSelectionRange(s + 1, s + 1)
+      syncScroll()
+      return
+    }
+    const sel = v.slice(s, e)
+    const nv = v.slice(0, s) + ch + sel + close + v.slice(e)
+    setBuf(active, nv)
+    ta.value = nv
+    if (sel) ta.setSelectionRange(s + 1, s + 1 + sel.length)
+    else ta.setSelectionRange(s + 1, s + 1)
+    ta.focus()
+    syncScroll()
+    updateLineCol()
+  }
+
+  const foldEnd = (arr: string[], start: number): number => {
+    let d = 0
+    for (let j = start; j < arr.length; j++) {
+      d += (arr[j].match(/[{(\[]/g) ?? []).length - (arr[j].match(/[})\]]/g) ?? []).length
+      if (d <= 0 && j > start) return j
+    }
+    return -1
+  }
+
+  const foldable = useMemo(() => {
+    const set = new Set<number>()
+    const arr = content.split('\n')
+    for (let i = 0; i < arr.length; i++) {
+      const opens = (arr[i].match(/[{(\[]/g) ?? []).length
+      const closes = (arr[i].match(/[})\]]/g) ?? []).length
+      if (opens - closes > 0) {
+        const end = foldEnd(arr, i)
+        if (end > i + 1) set.add(i)
+      }
+    }
+    return set
+  }, [content])
+
+  const foldedStarts = useMemo(() => new Set(folds.map((f) => f.start)), [folds])
+
+  const toggleFold = (i: number): void => {
+    if (!active) return
+    const existing = folds.find((f) => f.start === i)
+    const arr = content.split('\n')
+    if (existing) {
+      const next = arr.slice()
+      next.splice(existing.start + 1, 1, ...existing.saved.slice(1))
+      const nv = next.join('\n')
+      setFolds((fs) => fs.filter((f) => f.start !== i))
+      setBuf(active, nv)
+      const ta = taRef.current
+      if (ta) {
+        ta.value = nv
+        syncScroll()
+      }
+      return
+    }
+    const end = foldEnd(arr, i)
+    if (end <= i + 1) return
+    const saved = arr.slice(i, end + 1)
+    const placeholder = (arr[i].match(/^\s*/)?.[0] ?? '') + '\u22EF ' + (end - i) + ' lignes'
+    const next = [...arr.slice(0, i + 1), placeholder, ...arr.slice(end + 1)]
+    setFolds((fs) => [...fs, { start: i, saved }])
+    const nv = next.join('\n')
+    setBuf(active, nv)
+    const ta = taRef.current
+    if (ta) {
+      ta.value = nv
+      syncScroll()
+    }
+  }
+
+  const unfoldAll = (): string => {
+    let arr = content.split('\n')
+    for (const f of [...folds].sort((a, b) => b.start - a.start)) {
+      arr.splice(f.start + 1, 1, ...f.saved.slice(1))
+    }
+    setFolds([])
+    return arr.join('\n')
+  }
+
+  const probs = useMemo(() => {
+    const out: { line: number; label: string }[] = []
+    content.split('\n').forEach((l, i) => {
+      const t = l.match(/\b(TODO|FIXME|HACK|XXX)\b/)
+      if (t) out.push({ line: i + 1, label: `${t[1]} : ${l.trim().slice(0, 60)}` })
+      if (l.length > 120) out.push({ line: i + 1, label: `ligne longue (${l.length} car.)` })
+      if (/[ \t]$/.test(l)) out.push({ line: i + 1, label: 'espace en fin de ligne' })
+    })
+    return out
+  }, [content])
+
+  const fpList = useMemo(() => {
+    const q = fpQ.trim().toLowerCase()
+    const virt = (nodes ?? []).filter((n) => n.kind === 'file' && (!q || n.name.toLowerCase().includes(q))).map((n) => ({ key: n.id, name: n.name }))
+    const real = flattenReal(realTree).filter((e) => !q || e.name.toLowerCase().includes(q)).map((e) => ({ key: e.key, name: e.path }))
+    return [...virt, ...real]
+  }, [fpQ, nodes, realTree])
+
+  const openFileByKey = (key: string): void => {
+    if (key.startsWith('real:')) {
+      const e = flattenReal(realTree).find((x) => x.key === key)
+      if (e) void openReal(e)
+    } else {
+      const n = nodesRef.current.find((x) => x.id === key)
+      if (n) openNode(n)
+    }
+  }
+
+  const moveNode = async (id: string, parentId: string): Promise<void> => {
+    const n = nodes?.find((x) => x.id === id)
+    if (!n || n.parentId === parentId) return
+    await putNode({ ...n, parentId, updatedAt: Date.now() })
+    setNodes((prev) => prev?.map((x) => (x.id === id ? { ...x, parentId } : x)) ?? prev)
+    if (ui) setUi({ ...ui, expanded: [...new Set([...ui.expanded, parentId])] })
+    notify(`« ${n.name} » déplacé`)
+  }
+
+  const importFiles = async (files: File[]): Promise<void> => {
+    let count = 0
+    for (const f of files) {
+      if (f.size > 1_000_000) continue
+      const name0 = f.name
+      let name = name0
+      let k = 1
+      while (nodesRef.current.some((n) => n.parentId === null && n.name === name)) {
+        name = name0.replace(/(\.[^.]+)?$/, ` (${k})$1`)
+        k++
+      }
+      const node: KodNode = { id: uid(), parentId: null, name, kind: 'file', content: await f.text(), updatedAt: Date.now() }
+      await putNode(node)
+      setNodes((prev) => [...(prev ?? []), node])
+      setBuffers((prev) => ({ ...prev, [node.id]: { content: node.content ?? '', dirty: false } }))
+      count++
+    }
+    if (count) notify(`${count} fichier(s) importé(s) 📥`)
+  }
+
+  const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const files = [...(e.target.files ?? [])]
+    e.target.value = ''
+    if (files.length) void importFiles(files)
+  }
+
   const onTaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (!active || !ui) return
     if (multi.length > 0 && (e.key === 'Backspace' || e.key === 'Delete' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey))) {
       e.preventDefault()
       applyMultiEdit(e.key)
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault()
+      toggleComment()
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault()
+      duplicateSel()
+      return
+    }
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      moveLines(e.key === 'ArrowUp' ? -1 : 1)
+      return
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && PAIRS[e.key]) {
+      handleAutoPair(e.key)
+      e.preventDefault()
       return
     }
     const ta = e.currentTarget
@@ -909,7 +1253,11 @@ export default function KodApp() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setFindOpen(true)
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        setFpOpen(true)
+        setFpQ('')
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !e.shiftKey) {
         e.preventDefault()
         addNextOccurrence()
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && e.shiftKey) {
@@ -1062,7 +1410,12 @@ export default function KodApp() {
   const lines = content.split('\n')
 
   return (
-    <div className="blocs-app kod-app" style={{ '--side-w': `${sideW}px`, '--kod-fs': `${ui.fontSize}px`, '--kod-tab': ui.tabSize } as CSSProperties}>
+    <div
+      className={`blocs-app kod-app hl-${ui.hlTheme}${zen ? ' zen' : ''}`}
+      style={{ '--side-w': `${sideW}px`, '--kod-fs': `${ui.fontSize}px`, '--kod-tab': ui.tabSize, '--chw': `${charW}px` } as CSSProperties}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+      onDrop={(e) => { if (e.dataTransfer.files?.length) { e.preventDefault(); void importFiles([...e.dataTransfer.files]) } }}
+    >
       <aside className="blocs-sidebar kod-side">
         <div className="blocs-app-head">
           <Link to="/" className="blocs-app-brand" title="Retour au launcher Skouar">
@@ -1074,6 +1427,9 @@ export default function KodApp() {
           </Link>
         </div>
         <div className="kod-side-actions">
+          <button className="db-btn" aria-label="Importer des fichiers" title="Importer des fichiers dans le projet (ou glisse-les dans la fenêtre)" onClick={() => fileInputRef.current?.click()}>
+            ⬆️ Importer
+          </button>
           <button className="db-btn" onClick={() => setNewItem({ parentId: null, kind: 'file', value: '' })} title="Nouveau fichier à la racine">
             📄 Nouveau fichier
           </button>
@@ -1157,6 +1513,7 @@ export default function KodApp() {
             </div>
           </div>
         )}
+        <input ref={fileInputRef} type="file" multiple hidden onChange={onFilesPicked} />
         <div className="blocs-sidebar-foot">
           <ThemeButton />
         </div>
@@ -1242,6 +1599,8 @@ export default function KodApp() {
             <button className="db-btn" aria-label="Minimap" title="Minimap" onClick={() => setMini((x) => !x)}>🗺</button>
             <button className="db-btn" aria-label="Historique des versions" title="Historique des versions" onClick={() => void openHist()}>🕘</button>
             <button className="db-btn" aria-label="Palette de commandes" title="Palette de commandes (Ctrl+K)" onClick={() => { setPalOpen(true); setPalQ(''); setPalArg(null) }}>⌘K</button>
+            <button className="db-btn" aria-label="Problèmes" title={`Problèmes (${probs.length})`} onClick={() => setProbsOpen(true)}>⚠️</button>
+            <button className="db-btn" aria-label="Mode zen" title="Mode zen (sans sidebar, éditeur centré)" onClick={() => setZen((z) => !z)}>🧘</button>
           </div>
         </div>
         {active ? (
@@ -1274,6 +1633,12 @@ export default function KodApp() {
                   onClick={updateLineCol}
                   onKeyDown={onTaKeyDown}
                 />
+                {pair && (
+                  <>
+                    <div className="kod-bracket" style={{ left: 14 + pair.a.col * charW, top: 10 + pair.a.line * (ui.fontSize * 1.55) }} />
+                    <div className="kod-bracket" style={{ left: 14 + pair.b.col * charW, top: 10 + pair.b.line * (ui.fontSize * 1.55) }} />
+                  </>
+                )}
                 {findOpen && (
                   <div className="kod-find" data-pop="kfind">
                     <input
@@ -1339,6 +1704,38 @@ export default function KodApp() {
           </div>
         )}
       </main>
+      {probsOpen && (
+        <div className="kod-panel kod-outline" data-pop="kprob">
+          <div className="kod-panel-head">⚠️ Problèmes — {activeName} ({probs.length})</div>
+          {probs.map((pr) => (
+            <button key={pr.line} className="kod-panel-item" onClick={() => { jumpLine(pr.line); setProbsOpen(false) }}>
+              <span className="kod-panel-line">L{pr.line}</span> {pr.label}
+            </button>
+          ))}
+          {probs.length === 0 && <div className="kod-pal-empty">Aucun problème détecté 🎉</div>}
+        </div>
+      )}
+      {fpOpen && (
+        <div className="kod-pal" data-pop="kfp">
+          <input
+            autoFocus
+            aria-label="Aller au fichier"
+            placeholder="Aller au fichier… (Ctrl+P)"
+            value={fpQ}
+            onChange={(e) => setFpQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && fpList[0]) { openFileByKey(fpList[0].key); setFpOpen(false) }
+              if (e.key === 'Escape') setFpOpen(false)
+            }}
+          />
+          <div className="kod-pal-list" role="listbox">
+            {fpList.slice(0, 30).map((f) => (
+              <button key={f.key} className="kod-pal-item" role="option" onClick={() => { openFileByKey(f.key); setFpOpen(false) }}>{f.name}</button>
+            ))}
+            {fpList.length === 0 && <div className="kod-pal-empty">Aucun fichier</div>}
+          </div>
+        </div>
+      )}
       {palOpen && (
         <div className="kod-pal" data-pop="kpal">
           <input

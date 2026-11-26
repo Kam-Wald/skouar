@@ -17,6 +17,7 @@ export interface KodUI {
   fontSize: number
   tabSize: number
   wrap: boolean
+  hlTheme: string
 }
 
 export interface KodKV {
@@ -76,7 +77,8 @@ export const defaultUI = (): KodUI => ({
   expanded: [],
   fontSize: 13,
   tabSize: 2,
-  wrap: false
+  wrap: false,
+  hlTheme: 'default'
 })
 
 export async function loadUI(): Promise<KodUI> {
