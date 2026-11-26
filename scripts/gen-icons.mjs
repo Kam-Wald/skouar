@@ -71,6 +71,13 @@ function fillCapsule(px, size, cx, cy, w, h, ang, c) {
     }
   }
 }
+function fillEllipse(px, size, cx, cy, rx, ry, c) {
+  for (let y = cy - ry; y < cy + ry; y++)
+    for (let x = cx - rx; x < cx + rx; x++) {
+      const dx = (x - cx) / rx, dy = (y - cy) / ry
+      if (dx * dx + dy * dy <= 1) setPx(px, size, x, y, c)
+    }
+}
 function encodePng(size, px) {
   const stride = size * 4 + 1
   const raw = Buffer.alloc(stride * size)
@@ -93,8 +100,7 @@ function encodePng(size, px) {
 
 const WHITE = [255, 255, 255]
 const TEAL = [13, 148, 136]
-const TEAL_L = [160, 216, 216]
-const TEAL_D = [26, 95, 95]
+const EYE = [119, 227, 198]
 const L1 = [165, 220, 216]
 const L2 = [120, 200, 196]
 
@@ -106,13 +112,10 @@ function variant(size, v) {
   } else if (v === 2) {
     const u = size / 512
     const R = Math.round
-    fillCapsule(px, size, R(222*u), R(155*u), R(58*u), R(200*u), -12, TEAL)
-    fillCapsule(px, size, R(290*u), R(155*u), R(58*u), R(200*u), 12, TEAL)
-    fillCapsule(px, size, R(222*u), R(155*u), R(26*u), R(146*u), -12, TEAL_L)
-    fillCapsule(px, size, R(290*u), R(155*u), R(26*u), R(146*u), 12, TEAL_L)
-    fillCircle(px, size, R(256*u), R(348*u), R(110*u), TEAL)
-    fillCircle(px, size, R(220*u), R(346*u), R(16*u), TEAL_L)
-    fillCircle(px, size, R(294*u), R(384*u), R(10*u), TEAL_D)
+    fillCapsule(px, size, R(209*u), R(170*u), R(77*u), R(231*u), -8, TEAL)
+    fillCapsule(px, size, R(293*u), R(163*u), R(67*u), R(165*u), 20, TEAL)
+    fillEllipse(px, size, R(272*u), R(341*u), R(82*u), R(86*u), TEAL)
+    fillCircle(px, size, R(225*u), R(347*u), R(40*u), EYE)
   } else if (v === 3) {
     const s = Math.round(size * 0.42)
     const r = Math.round(size * 0.07)
@@ -122,13 +125,10 @@ function variant(size, v) {
   } else {
     const u = size / 512
     const R = Math.round
-    fillCapsule(px, size, R(222*u), R(155*u), R(58*u), R(200*u), -12, TEAL)
-    fillCapsule(px, size, R(290*u), R(155*u), R(58*u), R(200*u), 12, TEAL)
-    fillCapsule(px, size, R(222*u), R(155*u), R(26*u), R(146*u), -12, TEAL_L)
-    fillCapsule(px, size, R(290*u), R(155*u), R(26*u), R(146*u), 12, TEAL_L)
-    fillCircle(px, size, R(256*u), R(348*u), R(110*u), TEAL)
-    fillCircle(px, size, R(220*u), R(346*u), R(16*u), TEAL_L)
-    fillCircle(px, size, R(294*u), R(384*u), R(10*u), TEAL_D)
+    fillCapsule(px, size, R(209*u), R(170*u), R(77*u), R(231*u), -8, TEAL)
+    fillCapsule(px, size, R(293*u), R(163*u), R(67*u), R(165*u), 20, TEAL)
+    fillEllipse(px, size, R(272*u), R(341*u), R(82*u), R(86*u), TEAL)
+    fillCircle(px, size, R(225*u), R(347*u), R(40*u), EYE)
   }
   return px
 }

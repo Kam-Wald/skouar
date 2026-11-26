@@ -1,14 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="110" fill="#fafafa"/>
-  <g transform="rotate(-12 222 155)">
-    <rect x="193" y="55" width="58" height="200" rx="29" fill="#0d9488"/>
-    <rect x="209" y="82" width="26" height="146" rx="13" fill="#a0d8d8"/>
-  </g>
-  <g transform="rotate(12 290 155)">
-    <rect x="261" y="55" width="58" height="200" rx="29" fill="#0d9488"/>
-    <rect x="277" y="82" width="26" height="146" rx="13" fill="#a0d8d8"/>
-  </g>
-  <circle cx="256" cy="348" r="110" fill="#0d9488"/>
-  <circle cx="220" cy="346" r="16" fill="#a0d8d8"/>
-  <circle cx="294" cy="384" r="10" fill="#1a5f5f"/>
+  <g transform="rotate(-8 209 170)"><rect x="170.5" y="54.5" width="77" height="231" rx="38.5" fill="#0d9488"/></g>
+  <g transform="rotate(20 293 163)"><rect x="259.5" y="80.5" width="67" height="165" rx="33.5" fill="#0d9488"/></g>
+  <ellipse cx="272" cy="341" rx="82" ry="86" fill="#0d9488"/>
+  <circle cx="225" cy="347" r="40" fill="#77e3c6"/>
 </svg>
