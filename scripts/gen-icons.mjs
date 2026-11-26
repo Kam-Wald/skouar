@@ -52,14 +52,37 @@ function decodePng(buf) {
     const len = buf.readUInt32BE(pos)
     const type = buf.toString('ascii', pos + 4, pos + 8)
     const data = buf.subarray(pos + 8, pos + 8 + len)
-    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4) }
+    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); if (data[8] !== 8 || data[9] !== 6) throw new Error('PNG 8 bits RGBA attendu') }
     if (type === 'IDAT') idat.push(data)
     pos += 12 + len
   }
   const raw = inflateSync(Buffer.concat(idat))
   const stride = w * 4 + 1
   const px = Buffer.alloc(w * h * 4)
-  for (let y = 0; y < h; y++) raw.copy(px, y * w * 4, y * stride + 1, (y + 1) * stride)
+  const prev = Buffer.alloc(w * 4)
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * stride]
+    const line = raw.subarray(y * stride + 1, (y + 1) * stride)
+    const out = px.subarray(y * w * 4, (y + 1) * w * 4)
+    for (let i = 0; i < w * 4; i++) {
+      const a = i >= 4 ? out[i - 4] : 0
+      const b = prev[i]
+      const c = i >= 4 ? prev[i - 4] : 0
+      let v = line[i]
+      if (f === 1) v = (v + a) & 0xff
+      else if (f === 2) v = (v + b) & 0xff
+      else if (f === 3) v = (v + ((a + b) >> 1)) & 0xff
+      else if (f === 4) {
+        const p = a + b - c
+        const pa = Math.abs(p - a)
+        const pb = Math.abs(p - b)
+        const pc = Math.abs(p - c)
+        v = (v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 0xff
+      }
+      out[i] = v
+    }
+    out.copy(prev, 0)
+  }
   return { w, h, px }
 }
 function resize(src, size) {
