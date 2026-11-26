@@ -5,7 +5,6 @@ export interface AppMeta {
   name: string
   description: string
   icon: string
-  tag?: string
   logo?: string
   soon?: boolean
   component?: LazyExoticComponent<ComponentType>
@@ -15,7 +14,6 @@ export const apps: AppMeta[] = [
   {
     id: 'blocs',
     name: 'Calepin',
-    tag: 'Pages & BDD',
     description: 'Pages et bases de données type Notion.',
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,
@@ -24,7 +22,6 @@ export const apps: AppMeta[] = [
   {
     id: 'skrid',
     name: 'Skrid',
-    tag: 'Écriture',
     description: 'Traitement de texte léger, pensé pour écrire un livre (chapitres, compteurs, export PDF).',
     icon: '✍️',
     logo: `${import.meta.env.BASE_URL}app-icons/skrid.svg`,
@@ -33,7 +30,6 @@ export const apps: AppMeta[] = [
   {
     id: 'ler',
     name: 'Ler',
-    tag: 'PDF',
     description: 'Visionneuse et annotatrice de PDF 100 % local (recherche, surlignage, texte, signature, fusion/extraction de pages).',
     icon: '📕',
     logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`,
@@ -42,7 +38,6 @@ export const apps: AppMeta[] = [
   {
     id: 'skeud',
     name: 'Skeud',
-    tag: 'Images',
     description: 'Visionneuse + retouche d’images (recadrage, filtres, cadres, traitement par lot).',
     icon: '🖼️',
     logo: `${import.meta.env.BASE_URL}app-icons/skeud.svg`,
@@ -51,7 +46,6 @@ export const apps: AppMeta[] = [
   {
     id: 'taol',
     name: 'Taol',
-    tag: 'Tableur',
     description: 'Tableur local : formules, tris, filtres, graphiques, export CSV.',
     icon: '🧮',
     logo: `${import.meta.env.BASE_URL}app-icons/taol.svg`,
@@ -60,7 +54,6 @@ export const apps: AppMeta[] = [
   {
     id: 'tres',
     name: 'Tres',
-    tag: 'Dessin',
     description: 'Dessin & présentations : formes, flèches, diapos, export SVG/PNG.',
     icon: '✏️',
     logo: `${import.meta.env.BASE_URL}app-icons/tres.svg`,
@@ -69,7 +62,6 @@ export const apps: AppMeta[] = [
   {
     id: 'kod',
     name: 'Kod',
-    tag: 'Code',
     description: 'Éditeur de code léger et agréable : coloration, onglets, arbre de fichiers, recherche.',
     icon: '💻',
     logo: `${import.meta.env.BASE_URL}app-icons/kod.svg`,
@@ -78,7 +70,6 @@ export const apps: AppMeta[] = [
   {
     id: 'kemm',
     name: 'Kemm',
-    tag: 'Convertisseur',
     description: 'Convertisseur de fichiers 100 % local (images, audio, CSV/JSON…).',
     icon: '🔄',
     logo: `${import.meta.env.BASE_URL}app-icons/kemm.svg`,
@@ -87,7 +78,6 @@ export const apps: AppMeta[] = [
   {
     id: 'cockpit',
     name: 'Cockpit',
-    tag: 'Productivité',
     description: 'Pilotage de ta journée : minuteurs Pomodoro, suivi du temps, kanban, matrice urgent/important, rituels — 100 % local.',
     icon: '🎛️',
     logo: `${import.meta.env.BASE_URL}app-icons/cockpit.svg`,
@@ -96,7 +86,6 @@ export const apps: AppMeta[] = [
   {
     id: 'klevet',
     name: 'Klevet',
-    tag: 'Audio',
     description: 'Édition audio 100 % local (façon Audacity-lite) : enregistrer au micro, couper, gain, fondus, export WAV.',
     icon: '🎙️',
     logo: `${import.meta.env.BASE_URL}app-icons/klevet.svg`,

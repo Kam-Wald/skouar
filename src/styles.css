@@ -116,10 +116,6 @@ a {
   font-weight: 600;
   font-size: 1.1rem;
 }
-.app-tile-tag {
-  color: var(--muted);
-  font-weight: 400;
-}
 
 .app-tile-desc {
   color: var(--muted);
@@ -7144,4 +7140,89 @@ th.drag-over {
 }
 .sk-crop-hint {
   margin-top: 8px;
+}
+
+/* ===== Skeud v2 : presets ===== */
+.sk-tb-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.sk-presets {
+  max-width: 340px;
+}
+.sk-preset-row {
+  display: inline-flex;
+  gap: 4px;
+  overflow-x: auto;
+  max-width: 46vw;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+.sk-preset {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+.sk-preset:hover {
+  border-color: var(--accent);
+}
+.sk-preset.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.sk-chip-row {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sk-chip-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sk-chip-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.sk-frame-hint {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+}
+.sk-frame-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sk-check input {
+  accent-color: var(--accent);
+}
+.sk-frames {
+  max-width: 52vw;
 }

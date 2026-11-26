@@ -3,10 +3,13 @@ import type { SkCtx } from '../SkeudApp'
 import {
   ASPECT_PRESETS,
   DEFAULT_EDIT,
+  DEFAULT_FRAME,
   EXPORT_FORMATS,
-  FRAMES,
+  FILTER_PRESETS,
+  FRAME_PRESETS,
   aspectLabel,
   exportName,
+  framePresetOf,
   outDims,
   toImageRect,
   type EditState,
@@ -49,11 +52,14 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
     }
   }, [img.orig])
 
-  const push = useCallback((next: EditState) => {
-    setHist((h) => [...h.slice(0, hi + 1), next])
-    setHi((v) => v + 1)
-    setSt(next)
-  }, [hi])
+  const push = useCallback(
+    (next: EditState) => {
+      setHist((h) => [...h.slice(0, hi + 1), next])
+      setHi((v) => v + 1)
+      setSt(next)
+    },
+    [hi]
+  )
 
   const undo = (): void => {
     if (hi <= 0) return
@@ -69,9 +75,10 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
   useEffect(() => {
     if (!bmp || !canvasRef.current) return
     const maxW = Math.max(320, (wrapRef.current?.clientWidth ?? 900) - 24)
-    const dims = outDims(img.w, img.h, cropMode ? { ...st, frame: { ...st.frame, kind: 'none' }, size: null } : st)
+    const cropView = cropMode ? { ...st, frame: { ...DEFAULT_FRAME }, size: null } : st
+    const dims = outDims(img.w, img.h, cropView)
     const s = Math.min(1, maxW / dims.w, 620 / dims.h)
-    const preview = cropMode ? renderEdit(bmp, { ...st, frame: { ...st.frame, kind: 'none' }, size: null }, maxW) : renderEdit(bmp, st, maxW)
+    const preview = renderEdit(bmp, cropView, maxW)
     const c = canvasRef.current
     c.width = Math.max(1, Math.round(preview.width * s))
     c.height = Math.max(1, Math.round(preview.height * s))
@@ -81,17 +88,15 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
     cx.drawImage(preview, 0, 0, c.width, c.height)
     if (cropMode && drag) {
       const r = normDrag(drag)
-      cx.strokeStyle = '#fff'
-      cx.lineWidth = 2
-      cx.setLineDash([6, 4])
-      cx.strokeRect(r.x, r.y, r.w, r.h)
-      cx.fillStyle = 'rgba(0,0,0,0.25)'
+      cx.fillStyle = 'rgba(0,0,0,0.3)'
       cx.fillRect(0, 0, c.width, c.height)
       cx.clearRect(r.x, r.y, r.w, r.h)
       cx.drawImage(preview, 0, 0, c.width, c.height)
       cx.strokeStyle = '#4f46e5'
-      cx.setLineDash([])
+      cx.lineWidth = 2
+      cx.setLineDash([6, 4])
       cx.strokeRect(r.x, r.y, r.w, r.h)
+      cx.setLineDash([])
     }
   }, [bmp, st, cropMode, drag, img.w, img.h])
 
@@ -117,9 +122,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
     }
     const c = canvasRef.current
     const base: Rect = st.crop ?? { x: 0, y: 0, w: img.w, h: img.h }
-    const curW = base.w
-    const curH = base.h
-    const ir = toImageRect(r, c.width, c.height, curW, curH, aspect)
+    const ir = toImageRect(r, c.width, c.height, base.w, base.h, aspect)
     push({ ...st, crop: { x: base.x + ir.x, y: base.y + ir.y, w: ir.w, h: ir.h } })
     setDrag(null)
     setCropMode(false)
@@ -138,6 +141,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
 
   const dims = outDims(img.w, img.h, st)
   const dirty = hi >= 0
+  const activeFrame = framePresetOf(st.frame)
 
   return (
     <div className="sk-editor">
@@ -175,7 +179,15 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
         <div className="sk-tb-group">
           <button className="sk-btn ghost" disabled={hi <= 0} onClick={undo} title="Annuler">↶</button>
           <button className="sk-btn ghost" disabled={hi >= hist.length - 1} onClick={redo} title="Rétablir">↷</button>
-          <button className="sk-btn ghost" disabled={!dirty} onClick={() => { setHist([]); setHi(-1); setSt({ ...DEFAULT_EDIT, filter: { ...DEFAULT_EDIT.filter }, frame: { ...DEFAULT_EDIT.frame } }) }}>
+          <button
+            className="sk-btn ghost"
+            disabled={!dirty}
+            onClick={() => {
+              setHist([])
+              setHi(-1)
+              setSt({ ...DEFAULT_EDIT, filter: { ...DEFAULT_EDIT.filter }, frame: { ...DEFAULT_EDIT.frame } })
+            }}
+          >
             Reset
           </button>
         </div>
@@ -185,16 +197,26 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
             className={`sk-btn${cropMode ? ' primary' : ''}`}
             disabled={st.rot !== 0}
             title={st.rot !== 0 ? 'Remets la rotation à 0° pour recadrer' : 'Recadrer (glisser sur l’image)'}
-            onClick={() => { setCropMode((v) => !v); setDrag(null) }}
+            onClick={() => {
+              setCropMode((v) => !v)
+              setDrag(null)
+            }}
           >
             ▢ Recadrer
           </button>
           {cropMode && (
-            <select className="sk-input sk-aspect" value={aspect ?? ''} onChange={(e) => setAspect(e.target.value === '' ? null : Number(e.target.value))}>
+            <span className="sk-chip-row">
               {ASPECT_PRESETS.map((p) => (
-                <option key={p.label} value={p.v ?? ''}>{p.label}</option>
+                <button key={p.label} className={`sk-chip-btn${aspect === p.v ? ' active' : ''}`} onClick={() => setAspect(p.v)}>
+                  {p.label}
+                </button>
               ))}
-            </select>
+            </span>
+          )}
+          {st.crop && !cropMode && (
+            <button className="sk-btn ghost" onClick={() => push({ ...st, crop: null })}>
+              ✕ Annuler le recadrage ({st.crop.w}×{st.crop.h})
+            </button>
           )}
         </div>
         <div className="sk-tb-sep" />
@@ -204,64 +226,88 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
           <button className="sk-btn" title="Miroir vertical" onClick={() => push({ ...st, flipV: !st.flipV })}>🪞 V</button>
         </div>
         <div className="sk-tb-sep" />
+        <div className="sk-tb-group sk-presets">
+          {FILTER_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              className={`sk-preset${JSON.stringify(st.filter) === JSON.stringify(p.filter) ? ' active' : ''}`}
+              title={`Filtre ${p.label}`}
+              onClick={() => push({ ...st, filter: { ...p.filter } })}
+            >
+              {p.icon} {p.label}
+            </button>
+          ))}
+        </div>
         <div className="sk-tb-group sk-filters">
-          {FILTER_SLIDERS.map((s) => (
-            <label key={s.key} className="sk-slider">
-              <span>{s.label}</span>
+          {FILTER_SLIDERS.map((sl) => (
+            <label key={sl.key} className="sk-slider">
+              <span>{sl.label}</span>
               <input
                 type="range"
-                min={s.min}
-                max={s.max}
-                step={s.step}
-                value={st.filter[s.key]}
-                onChange={(e) => push({ ...st, filter: { ...st.filter, [s.key]: Number(e.target.value) } })}
+                min={sl.min}
+                max={sl.max}
+                step={sl.step}
+                value={st.filter[sl.key]}
+                onChange={(e) => push({ ...st, filter: { ...st.filter, [sl.key]: Number(e.target.value) } })}
               />
               <span className="sk-slider-val">
-                {s.key === 'hue' ? `${Math.round(st.filter.hue)}°` : `${Math.round(st.filter[s.key] * 100)}${s.unit}`}
+                {sl.key === 'hue' ? `${Math.round(st.filter.hue)}°` : `${Math.round(st.filter[sl.key] * 100)}${sl.unit}`}
               </span>
             </label>
           ))}
         </div>
         <div className="sk-tb-sep" />
-        <div className="sk-tb-group">
-          <select
-            className="sk-input"
-            value={st.frame.kind}
-            title="Cadre"
-            onChange={(e) => push({ ...st, frame: { ...st.frame, kind: e.target.value as EditState['frame']['kind'] } })}
-          >
-            {FRAMES.map((f) => (
-              <option key={f.kind} value={f.kind}>{f.icon} {f.label}</option>
+        <div className="sk-tb-group sk-frames">
+          <span className="sk-tb-label">Cadre</span>
+          <span className="sk-preset-row">
+            {FRAME_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                className={`sk-preset${activeFrame?.id === p.id ? ' active' : ''}`}
+                title={`${p.label} — ${p.hint}`}
+                onClick={() => push({ ...st, frame: { ...p.frame }, ...(p.filter ? { filter: { ...p.filter } } : {}) })}
+              >
+                {p.icon} {p.label}
+              </button>
             ))}
-          </select>
-          {st.frame.kind !== 'none' && (
-            <>
-              <input
-                type="color"
-                className="sk-color"
-                value={st.frame.color}
-                title="Couleur"
-                onChange={(e) => push({ ...st, frame: { ...st.frame, color: e.target.value } })}
-              />
-              {st.frame.kind === 'border' && (
+          </span>
+          <span className="sk-frame-hint">Bordure = filet SUR l’image · Passe-partout = marge AUTOUR</span>
+          {(st.frame.border || st.frame.rounded || st.frame.vignette || st.frame.mat) && (
+            <span className="sk-frame-custom">
+              {st.frame.border && (
+                <>
+                  <input type="color" className="sk-color" value={st.frame.borderColor} title="Couleur du filet" onChange={(e) => push({ ...st, frame: { ...st.frame, borderColor: e.target.value } })} />
+                  <label className="sk-num">
+                    ép.{' '}
+                    <input type="number" min={1} max={200} value={st.frame.borderWidth} onChange={(e) => push({ ...st, frame: { ...st.frame, borderWidth: Number(e.target.value) } })} />
+                  </label>
+                </>
+              )}
+              {st.frame.rounded && (
                 <label className="sk-num">
-                  Épaisseur
-                  <input type="number" min={1} max={200} value={st.frame.width} onChange={(e) => push({ ...st, frame: { ...st.frame, width: Number(e.target.value) } })} />
+                  rayon{' '}
+                  <input type="number" min={0} max={9999} value={st.frame.radius} onChange={(e) => push({ ...st, frame: { ...st.frame, radius: Number(e.target.value) } })} />
                 </label>
               )}
-              {st.frame.kind === 'rounded' && (
+              {st.frame.vignette && (
                 <label className="sk-num">
-                  Rayon
-                  <input type="number" min={0} max={400} value={st.frame.radius} onChange={(e) => push({ ...st, frame: { ...st.frame, radius: Number(e.target.value) } })} />
+                  vig.{' '}
+                  <input type="number" min={0} max={1} step={0.05} value={st.frame.vig} onChange={(e) => push({ ...st, frame: { ...st.frame, vig: Number(e.target.value) } })} />
                 </label>
               )}
-              {st.frame.kind === 'mat' && (
-                <label className="sk-num">
-                  Marge
-                  <input type="number" min={0} max={800} value={st.frame.mat} onChange={(e) => push({ ...st, frame: { ...st.frame, mat: Number(e.target.value) } })} />
-                </label>
+              {st.frame.mat && (
+                <>
+                  <input type="color" className="sk-color" value={st.frame.matColor} title="Couleur de la marge" onChange={(e) => push({ ...st, frame: { ...st.frame, matColor: e.target.value } })} />
+                  <label className="sk-num">
+                    marge{' '}
+                    <input type="number" min={0} max={800} value={st.frame.matSize} onChange={(e) => push({ ...st, frame: { ...st.frame, matSize: Number(e.target.value) } })} />
+                  </label>
+                  <label className="sk-check">
+                    <input type="checkbox" checked={st.frame.polaroid} onChange={(e) => push({ ...st, frame: { ...st.frame, polaroid: e.target.checked } })} /> polaroid
+                  </label>
+                </>
               )}
-            </>
+            </span>
           )}
         </div>
         <div className="sk-tb-sep" />
@@ -282,7 +328,9 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
             />
           </label>
           {st.size && (
-            <button className="sk-btn ghost" onClick={() => push({ ...st, size: null })}>Taille d'origine</button>
+            <button className="sk-btn ghost" onClick={() => push({ ...st, size: null })}>
+              Taille d'origine
+            </button>
           )}
         </div>
         <div className="sk-tb-sep" />
@@ -293,7 +341,9 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
             ))}
           </select>
           <button className="sk-btn primary" onClick={() => void exportCurrent(false)}>⬇ Exporter</button>
-          <button className="sk-btn" title="Remplacer l'image dans la bibliothèque (l'original est conservé)" onClick={() => void exportCurrent(true)}>💾 Enregistrer</button>
+          <button className="sk-btn" title="Remplacer l'image dans la bibliothèque (l'original est conservé)" onClick={() => void exportCurrent(true)}>
+            💾 Enregistrer
+          </button>
         </div>
       </div>
 
@@ -320,7 +370,7 @@ export default function EditorView({ img, ctx }: { img: SkImage; ctx: SkCtx }): 
         ) : (
           <div className="sk-hint">Chargement de l'image…</div>
         )}
-        {cropMode && <p className="sk-hint sk-crop-hint">Glisse sur l'image pour définir le recadrage. Échap pour annuler.</p>}
+        {cropMode && <p className="sk-hint sk-crop-hint">Glisse sur l'image pour définir le recadrage, choisis un ratio ci-dessus.</p>}
       </div>
     </div>
   )

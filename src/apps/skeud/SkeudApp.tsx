@@ -4,7 +4,7 @@ import { notify } from '../../shared/notify'
 import { useDismiss } from '../../shared/useDismiss'
 import { zipFiles } from '../kod/zip'
 import { delImage, listImages, putImage, uid, type SkImage } from './store'
-import { batchName, DEFAULT_EDIT, EXPORT_FORMATS, fmtBytes, type EditState, type FrameKind } from './logic'
+import { batchName, DEFAULT_EDIT, EXPORT_FORMATS, fmtBytes, FRAME_PRESETS, framePresetOf, type EditState } from './logic'
 import { canvasToBlob, downloadBlob, loadBitmap, renderEdit } from './render'
 import EditorView from './views/EditorView'
 
@@ -245,11 +245,14 @@ export default function SkeudApp(): JSX.Element {
               Cadre
               <select
                 className="sk-input"
-                value={batchState.frame.kind}
-                onChange={(e) => setBatchState({ ...batchState, frame: { ...batchState.frame, kind: e.target.value as FrameKind } })}
+                value={framePresetOf(batchState.frame)?.id ?? ''}
+                onChange={(e) => {
+                  const p = FRAME_PRESETS.find((x) => x.id === e.target.value)
+                  if (p) setBatchState({ ...batchState, frame: { ...p.frame } })
+                }}
               >
-                {['none', 'border', 'rounded', 'vignette', 'mat'].map((k) => (
-                  <option key={k} value={k}>{k}</option>
+                {FRAME_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>{p.icon} {p.label}</option>
                 ))}
               </select>
             </label>
