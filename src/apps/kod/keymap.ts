@@ -52,12 +52,12 @@ const normCombo = (raw: string): string | null => {
 
 export const parseKeymapText = (text: string): Record<string, string> => {
   const out: Record<string, string> = {}
-  const ids = new Set(KEYMAP_ACTIONS.map((a) => a.id))
+  const ids = new Map(KEYMAP_ACTIONS.map((a) => [a.id.toLowerCase(), a.id]))
   for (const line of text.split('\n')) {
     const m = line.match(/^\s*([a-zA-Z]+)\s*[:=]\s*(.+?)\s*$/)
     if (!m) continue
-    const id = m[1].toLowerCase()
-    if (!ids.has(id)) continue
+    const id = ids.get(m[1].toLowerCase())
+    if (!id) continue
     const c = normCombo(m[2])
     if (c) out[id] = c
   }
