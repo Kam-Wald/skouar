@@ -49,7 +49,7 @@ const LANGS: Record<string, LangRule> = {
   html: { comments: ['<!--[\\s\\S]*?-->'], keywords: [] },
   xml: { comments: ['<!--[\\s\\S]*?-->'], keywords: [] },
   css: { comments: ['\\/\\*[\\s\\S]*?\\*\\/'], keywords: ['important', 'media', 'keyframes', 'import', 'root'] },
-  markdown: { comments: [], keywords: [], extra: ['(?m)^#{1,6}[^\\n]*', '\\[[^\\]\\n]*\\]\\([^)\\n]*\\)', '`[^`\\n]*`'] },
+  markdown: { comments: [], keywords: [], extra: ['(^|\\n)(#{1,6})[^\\n]*', '\\[[^\\]\\n]*\\]\\([^)\\n]*\\)', '`[^`\\n]*`'] },
   python: { comments: ['#[^\\n]*', '"""[\\s\\S]*?"""'], keywords: KW.py.split(' ') },
   ruby: { comments: ['#[^\\n]*'], keywords: KW.rb.split(' ') },
   bash: { comments: ['#[^\\n]*'], keywords: KW.sh.split(' ') },
