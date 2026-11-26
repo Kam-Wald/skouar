@@ -42,6 +42,7 @@ export interface CkRoutine {
   id: string
   label: string
   icon: string
+  target: number
 }
 
 export interface CkDayCheck {
@@ -49,6 +50,7 @@ export interface CkDayCheck {
   day: string
   routineId: string
   done: boolean
+  count: number
 }
 
 export interface CkDayItem {
@@ -117,12 +119,12 @@ export const saveKV = kv.saveKV
 
 export async function seedRoutines(): Promise<CkRoutine[]> {
   const existing = await routinesT.toArray()
-  if (existing.length) return existing
+  if (existing.length) return existing.map((r) => ({ ...r, target: r.target ?? 0 }))
   const defs: CkRoutine[] = [
-    { id: uid(), label: 'Boire un verre d’eau', icon: '💧' },
-    { id: uid(), label: 'Pause yeux 20-20-20 (5 min)', icon: '👀' },
-    { id: uid(), label: 'Étirements 2 min', icon: '🧘' },
-    { id: uid(), label: 'Air frais 2 min', icon: '🌬️' }
+    { id: uid(), label: 'Verres d’eau', icon: '💧', target: 8 },
+    { id: uid(), label: 'Pause yeux 20-20-20 (5 min)', icon: '👀', target: 0 },
+    { id: uid(), label: 'Étirements 2 min', icon: '🧘', target: 0 },
+    { id: uid(), label: 'Air frais 2 min', icon: '🌬️', target: 0 }
   ]
   await routinesT.bulkPut(defs)
   return defs
@@ -147,7 +149,7 @@ export const listSubtasks = (): Promise<CkSubtask[]> => subtasksT.toArray()
 export const putSubtask = (s: CkSubtask): Promise<string> => subtasksT.put(s).then(() => s.id)
 export const delSubtask = (id: string): Promise<void> => subtasksT.delete(id)
 export const delSubtasksOf = async (taskId: string): Promise<void> => { await subtasksT.where('taskId').equals(taskId).delete() }
-export const listChecks = (day: string): Promise<CkDayCheck[]> => dayChecksT.where('day').equals(day).toArray()
+export const listChecks = (day: string): Promise<CkDayCheck[]> => dayChecksT.where('day').equals(day).toArray().then((cs) => cs.map((c) => ({ ...c, count: c.count ?? (c.done ? 1 : 0) })))
 export const putCheck = (c: CkDayCheck): Promise<string> => dayChecksT.put(c).then(() => c.id)
 export const delCheck = (id: string): Promise<void> => dayChecksT.delete(id)
 export const listDayItems = (day: string): Promise<CkDayItem[]> => dayItemsT.where('day').equals(day).toArray()

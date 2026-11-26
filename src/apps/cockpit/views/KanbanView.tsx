@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CkCtx } from '../CockpitApp'
-import { allTags, dueChip, parseTaskLines, WIP_LIMIT, wipExceeded } from '../logic'
+import { allTags, dueChip, filterTasks, parseTaskLines, sortTasks, WIP_LIMIT, wipExceeded, type SortMode } from '../logic'
 import { notify } from '../../../shared/notify'
 import { useDismiss } from '../../../shared/useDismiss'
 import { uid, type CkTask } from '../store'
@@ -19,6 +19,8 @@ export default function KanbanView({ ctx }: { ctx: CkCtx }): JSX.Element {
   const [tag, setTag] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState<SortMode>('created')
   useDismiss('ck-import', showImport, () => setShowImport(false))
 
   const doing = ctx.tasks.filter((t) => t.col === 'doing').length
@@ -72,11 +74,20 @@ export default function KanbanView({ ctx }: { ctx: CkCtx }): JSX.Element {
             <button key={tg} className={`ck-chip${tag === tg ? ' active' : ''}`} onClick={() => setTag(tag === tg ? '' : tg)}>#{tg}</button>
           ))}
         </div>
+        <div className="ck-kanban-tools">
+          <input className="ck-input ck-search" placeholder="🔍 Rechercher une tâche…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="ck-input ck-sort" value={sort} onChange={(e) => setSort(e.target.value as SortMode)} title="Trier">
+            <option value="created">Trier : création</option>
+            <option value="due">Trier : échéance</option>
+            <option value="value">Trier : valeur ★</option>
+            <option value="est">Trier : estimé</option>
+          </select>
+        </div>
         <button className="ck-btn ghost" onClick={() => setShowImport(true)}>📋 Importer une liste</button>
       </div>
       <div className="ck-kanban">
         {COLS.map((c) => {
-          const tasks = ctx.tasks.filter((t) => t.col === c.id && visible(t))
+          const tasks = sortTasks(filterTasks(ctx.tasks.filter((t) => t.col === c.id && visible(t)), q), sort, ctx.today)
           return (
             <section
               key={c.id}

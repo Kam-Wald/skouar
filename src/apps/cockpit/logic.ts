@@ -303,3 +303,75 @@ export const RECUR_LABELS: Record<string, string> = {
   '5': 'Vendredi',
   '6': 'Samedi'
 }
+
+export interface CheckLike {
+  done: boolean
+  count?: number
+}
+
+export function checkState(routine: { target?: number }, check?: CheckLike | null): { mode: 'bool' | 'count'; done: boolean; count: number; target: number } {
+  const target = routine.target ?? 0
+  if (target <= 0) return { mode: 'bool', done: !!check?.done, count: check?.done ? 1 : 0, target: 0 }
+  const count = Math.max(0, check?.count ?? 0)
+  return { mode: 'count', done: count >= target, count, target }
+}
+
+export function weekTrend(sessions: SessLike[], now = new Date()): { thisMin: number; prevMin: number; pct: number | null } {
+  const all = lastDays(14, now)
+  const fb = focusByDay(sessions, all)
+  const thisMin = fb.slice(7).reduce((a, d) => a + d.min, 0)
+  const prevMin = fb.slice(0, 7).reduce((a, d) => a + d.min, 0)
+  return { thisMin: Math.round(thisMin), prevMin: Math.round(prevMin), pct: prevMin > 0 ? Math.round(((thisMin - prevMin) / prevMin) * 100) : null }
+}
+
+export type SortMode = 'created' | 'due' | 'value' | 'est'
+
+export function sortTasks<T extends { title: string; createdAt: number; due?: string | null; value?: number; estMin: number; tags?: string[] }>(tasks: T[], mode: SortMode, today: string): T[] {
+  const out = [...tasks]
+  if (mode === 'due') out.sort((a, b) => (a.due ?? '9999') .localeCompare(b.due ?? '9999') || a.createdAt - b.createdAt)
+  else if (mode === 'value') out.sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || a.createdAt - b.createdAt)
+  else if (mode === 'est') out.sort((a, b) => b.estMin - a.estMin || a.createdAt - b.createdAt)
+  else out.sort((a, b) => a.createdAt - b.createdAt)
+  return out
+}
+
+export const filterTasks = <T extends { title: string; tags?: string[] }>(tasks: T[], q: string): T[] => {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return tasks
+  return tasks.filter((t) => t.title.toLowerCase().includes(needle) || (t.tags ?? []).some((tg) => tg.toLowerCase().includes(needle)))
+}
+
+export function reviewMarkdown(input: {
+  weekStart: string
+  days: string[]
+  fb: { day: string; min: number }[]
+  eb: { day: string; avg: number | null }[]
+  ib: { day: string; n: number }[]
+  eva: { est: number; act: number }
+  paretoRows: { title: string; value: number; cum: number }[]
+  lines: string[]
+  trend: { thisMin: number; prevMin: number; pct: number | null }
+}): string {
+  const L: string[] = []
+  L.push(`# Revue Cockpit — semaine du ${input.weekStart}`)
+  L.push('')
+  L.push(`Tendance vs semaine précédente : ${input.trend.pct === null ? 'n/a' : `${input.trend.pct > 0 ? '+' : ''}${input.trend.pct} %`} (${input.trend.thisMin} min vs ${input.trend.prevMin} min).`)
+  L.push('')
+  L.push('## Focus par jour (min)')
+  L.push('')
+  for (const d of input.fb) L.push(`- ${d.day} : ${Math.round(d.min)} min${input.eb.find((e) => e.day === d.day)?.avg ? ` · énergie ${input.eb.find((e) => e.day === d.day)?.avg}/5` : ''}${input.ib.find((i) => i.day === d.day)?.n ? ` · ${input.ib.find((i) => i.day === d.day)?.n} interruption(s)` : ''}`)
+  L.push('')
+  L.push(`## Prévu vs réel : ${input.eva.act} min réelles pour ${input.eva.est} min prévus (7 jours)`)
+  L.push('')
+  if (input.paretoRows.length) {
+    L.push('## Pareto (80 % de la valeur)')
+    L.push('')
+    for (const r of input.paretoRows) L.push(`- ${r.title} — ★${r.value} (${Math.round(r.cum * 100)} % cumulé)`)
+    L.push('')
+  }
+  L.push('## Bilan')
+  L.push('')
+  for (const l of input.lines) L.push(`- ${l}`)
+  L.push('')
+  return L.join('\n')
+}

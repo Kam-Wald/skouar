@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { CkCtx } from '../CockpitApp'
-import { energyByDay, estVsActual, focusByDay, fmt, goalProgress, interruptionsByDay, pareto, reviewSummary, weekStartOf } from '../logic'
+import { energyByDay, estVsActual, focusByDay, fmt, goalProgress, interruptionsByDay, pareto, reviewMarkdown, reviewSummary, weekStartOf, weekTrend } from '../logic'
 import { notify } from '../../../shared/notify'
 import { useDismiss } from '../../../shared/useDismiss'
 import type { CkSession } from '../store'
@@ -80,13 +80,18 @@ export default function ReviewView({ ctx }: { ctx: CkCtx }): JSX.Element {
   const lines = reviewSummary({ weekMin, est: eva.est, act: eva.act, paretoRows: p.length, totalDone: done.length })
   const recent = [...ctx.sessions].sort((a, b) => b.at - a.at).slice(0, 12)
   const ws = weekStartOf()
+  const trend = weekTrend(ctx.sessions)
   const gp = goalProgress(ctx.goals, ctx.tasks, ws)
   const editSession = ctx.sessions.find((s) => s.id === editSess)
 
   return (
     <div className="ck-review">
       <section className="ck-card">
-        <h3 className="ck-card-title">📊 Focus sur 7 jours</h3>
+        <h3 className="ck-card-title">📊 Focus sur 7 jours {trend.pct !== null && (
+            <span className={`ck-trend ${trend.pct >= 0 ? 'up' : 'down'}`}>
+              {trend.pct > 0 ? '▲' : trend.pct < 0 ? '▼' : '►'} {Math.abs(trend.pct)} % vs sem. préc.
+            </span>
+          )}</h3>
         <div className="ck-bars">
           {fb.map((d) => (
             <div key={d.day} className="ck-bar-col">
@@ -202,6 +207,18 @@ export default function ReviewView({ ctx }: { ctx: CkCtx }): JSX.Element {
       <section className="ck-card">
         <h3 className="ck-card-title">💾 Données</h3>
         <div className="ck-pop-actions" style={{ justifyContent: 'flex-start' }}>
+          <button
+            className="ck-btn"
+            onClick={() => {
+              const md = reviewMarkdown({ weekStart: ws, days: ctx.days, fb, eb, ib, eva, paretoRows: p, lines, trend })
+              navigator.clipboard
+                .writeText(md)
+                .then(() => notify('Revue copiée en Markdown 📄'))
+                .catch(() => notify('Copie impossible (presse-papiers)'))
+            }}
+          >
+            📄 Copier la revue en Markdown
+          </button>
           <button className="ck-btn" onClick={() => void ctx.exportData()}>💾 Exporter en JSON</button>
           <button className="ck-btn" onClick={() => fileRef.current?.click()}>📥 Importer un JSON</button>
           <input
