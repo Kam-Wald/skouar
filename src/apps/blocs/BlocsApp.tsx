@@ -25,6 +25,7 @@ import CoverMenu from './CoverMenu'
 import { coverStyle } from './covers'
 import { TEMPLATES, type TemplateSpec } from './templates'
 import { exportFile, parseMarkdown, toMarkdown } from './markdown'
+import SettingsButton from '../../Settings'
 import ThemeButton from '../../ThemeButton'
 import GraphView from './GraphView'
 import DashboardView from './DashboardView'
@@ -1062,6 +1063,7 @@ export default function BlocsApp() {
         </div>
         <div className="blocs-sidebar-foot">
           <ThemeButton />
+          <SettingsButton appId="blocs" appName="Calepin" />
           <div className="sync-wrap" data-pop="sync">
             <button className={`blocs-io${sync ? ' active' : ''}`} onClick={toggleSync} title="Sync P2P (code de salon)">
               {sync ? `⇄ ${sync.code}${syncPeers > 0 ? ` · ${syncPeers} app.` : ''}` : '⇄ Sync'}

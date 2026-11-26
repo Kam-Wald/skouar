@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apps } from '../apps/registry'
 import ThemeButton from '../ThemeButton'
+import SettingsButton from '../Settings'
 
 export default function LauncherHome() {
   const [q, setQ] = useState('')
@@ -17,6 +18,7 @@ export default function LauncherHome() {
       </a>
       <div className="launcher-theme">
         <ThemeButton />
+        <SettingsButton />
       </div>
       <header className="launcher-header">
         <img

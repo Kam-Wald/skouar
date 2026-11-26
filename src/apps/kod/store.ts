@@ -14,6 +14,8 @@ export interface KodUI {
   tabs: string[]
   active: string | null
   expanded: string[]
+  pinned: string[]
+  closed: string[]
   fontSize: number
   tabSize: number
   wrap: boolean
@@ -75,6 +77,8 @@ export const defaultUI = (): KodUI => ({
   tabs: [],
   active: null,
   expanded: [],
+  pinned: [],
+  closed: [],
   fontSize: 13,
   tabSize: 2,
   wrap: false,
