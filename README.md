@@ -64,7 +64,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **8 nouveaux blocs** : encadré (callout coloré), **embed iframe**, **formule math KaTeX**, **barre de progression**, **QR code** (texte éditable), **compte à rebours**, **galerie d'images**, **page intégrée** (carte cliquable)
 - **Bouton automatisation** ⚙ : un clic sur le bouton duplique N fois le bloc choisi de la page (ex : blocs recette de cuisine)
 - **Modèles** : bouton 📋 (ou ＋) dans la barre latérale → picker des 20 templates
-- **Design** : thème sombre éditorial (inspiration getartcraft) + thème clair, **glassmorphism sur les grands panneaux** (templates, graphe, rappels), launcher en **tuiles uniformes à bordure fine 1px** + 7 applis « Bientôt » non actives avec leur propre logo (Skeud 🖼️, Taol 🧮, Tres ✏️, Kod 💻, Kemm 🔄, Eur ⏱️), labels/badges/dates en **mono**, une seule couleur d'accent (états survolés/sélectionnés dérivés automatiquement)
+- **Design** : thème sombre éditorial (inspiration getartcraft) + thème clair, **glassmorphism sur les grands panneaux** (templates, graphe, rappels), launcher en **tuiles uniformes à bordure fine 1px** + **identité visuelle retravaillée** : marque Skouar originale (lapin géométrique, en référence à Jekyll/Rudy/Walden), titre du launcher en typo display avec ombre outline accent, **10 logos d'applis en duotone** avec une couleur propre à chaque appli (calepin sky, skrid amber, ler red, skeud emerald, taol violet, tres pink, kod slate, kemm teal, eur orange, klevet indigo) ; 7 applis « Bientôt » (Skeud 🖼️, Taol 🧮, Tres ✏️, Kod 💻, Kemm 🔄, Eur ⏱️, Klevet 🎤), labels/badges/dates en **mono**, une seule couleur d'accent (états survolés/sélectionnés dérivés automatiquement)
 - **Barre latérale** : en-tête **Calepin** (logo + nom, clic = retour au launcher), encart **🔔 Rappels** avec **point rouge pulsant si un rappel est dans les 48 h** (clic → liste des rappels), puis la liste des pages (sous-pages indentées dessous, plus de scrollbar horizontale), puis les lignes **＋ Nouvelle page** et **📋 Templates**
 - **Launcher** : chaque logiciel est numéroté (01, 02…) en mono, descriptions sans le « 100 % local » (déjà en pied de page), logo Calepin distinct du logo Skouar (page à coin corné)
 - **Picker d'icônes de page** : 2 sections — émojis + **pictos monochromes recolorables** (formes, symboles, maths) via les pastilles de couleur
@@ -108,6 +108,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - **Kod** 💻 — éditeur de code léger (coloration, onglets, arbre de dossier local, recherche dans les fichiers) — bientôt
 - **Kemm** 🔄 — convertisseur de fichiers local (images ↔ PNG/JPEG/WebP, audio, CSV/JSON) — bientôt
 - **Eur** ⏱️ — cockpit productivité : minuteurs à techniques (Pomodoro, 52/17, timeboxing), suivi du temps par projet, kanban perso, astuces bien-être — bientôt
+- **Klevet** 🎤 — édition audio 100 % local façon Audacity-lite : micro (MediaRecorder), forme d'onde, couper/copier, gain, fondus, lecture, export WAV — bientôt
 
 ## Roadmap
 

@@ -10,12 +10,15 @@ export default function LauncherHome() {
       </div>
       <header className="launcher-header">
         <img
-          className="launcher-logo-img"
+          className="launcher-logo-img launcher-mark"
           src={`${import.meta.env.BASE_URL}icon.svg`}
           alt="Skouar"
         />
         <div>
-          <h1>Skouar</h1>
+          <span className="launcher-kicker mono">Launcher local-first · 100 % offline</span>
+          <h1 className="launcher-title" data-text="Skouar">
+            Skouar<span className="launcher-title-dot">.</span>
+          </h1>
           <p className="launcher-subtitle">
             Tes applications, réunies sur une seule place.
           </p>

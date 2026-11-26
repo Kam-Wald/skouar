@@ -84,11 +84,13 @@ function variant(size, v) {
   if (v === 1) {
     fillRoundedRect(px, size, m, m, size - m, size - m, Math.round(size * 0.08), WHITE)
   } else if (v === 2) {
-    const bw = size - 2 * m
-    for (let i = 0; i < 3; i++) {
-      const y0 = m + i * Math.round(size * 0.155)
-      fillRoundedRect(px, size, m, y0, m + bw, y0 + Math.round(size * 0.1), Math.round(size * 0.03), i === 2 ? WHITE : L1)
-    }
+    const u = size / 512
+    const R = Math.round
+    fillRoundedRect(px, size, R(193*u), R(58*u), R(247*u), R(282*u), R(27*u), WHITE)
+    fillRoundedRect(px, size, R(265*u), R(84*u), R(319*u), R(282*u), R(27*u), L1)
+    fillCircle(px, size, R(256*u), R(366*u), R(88*u), WHITE)
+    fillCircle(px, size, R(226*u), R(356*u), R(11*u), BG)
+    fillCircle(px, size, R(286*u), R(356*u), R(11*u), BG)
   } else if (v === 3) {
     const s = Math.round(size * 0.42)
     const r = Math.round(size * 0.07)
@@ -96,11 +98,13 @@ function variant(size, v) {
     fillRoundedRect(px, size, size - m - s - Math.round(size * 0.06), m + Math.round(size * 0.06), size - m - Math.round(size * 0.06), m + s + Math.round(size * 0.06), r, L2)
     fillRoundedRect(px, size, m, size - m - s, m + s, size - m, r, WHITE)
   } else {
-    const s = Math.round(size * 0.4)
-    const r = Math.round(size * 0.08)
-    fillCircle(px, size, Math.round(size * 0.38), Math.round(size * 0.26), Math.round(size * 0.075), WHITE)
-    fillCircle(px, size, Math.round(size * 0.62), Math.round(size * 0.26), Math.round(size * 0.075), WHITE)
-    fillRoundedRect(px, size, size / 2 - s / 2, size / 2 - s / 2 + Math.round(size * 0.08), size / 2 + s / 2, size / 2 + s / 2 + Math.round(size * 0.08), r, WHITE)
+    const u = size / 512
+    const R = Math.round
+    fillRoundedRect(px, size, R(193*u), R(58*u), R(247*u), R(282*u), R(27*u), WHITE)
+    fillRoundedRect(px, size, R(265*u), R(84*u), R(319*u), R(282*u), R(27*u), L1)
+    fillCircle(px, size, R(256*u), R(366*u), R(88*u), WHITE)
+    fillCircle(px, size, R(226*u), R(356*u), R(11*u), BG)
+    fillCircle(px, size, R(286*u), R(356*u), R(11*u), BG)
   }
   return px
 }

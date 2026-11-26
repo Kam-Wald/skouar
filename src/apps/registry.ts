@@ -82,5 +82,13 @@ export const apps: AppMeta[] = [
     icon: '⏱️',
     logo: `${import.meta.env.BASE_URL}app-icons/eur.svg`,
     soon: true
+  },
+  {
+    id: 'klevet',
+    name: 'Klevet',
+    description: 'Édition audio 100 % local (façon Audacity-lite) : enregistrer au micro, couper, gain, fondus, export WAV.',
+    icon: '🎙️',
+    logo: `${import.meta.env.BASE_URL}app-icons/klevet.svg`,
+    soon: true
   }
 ]
