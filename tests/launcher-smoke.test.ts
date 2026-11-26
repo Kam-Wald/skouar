@@ -30,13 +30,13 @@ describe('Launcher (smoke jsdom)', () => {
       root.render(React.createElement(MemoryRouter, null, React.createElement(LauncherHome)))
     })
     const html = div.innerHTML
-    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Calepin', 'Skrid', 'Ler', 'Kod', 'Bientôt', 'launcher-search', 'Réglages']) {
+    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Calepin', 'Skrid', 'Ler', 'Kod', 'Cockpit', 'Bientôt', 'launcher-search', 'Réglages']) {
       expect(html).toContain(needle)
     }
     const tiles = div.querySelectorAll('.app-tile').length
     expect(tiles).toBeGreaterThanOrEqual(4)
     const soon = div.querySelectorAll('.app-tile.soon').length
-    expect(soon).toBeGreaterThanOrEqual(6)
+    expect(soon).toBeGreaterThanOrEqual(5)
     root.unmount()
   })
 })

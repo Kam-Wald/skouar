@@ -76,12 +76,12 @@ export const apps: AppMeta[] = [
     soon: true
   },
   {
-    id: 'eur',
-    name: 'Eur',
-    description: 'Cockpit productivité : minuteurs (Pomodoro…), suivi du temps, kanban, astuces bien-être.',
-    icon: '⏱️',
-    logo: `${import.meta.env.BASE_URL}app-icons/eur.svg`,
-    soon: true
+    id: 'cockpit',
+    name: 'Cockpit',
+    description: 'Pilotage de ta journée : minuteurs Pomodoro, suivi du temps, kanban, matrice urgent/important, rituels — 100 % local.',
+    icon: '🎛️',
+    logo: `${import.meta.env.BASE_URL}app-icons/cockpit.svg`,
+    component: lazy(() => import('./cockpit/CockpitApp'))
   },
   {
     id: 'klevet',
