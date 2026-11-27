@@ -152,3 +152,51 @@ describe('export CSV', () => {
     expect(lines[2]).toBe('25;')
   })
 })
+
+describe('vue tri/filtre (PR A)', () => {
+  it('viewRows : tri croissant/décroissant sur une colonne, clés A1 inchangées', async () => {
+    const { viewRows, emptyView } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's1', name: 'F', cells: { A1: { v: 'b' }, A2: { v: 'a' }, A3: { v: 'c' }, B1: { v: 3 }, B2: { v: 1 }, B3: { v: 2 } } }
+    const asc = viewRows(sh, { sort: { col: 0, dir: 1 }, filters: {} })
+    expect(asc).toEqual([1, 0, 2])
+    const desc = viewRows(sh, { sort: { col: 0, dir: -1 }, filters: {} })
+    expect(desc).toEqual([2, 0, 1])
+    const numAsc = viewRows(sh, { sort: { col: 1, dir: 1 }, filters: {} })
+    expect(numAsc).toEqual([1, 2, 0])
+    expect(emptyView().sort).toBeNull()
+  })
+
+  it('viewRows : filtre par valeurs de colonne', async () => {
+    const { viewRows } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's1', name: 'F', cells: { A1: { v: 'x' }, A2: { v: 'y' }, A3: { v: 'x' } } }
+    expect(viewRows(sh, { sort: null, filters: { 0: ['x'] } })).toEqual([0, 2])
+    expect(viewRows(sh, { sort: null, filters: { 0: ['x', 'y'] } })).toEqual([0, 1, 2])
+  })
+})
+
+describe('TSV (PR A)', () => {
+  it('serialize/parse roundtrip, formules en =…', async () => {
+    const { tsvSerializeRange, tsvParse, parseInput } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's1', name: 'F', cells: { A1: { v: 'txt' }, B1: { v: 12.5 }, A2: { f: 'B1*2' } } }
+    const tsv = tsvSerializeRange(sh, 0, 0, 1, 1)
+    expect(tsv).toBe('txt\t12.5\n=B1*2\t')
+    const grid = tsvParse(tsv)
+    expect(grid).toEqual([['txt', '12.5'], ['=B1*2', '']])
+    expect(parseInput(grid[1][0])).toEqual({ f: 'B1*2' })
+  })
+})
+
+describe('barre de statut + recherche (PR A)', () => {
+  it('statusOf', async () => {
+    const { statusOf } = await import('../src/apps/taol/logic')
+    expect(statusOf([1, 2, 'a', null, true])).toEqual({ nb: 2, somme: 3, moyenne: 1.5 })
+    expect(statusOf([])).toEqual({ nb: 0, somme: 0, moyenne: null })
+  })
+  it('searchCells trouve valeurs et formules', async () => {
+    const { searchCells } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's1', name: 'F', cells: { A1: { v: 'Lapin' }, B2: { f: 'A1&"-2026"' }, C3: { v: 42 } } }
+    expect(searchCells(sh, 'lapin').map((p) => p.row)).toEqual([0])
+    expect(searchCells(sh, 'a1').length).toBeGreaterThanOrEqual(1)
+    expect(searchCells(sh, 'zzz')).toEqual([])
+  })
+})

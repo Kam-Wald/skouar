@@ -664,3 +664,108 @@ export function usedRange(sh: Sheet): { maxC: number; maxR: number } {
   }
   return { maxC, maxR }
 }
+
+// ---------- Vue : tri + filtres (affichage, les clés A1 ne bougent pas) ----------
+
+export interface ViewState {
+  sort: { col: number; dir: 1 | -1 } | null
+  filters: Record<number, string[] | null>
+}
+
+export function emptyView(): ViewState {
+  return { sort: null, filters: {} }
+}
+
+export function compareValues(a: CellValue, b: CellValue): number {
+  const ra = rank(a)
+  const rb = rank(b)
+  if (ra !== rb) return ra - rb
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  if (typeof a === 'boolean' && typeof b === 'boolean') return (a ? 1 : 0) - (b ? 1 : 0)
+  return String(a ?? '').toLowerCase().localeCompare(String(b ?? '').toLowerCase())
+}
+
+export function viewRows(sh: Sheet, view: ViewState): number[] {
+  const used = usedRange(sh)
+  let rows = Array.from({ length: used.maxR + 1 }, (_, r) => r)
+  for (const [cStr, allowed] of Object.entries(view.filters)) {
+    if (!allowed) continue
+    const c = Number(cStr)
+    rows = rows.filter((r) => {
+      const cell = sh.cells[keyOf(c, r)]
+      const v = cell ? fmtDisplay(cell.v ?? null) : ''
+      return allowed.includes(v)
+    })
+  }
+  if (view.sort) {
+    const { col, dir } = view.sort
+    rows = [...rows].sort((a, b) => {
+      const va = sh.cells[keyOf(col, a)]?.v ?? null
+      const vb = sh.cells[keyOf(col, b)]?.v ?? null
+      return compareValues(va, vb) * dir
+    })
+  }
+  return rows
+}
+
+export function columnValues(sh: Sheet, col: number): string[] {
+  const used = usedRange(sh)
+  const set = new Set<string>()
+  for (let r = 0; r <= used.maxR; r++) {
+    const cell = sh.cells[keyOf(col, r)]
+    set.add(cell ? fmtDisplay(cell.v ?? null) : '')
+  }
+  return Array.from(set)
+}
+
+// ---------- TSV (copier-coller interne et externe) ----------
+
+export function tsvSerializeCell(cell: Cell | undefined): string {
+  if (!cell) return ''
+  if (cell.f !== undefined) return '=' + cell.f
+  const v = cell.v
+  if (v === undefined || v === null) return ''
+  return String(v).replace(/[\t\n\r]/g, ' ')
+}
+
+export function tsvSerializeRange(sh: Sheet, c1: number, r1: number, c2: number, r2: number): string {
+  const lines: string[] = []
+  for (let r = r1; r <= r2; r++) {
+    const cols: string[] = []
+    for (let c = c1; c <= c2; c++) cols.push(tsvSerializeCell(sh.cells[keyOf(c, r)]))
+    lines.push(cols.join('\t'))
+  }
+  return lines.join('\n')
+}
+
+export function tsvParse(text: string): string[][] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.split('\t'))
+}
+
+// ---------- Barre de statut ----------
+
+export function statusOf(vals: CellValue[]): { nb: number; somme: number; moyenne: number | null } {
+  const nums = vals.filter((v): v is number => typeof v === 'number')
+  const somme = nums.reduce((a, b) => a + b, 0)
+  return { nb: nums.length, somme, moyenne: nums.length ? somme / nums.length : null }
+}
+
+// ---------- Recherche dans le classeur ----------
+
+export function searchCells(sh: Sheet, q: string): { col: number; row: number }[] {
+  const needle = q.toLowerCase()
+  if (!needle) return []
+  const out: { col: number; row: number }[] = []
+  for (const [key, cell] of Object.entries(sh.cells)) {
+    const p = parseKey(key)
+    if (!p) continue
+    const hay = `${cell.f ?? ''} ${fmtDisplay(cell.v ?? null)}`.toLowerCase()
+    if (hay.includes(needle)) out.push(p)
+  }
+  return out
+}
+

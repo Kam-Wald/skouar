@@ -227,3 +227,252 @@
     height: auto;
   }
 }
+
+.taol-col-head {
+  white-space: nowrap;
+}
+
+.taol-col-menu-btn {
+  margin-left: 4px;
+  font-size: 0.55rem;
+  color: var(--muted);
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.taol-col-menu-btn:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.taol-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.82rem;
+}
+
+.taol-menu button {
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.taol-menu button:hover {
+  background: var(--accent-soft);
+}
+
+.taol-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.taol-menu-label {
+  margin: 2px 4px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.taol-menu-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.taol-menu-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.taol-menu-check:hover {
+  background: var(--panel-2);
+}
+
+.taol-cell {
+  position: relative;
+}
+
+.taol-cell.in-range {
+  background: var(--accent-soft);
+}
+
+.taol-cell.in-fill {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.taol-fill-handle {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border: 1px solid #fff;
+  border-radius: 2px;
+  cursor: crosshair;
+  z-index: 5;
+}
+
+.taol-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.taol-freeze {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.taol-search {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.taol-search-input {
+  width: 240px;
+  padding: 5px 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.taol-search-input:focus {
+  border-color: var(--accent);
+}
+
+.taol-search-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 34px;
+  text-align: center;
+}
+
+.taol-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.taol-modal {
+  width: min(560px, 92vw);
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.taol-modal-title {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.taol-paste-area {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  resize: vertical;
+}
+
+.taol-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.taol-table.freeze-r tbody tr:first-child td {
+  position: sticky;
+  top: 27px;
+  z-index: 1;
+  background: var(--bg);
+}
+
+.taol-table.freeze-c .taol-row-head,
+.taol-table.freeze-c td:nth-child(2) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+}
+
+.taol-table.freeze-c thead th.taol-corner,
+.taol-table.freeze-c thead th:nth-child(2) {
+  z-index: 3;
+}
+
+@media print {
+  .taol-status,
+  .taol-search,
+  .taol-modal-overlay,
+  .taol-col-menu-btn,
+  .taol-fill-handle {
+    display: none !important;
+  }
+}
