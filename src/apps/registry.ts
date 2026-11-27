@@ -78,8 +78,8 @@ export const apps: AppMeta[] = [
   {
     id: 'kemm',
     name: 'Kemm',
-    description: 'Convertisseur de fichiers 100 % local (images, audio, CSV/JSON…).',
-    tag: 'conversion',
+    description: 'Convertisseur multiformat + compression de fichiers, 100 % local (images, audio, documents, ZIP…).',
+    tag: 'fichiers & zip',
     icon: '🔄',
     logo: `${import.meta.env.BASE_URL}app-icons/kemm.svg`,
     soon: true
@@ -100,6 +100,24 @@ export const apps: AppMeta[] = [
     tag: 'audio',
     icon: '🎙️',
     logo: `${import.meta.env.BASE_URL}app-icons/klevet.svg`,
+    soon: true
+  },
+  {
+    id: 'archant',
+    name: "Arc'hant",
+    description: 'Budget perso 100 % local : comptes, catégories, graphiques mensuels, export CSV.',
+    tag: 'budget',
+    icon: '💰',
+    logo: `${import.meta.env.BASE_URL}app-icons/archant.svg`,
+    soon: true
+  },
+  {
+    id: 'unvez',
+    name: 'Unvez',
+    description: "Calculatrice + convertisseur d'unités 100 % local (longueur, masse, température, devises…). À ne pas confondre avec Kemm (convertisseur de fichiers).",
+    tag: 'unités & calcul',
+    icon: '📐',
+    logo: `${import.meta.env.BASE_URL}app-icons/unvez.svg`,
     soon: true
   }
 ]
