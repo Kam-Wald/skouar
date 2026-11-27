@@ -15,7 +15,7 @@ export const apps: AppMeta[] = [
   {
     id: 'blocs',
     name: 'Karneto',
-    description: 'Pages et bases de données type Notion.',
+    description: 'Pages et bases de données type Notion : blocs riches, 11 vues de BDD, graphe de liens, rappels, 30 templates, import/export.',
     tag: 'notes & bdd',
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,
@@ -33,7 +33,7 @@ export const apps: AppMeta[] = [
   {
     id: 'ler',
     name: 'Ler',
-    description: 'Visionneuse et annotatrice de PDF 100 % local (recherche, surlignage, texte, signature, fusion/extraction de pages).',
+    description: 'Visionneuse et annotatrice de PDF (recherche, surlignage, texte, signature, fusion/extraction de pages).',
     tag: 'pdf',
     icon: '📕',
     logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`,
@@ -69,7 +69,7 @@ export const apps: AppMeta[] = [
   {
     id: 'kod',
     name: 'Kod',
-    description: 'Éditeur de code léger et agréable : coloration, onglets, arbre de fichiers, recherche.',
+    description: 'Éditeur de code léger : coloration, onglets, arbre de fichiers, recherche.',
     tag: 'éditeur de code',
     icon: '💻',
     logo: `${import.meta.env.BASE_URL}app-icons/kod.svg`,
@@ -78,7 +78,7 @@ export const apps: AppMeta[] = [
   {
     id: 'kemm',
     name: 'Kemm',
-    description: 'Convertisseur multiformat + compression de fichiers, 100 % local (images, audio, documents, ZIP…).',
+    description: 'Convertisseur multiformat + compression de fichiers (images, audio, documents, ZIP…).',
     tag: 'fichiers & zip',
     icon: '🔄',
     logo: `${import.meta.env.BASE_URL}app-icons/kemm.svg`,
@@ -87,7 +87,7 @@ export const apps: AppMeta[] = [
   {
     id: 'cockpit',
     name: 'Cockpit',
-    description: 'Pilotage de ta journée : minuteurs Pomodoro, suivi du temps, kanban, matrice urgent/important, rituels — 100 % local.',
+    description: 'Pilotage de ta journée : minuteurs Pomodoro, suivi du temps, kanban, matrice urgent/important, rituels.',
     tag: 'productivité & focus',
     icon: '🎛️',
     logo: `${import.meta.env.BASE_URL}app-icons/cockpit.svg`,
@@ -96,7 +96,7 @@ export const apps: AppMeta[] = [
   {
     id: 'klevet',
     name: 'Klevet',
-    description: 'Édition audio 100 % local (façon Audacity-lite) : enregistrer au micro, couper, gain, fondus, export WAV.',
+    description: 'Édition audio (façon Audacity-lite) : enregistrer au micro, couper, gain, fondus, export WAV.',
     tag: 'audio',
     icon: '🎙️',
     logo: `${import.meta.env.BASE_URL}app-icons/klevet.svg`,
@@ -105,7 +105,7 @@ export const apps: AppMeta[] = [
   {
     id: 'archant',
     name: "Arc'hant",
-    description: 'Budget perso 100 % local : comptes, catégories, graphiques mensuels, export CSV.',
+    description: 'Budget perso : comptes, catégories, graphiques mensuels, export CSV.',
     tag: 'budget',
     icon: '💰',
     logo: `${import.meta.env.BASE_URL}app-icons/archant.svg`,
@@ -114,10 +114,10 @@ export const apps: AppMeta[] = [
   {
     id: 'unvez',
     name: 'Unvez',
-    description: "Calculatrice + convertisseur d'unités 100 % local (longueur, masse, température, devises…). À ne pas confondre avec Kemm (convertisseur de fichiers).",
+    description: "Calculatrice + convertisseur d'unités (longueur, poids, devises…).",
     tag: 'unités & calcul',
     icon: '📐',
     logo: `${import.meta.env.BASE_URL}app-icons/unvez.svg`,
-    soon: true
+    component: lazy(() => import('./unvez/UnvezApp'))
   }
 ]

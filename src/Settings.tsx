@@ -233,6 +233,8 @@ export default function SettingsButton({ appId, appName }: Props) {
                   <option value="gradient">Dégradé</option>
                   <option value="dots">Points</option>
                   <option value="grid">Grille</option>
+                  <option value="waves">Vagues</option>
+                  <option value="rings">Anneaux</option>
                 </select>
               </label>
               <div className="settings-field">

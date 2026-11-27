@@ -10,6 +10,7 @@ import './styles/03-blocs.css'
 import './styles/04-apps-misc.css'
 import './styles/05-kod-cockpit.css'
 import './styles/06-skeud-settings.css'
+import './styles/07-unvez.css'
 
 applyTheme(getTheme(), getAccent())
 

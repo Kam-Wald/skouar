@@ -1,9 +1,8 @@
 import { useState } from 'react'
 
 export const PALETTE: string[] = [
-  '#111827', '#4b5563', '#9ca3af', '#e5e7eb', '#fafaf9', '#ffffff',
-  '#7f1d1d', '#dc2626', '#ea580c', '#d97706', '#eab308', '#16a34a',
-  '#0d9488', '#0ea5e9', '#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#92400e'
+  '#dc2626', '#ea580c', '#d97706', '#eab308', '#16a34a',
+  '#0d9488', '#0ea5e9', '#2563eb', '#4f46e5', '#7c3aed', '#db2777'
 ]
 
 const KEY = 'skouar:colorHistory'
