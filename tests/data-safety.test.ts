@@ -32,7 +32,7 @@ import { APP_DB_MAP, createAppDb, deleteDatabaseSafe } from '../src/shared/db'
 import { apps } from '../src/apps/registry'
 import { snapshotBeforeImport, exportBackup, importBackup } from '../src/shared/backup'
 
-const APPS_WITH_DB = ['blocs', 'skrid', 'ler', 'skeud', 'kod', 'cockpit']
+const APPS_WITH_DB = ['blocs', 'skrid', 'ler', 'skeud', 'kod', 'cockpit', 'taol']
 
 describe('sécurité des données (non-régression)', () => {
   it('APP_DB_MAP : le nommage réel de la base de Karneto est « skouar » et chaque app à base est couverte', () => {
