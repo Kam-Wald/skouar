@@ -24,6 +24,22 @@ export function saveLauncherBg(bg: LauncherBg | null): void {
   window.dispatchEvent(new CustomEvent('skouar:settings'))
 }
 
+export interface BgPreset {
+  name: string
+  bg: LauncherBg
+}
+
+export const BG_PRESETS: BgPreset[] = [
+  { name: 'Nuit teal', bg: { type: 'gradient', c1: '#0b0f19', c2: '#155b60', angle: 135 } },
+  { name: 'Brume', bg: { type: 'gradient', c1: '#1a2334', c2: '#0b0f19', angle: 160 } },
+  { name: 'Aube', bg: { type: 'gradient', c1: '#c7d2fe', c2: '#f4f6fb', angle: 120 } },
+  { name: 'Sunset', bg: { type: 'gradient', c1: '#3b0764', c2: '#9a3412', angle: 120 } },
+  { name: 'Forêt', bg: { type: 'gradient', c1: '#052e16', c2: '#14532d', angle: 140 } },
+  { name: 'Encre', bg: { type: 'solid', c1: '#0b0f19', c2: '#155b60', angle: 135 } },
+  { name: 'Points violets', bg: { type: 'dots', c1: '#a78bfa', c2: '#17101f', angle: 0 } },
+  { name: 'Grille ardoise', bg: { type: 'grid', c1: '#334155', c2: '#0f172a', angle: 0 } }
+]
+
 export function launcherBgCss(bg: LauncherBg | null): string | undefined {
   if (!bg) return undefined
   const scrim = 'linear-gradient(var(--launcher-scrim), var(--launcher-scrim))'

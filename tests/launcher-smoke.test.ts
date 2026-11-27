@@ -69,4 +69,42 @@ describe('Launcher (smoke jsdom)', () => {
     root.unmount()
     div.remove()
   })
+
+  it('recherche par tag + compteur + Échap efface puis quitte', async () => {
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { MemoryRouter } = await import('react-router-dom')
+    const LauncherHome = (await import('../src/launcher/LauncherHome')).default
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    const root = createRoot(div)
+    await React.act(async () => {
+      root.render(React.createElement(MemoryRouter, null, React.createElement(LauncherHome)))
+    })
+    const search = div.querySelector('.launcher-search') as HTMLInputElement
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+    await React.act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }))
+    })
+    expect(document.activeElement).toBe(search)
+    await React.act(async () => {
+      setVal.call(search, 'photos')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(div.querySelectorAll('.app-tile').length).toBe(1)
+    expect(div.textContent).toContain('Skeud')
+    expect(div.querySelector('.launcher-count')?.textContent).toContain('1 app')
+    await React.act(async () => {
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(search.value).toBe('')
+    expect(document.activeElement).toBe(search)
+    expect(div.querySelectorAll('.app-tile').length).toBe(10)
+    await React.act(async () => {
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(document.activeElement).not.toBe(search)
+    root.unmount()
+    div.remove()
+  })
 })

@@ -30,7 +30,7 @@ if (typeof Blob !== 'undefined' && !(Blob.prototype as unknown as { stream?: unk
 }
 import { zipFiles, unzipFiles, entryText } from '../src/apps/kod/zip'
 import { exportBackup, importBackup } from '../src/shared/backup'
-import { launcherBgCss, saveLauncherBg, loadLauncherBg } from '../src/shared/launcherBg'
+import { BG_PRESETS, launcherBgCss, saveLauncherBg, loadLauncherBg } from '../src/shared/launcherBg'
 
 describe('zip roundtrip', () => {
   it('zipFiles/unzipFiles : aller-retour fidèle', async () => {
@@ -102,5 +102,12 @@ describe('launcherBg', () => {
     saveLauncherBg({ type: 'grid', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
     expect(launcherBgCss(loadLauncherBg())).toContain('linear-gradient')
     saveLauncherBg(null)
+  })
+
+  it('BG_PRESETS : au moins 6 presets, tous avec voile de lisibilité', () => {
+    expect(BG_PRESETS.length).toBeGreaterThanOrEqual(6)
+    for (const p of BG_PRESETS) {
+      expect(launcherBgCss(p.bg)).toContain('var(--launcher-scrim)')
+    }
   })
 })

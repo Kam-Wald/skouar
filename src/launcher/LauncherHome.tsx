@@ -22,15 +22,16 @@ export default function LauncherHome() {
         e.preventDefault()
         searchRef.current?.focus()
       } else if (e.key === 'Escape' && t === searchRef.current) {
-        searchRef.current?.blur()
+        if (q) setQ('')
+        else searchRef.current?.blur()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [q])
   const query = q.trim().toLowerCase()
   const visible = query
-    ? apps.filter((a) => `${a.name} ${a.description}`.toLowerCase().includes(query))
+    ? apps.filter((a) => `${a.name} ${a.description} ${a.tag}`.toLowerCase().includes(query))
     : apps
 
   return (
@@ -66,6 +67,11 @@ export default function LauncherHome() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
+      {query && (
+        <p className="launcher-count" role="status" aria-live="polite">
+          {visible.length === 0 ? 'Aucune app' : `${visible.length} app${visible.length > 1 ? 's' : ''}`}
+        </p>
+      )}
       <main className="launcher-grid" id="launcher-main">
         {visible.map((app) => (
           <AppTile key={app.id} app={app} idx={String(apps.indexOf(app) + 1).padStart(2, '0')} />
