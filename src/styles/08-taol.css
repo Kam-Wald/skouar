@@ -620,3 +620,30 @@
     display: none !important;
   }
 }
+
+/* ---------- Structure (PR C) ---------- */
+
+.taol-col-label {
+  cursor: pointer;
+}
+
+.taol-col-label:hover {
+  color: var(--accent);
+}
+
+.taol-row-head {
+  cursor: pointer;
+}
+
+.taol-row-head:hover {
+  color: var(--accent);
+}
+
+.taol-row-head .taol-col-menu-btn {
+  float: right;
+}
+
+.taol-menu-row {
+  left: 100%;
+  top: 0;
+}
