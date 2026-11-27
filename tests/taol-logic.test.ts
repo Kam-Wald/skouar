@@ -200,3 +200,70 @@ describe('barre de statut + recherche (PR A)', () => {
     expect(searchCells(sh, 'zzz')).toEqual([])
   })
 })
+
+describe('mise en forme (PR B)', () => {
+  it('fmtWithStyle : formats de nombre', async () => {
+    const { fmtWithStyle } = await import('../src/apps/taol/logic')
+    expect(fmtWithStyle(0.5, { numFmt: 'percent' })).toBe('50 %')
+    expect(fmtWithStyle(1234.5, { numFmt: 'number' })).toContain('234,50')
+    expect(fmtWithStyle(1234.5, { numFmt: 'euro' })).toContain('€')
+    expect(fmtWithStyle('2026-01-05', { numFmt: 'date' })).toBe('05/01/2026')
+    expect(fmtWithStyle(42)).toBe('42')
+    expect(fmtWithStyle('x', { numFmt: 'text' })).toBe('x')
+    expect(fmtWithStyle(42, { numFmt: 'general' })).toBe('42')
+  })
+
+  it('applyStyle pose et efface des styles sur une plage', async () => {
+    const { applyStyle } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 1 } } }
+    applyStyle(sh, { c1: 0, r1: 0, c2: 1, r2: 0 }, { bold: true, color: '#ff0000', align: 'center' })
+    expect(sh.cells.A1.s).toEqual({ bold: true, color: '#ff0000', align: 'center' })
+    expect(sh.cells.B1.s).toEqual({ bold: true, color: '#ff0000', align: 'center' })
+    applyStyle(sh, { c1: 0, r1: 0, c2: 0, r2: 0 }, { bold: null, color: '' })
+    expect(sh.cells.A1.s).toEqual({ align: 'center' })
+    applyStyle(sh, { c1: 0, r1: 0, c2: 0, r2: 0 }, { align: null })
+    expect(sh.cells.A1.s).toBeUndefined()
+    expect(sh.cells.B1.s?.bold).toBe(true)
+  })
+
+  it('fusion / coveredBy / unmerge', async () => {
+    const { mergeCells, coveredBy, unmergeAt } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 'x' }, B2: { v: 2 }, C3: { v: 3 } } }
+    const anchor = mergeCells(sh, { c1: 0, r1: 0, c2: 1, r2: 1 })
+    expect(anchor).toBe('A1')
+    expect(sh.cells.B2).toBeUndefined()
+    expect(sh.cells.C3).toBeDefined()
+    expect(coveredBy(sh, 0, 0)).toBe('A1')
+    expect(coveredBy(sh, 1, 1)).toBe('A1')
+    expect(coveredBy(sh, 5, 5)).toBeNull()
+    unmergeAt(sh, 1, 1)
+    expect(coveredBy(sh, 1, 1)).toBeNull()
+    expect(sh.merged && Object.keys(sh.merged).length).toBe(0)
+  })
+
+  it('cfMatch', async () => {
+    const { cfMatch } = await import('../src/apps/taol/logic')
+    const rule = { col: 0, op: '>' as const, value: 10, bg: '#fee2e2' }
+    expect(cfMatch(rule, 11)).toBe(true)
+    expect(cfMatch(rule, 10)).toBe(false)
+    expect(cfMatch(rule, '11')).toBe(false)
+    expect(cfMatch(rule, null)).toBe(false)
+    expect(cfMatch({ ...rule, op: '<' as const }, 9)).toBe(true)
+    expect(cfMatch({ ...rule, op: '<' as const }, 10)).toBe(false)
+  })
+
+  it('colSparkMax par colonne + setColWidth clamp', async () => {
+    const { colSparkMax, setColWidth } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 5 }, A2: { v: -20 }, B1: { v: 999 }, AA1: { v: 12345 } } }
+    expect(colSparkMax(sh, 0)).toBe(20)
+    expect(colSparkMax(sh, 1)).toBe(999)
+    expect(colSparkMax(sh, 26)).toBe(12345)
+    setColWidth(sh, 0, 500)
+    expect(sh.widths?.[0]).toBe(400)
+    setColWidth(sh, 1, 10)
+    expect(sh.widths?.[1]).toBe(30)
+    setColWidth(sh, 0, null)
+    expect(sh.widths?.[0]).toBeUndefined()
+    expect(sh.widths?.[1]).toBe(30)
+  })
+})

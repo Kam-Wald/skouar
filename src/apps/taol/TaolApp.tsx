@@ -1,29 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
 import AppShell from '../../shared/AppShell'
+import ColorSwatches from '../../shared/ColorSwatches'
+import { EMBEDDED_FONTS, SYSTEM_FONTS } from '../../shared/fonts'
 import { notify } from '../../shared/notify'
 import { loadWorkbook, saveWorkbook, uid } from './store'
 import {
+  applyStyle,
+  cfMatch,
+  colSparkMax,
   columnValues,
+  coveredBy,
   csvExport,
   emptyView,
   fmtDisplay,
+  fmtWithStyle,
   indexToCol,
   keyOf,
+  mergeCells,
   parseFormula,
   parseInput,
   parseKey,
   recalcWorkbook,
   searchCells,
   serializeFormula,
+  setColWidth,
   shiftRefs,
   statusOf,
   tsvParse,
   tsvSerializeRange,
+  unmergeAt,
   usedRange,
   viewRows,
+  type Box,
   type Cell,
   type CellValue,
+  type CfRule,
+  type NumFmt,
   type Sheet,
+  type StylePatch,
   type ViewState,
   type Workbook
 } from './logic'
@@ -66,6 +80,14 @@ export default function TaolApp(): JSX.Element {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [fillTo, setFillTo] = useState<Pos | null>(null)
   const [frozen, setFrozen] = useState({ rows: true, cols: false })
+  const [commentFor, setCommentFor] = useState<Pos | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
+  const [valFor, setValFor] = useState<number | null>(null)
+  const [valDraft, setValDraft] = useState('')
+  const [cfFor, setCfFor] = useState<number | null>(null)
+  const [cfDraft, setCfDraft] = useState<{ op: '>' | '<'; value: string; bg: string }>({ op: '>', value: '', bg: '#fee2e2' })
+  const [widthInput, setWidthInput] = useState('')
+  const [widthDraft, setWidthDraft] = useState('')
   const past = useRef<Workbook[]>([])
   const future = useRef<Workbook[]>([])
   const mainRef = useRef<HTMLDivElement>(null)
@@ -105,6 +127,12 @@ export default function TaolApp(): JSX.Element {
   const nCols = Math.max(26, Math.min(COLS, used.maxC + 3))
   const nRows = Math.max(50, Math.min(ROWS, used.maxR + 6))
   const displayRows = sheet ? viewRows(sheet, view) : []
+  const valList = sheet?.validations?.[sel.col]
+
+  useEffect(() => {
+    setWidthInput(sheet?.widths?.[sel.col] != null ? String(sheet.widths[sel.col]) : '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet?.id, sel.col, sheet?.widths])
 
   const mutate = (fn: (w: Workbook) => void): void => {
     if (!wb) return
@@ -337,10 +365,73 @@ export default function TaolApp(): JSX.Element {
     })
   }
 
+  const styleBox = (): Box => range ?? { c1: sel.col, r1: sel.row, c2: sel.col, r2: sel.row }
+  const curStyle = selCell?.s
+
+  const applyFmt = (patch: StylePatch): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      applyStyle(sh, styleBox(), patch)
+    })
+  }
+
+  const doMerge = (): void => {
+    if (!range || (range.c2 === range.c1 && range.r2 === range.r1)) return
+    const box = range
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      mergeCells(sh, box)
+    })
+  }
+
+  const doUnmerge = (): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      unmergeAt(sh, sel.col, sel.row)
+    })
+  }
+
+  const commitWidth = (): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      setColWidth(sh, sel.col, widthInput.trim() === '' ? null : Number(widthInput))
+    })
+  }
+
+  const saveValidation = (): void => {
+    if (valFor === null) return
+    const items = valDraft.split('\n').map((s) => s.trim()).filter(Boolean)
+    const c = valFor
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      sh.validations = { ...(sh.validations ?? {}) }
+      if (items.length) sh.validations[c] = items
+      else delete sh.validations[c]
+    })
+    setValFor(null)
+  }
+
+  const saveCf = (): void => {
+    if (cfFor === null) return
+    const v = Number(cfDraft.value)
+    if (cfDraft.value.trim() === '' || Number.isNaN(v)) {
+      setCfFor(null)
+      return
+    }
+    const c = cfFor
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      const rule: CfRule = { col: c, op: cfDraft.op, value: v, bg: cfDraft.bg }
+      sh.cf = [...(sh.cf ?? []).filter((r) => !(r.col === c && r.op === rule.op)), rule]
+    })
+    setCfFor(null)
+  }
+
   const openColMenu = (c: number): void => {
     setColMenu(c)
     const cur = view.filters[c] ?? null
     setFilterDraft(cur ? [...cur] : columnValues(sheet!, c))
+    setWidthDraft(sheet?.widths?.[c] != null ? String(sheet.widths[c]) : '')
   }
 
   const statusVals = (): CellValue[] => {
@@ -359,9 +450,10 @@ export default function TaolApp(): JSX.Element {
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
     const t = e.target as HTMLElement
-    if (t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
-    if (!wb || !sheet) return
     const k = e.key
+    if (t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+    if (t instanceof HTMLElement && t.tagName === 'BUTTON' && !k.startsWith('Arrow')) return
+    if (!wb || !sheet) return
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'f') {
       e.preventDefault()
       setSearch({ q: '', matches: [], idx: 0 })
@@ -419,6 +511,9 @@ export default function TaolApp(): JSX.Element {
       setEdit(null)
       setColMenu(null)
       setSearch(null)
+      setCommentFor(null)
+      setValFor(null)
+      setCfFor(null)
       return
     }
     if (k.startsWith('Arrow')) {
@@ -509,7 +604,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier.
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/soulign\u00e9, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu \u25bc de colonne : largeur, validation (liste), mise en forme conditionnelle.
           </p>
         </div>
       }
@@ -538,12 +633,155 @@ export default function TaolApp(): JSX.Element {
             {Object.keys(view.filters).length ? ` — ${Object.keys(view.filters).length} filtre(s)` : ''}
           </span>
         </div>
+        <div className="taol-fmtbar">
+          <select
+            className="taol-select taol-font"
+            title="Police de la sélection"
+            value={curStyle?.fontFamily ?? ''}
+            onChange={(e) => applyFmt({ fontFamily: e.target.value === '' ? null : e.target.value })}
+          >
+            <option value="">Police par d\u00e9faut</option>
+            <optgroup label="Polices int\u00e9gr\u00e9es">
+              {EMBEDDED_FONTS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Polices du syst\u00e8me">
+              {SYSTEM_FONTS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <input
+            type="number"
+            className="taol-size"
+            title="Taille de police"
+            min={8}
+            max={72}
+            placeholder="16"
+            value={curStyle?.fontSize ?? ''}
+            onChange={(e) => applyFmt({ fontSize: e.target.value === '' ? null : Number(e.target.value) })}
+          />
+          <span className="taol-sep" />
+          <button type="button" className={`taol-tgl${curStyle?.bold ? ' on' : ''}`} title="Gras" onClick={() => applyFmt({ bold: !curStyle?.bold })}>
+            B
+          </button>
+          <button type="button" className={`taol-tgl${curStyle?.italic ? ' on' : ''}`} title="Italique" onClick={() => applyFmt({ italic: !curStyle?.italic })}>
+            <i>I</i>
+          </button>
+          <button type="button" className={`taol-tgl${curStyle?.underline ? ' on' : ''}`} title="Soulign\u00e9" onClick={() => applyFmt({ underline: !curStyle?.underline })}>
+            <u>U</u>
+          </button>
+          <span className="taol-sep" />
+          <span className="taol-color-label" title="Couleur du texte">
+            A
+          </span>
+          <ColorSwatches value={curStyle?.color ?? '#000000'} onChange={(c) => applyFmt({ color: c })} title="Couleur du texte" />
+          <button type="button" className="taol-mini" title="Effacer la couleur du texte" onClick={() => applyFmt({ color: null })}>
+            \u00d7
+          </button>
+          <span className="taol-color-label taol-bg-label" title="Couleur de fond">
+            Fond
+          </span>
+          <ColorSwatches value={curStyle?.bg ?? '#ffffff'} onChange={(c) => applyFmt({ bg: c })} title="Couleur de fond" />
+          <button type="button" className="taol-mini" title="Effacer la couleur de fond" onClick={() => applyFmt({ bg: null })}>
+            \u00d7
+          </button>
+          <span className="taol-sep" />
+          {(['left', 'center', 'right'] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              className={`taol-tgl${curStyle?.align === a ? ' on' : ''}`}
+              title={`Aligner ${a === 'left' ? '\u00e0 gauche' : a === 'center' ? 'au centre' : '\u00e0 droite'}`}
+              onClick={() => applyFmt({ align: curStyle?.align === a ? null : a })}
+            >
+              {a === 'left' ? '\u21e4' : a === 'center' ? '\u21d4' : '\u21e5'}
+            </button>
+          ))}
+          <span className="taol-sep" />
+          <select
+            className="taol-select"
+            title="Format de nombre"
+            value={curStyle?.numFmt ?? 'general'}
+            onChange={(e) => {
+              const v = e.target.value as NumFmt
+              applyFmt({ numFmt: v === 'general' ? null : v })
+            }}
+          >
+            <option value="general">G\u00e9n\u00e9ral</option>
+            <option value="number">Nombre (1,50)</option>
+            <option value="percent">Pourcentage (50 %)</option>
+            <option value="euro">Euro (1,50 \u20ac)</option>
+            <option value="date">Date (JJ/MM/AAAA)</option>
+            <option value="text">Texte</option>
+          </select>
+          <button
+            type="button"
+            className={`taol-tgl${curStyle?.spark ? ' on' : ''}`}
+            title="Sparkline (barre proportionnelle dans la cellule)"
+            onClick={() => applyFmt({ spark: !curStyle?.spark })}
+          >
+            📊
+          </button>
+          <span className="taol-sep" />
+          <button
+            type="button"
+            className="taol-tgl"
+            title="Fusionner la plage s\u00e9lectionn\u00e9e"
+            disabled={!range || (range.c2 === range.c1 && range.r2 === range.r1)}
+            onClick={doMerge}
+          >
+            Fusionner
+          </button>
+          <button
+            type="button"
+            className="taol-tgl"
+            title="D\u00e9fusionner la cellule active"
+            disabled={!sheet || !coveredBy(sheet, sel.col, sel.row)}
+            onClick={doUnmerge}
+          >
+            D\u00e9fusionner
+          </button>
+          <button
+            type="button"
+            className="taol-tgl"
+            title="Ajouter / modifier un commentaire"
+            onClick={() => {
+              setCommentFor({ col: sel.col, row: sel.row })
+              setCommentDraft(selCell?.s?.comment ?? '')
+            }}
+          >
+            💬
+          </button>
+          <span className="taol-sep" />
+          <label className="taol-width-label" title="Largeur de la colonne active (px)">
+            Larg.
+            <input
+              type="number"
+              className="taol-size"
+              min={30}
+              max={400}
+              value={widthInput}
+              onChange={(e) => setWidthInput(e.target.value)}
+              onBlur={commitWidth}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitWidth()
+              }}
+            />
+          </label>
+        </div>
         <div className="taol-formula-bar">
           <span className="taol-ref">{selKey}</span>
           <input
             ref={formulaRef}
             className="taol-formula"
             aria-label="Barre de formule"
+            list={valList ? `taol-datalist-${sel.col}` : undefined}
             value={edit ?? rawOf(selCell)}
             onChange={(e) => setEdit(e.target.value)}
             onKeyDown={(e) => {
@@ -553,6 +791,13 @@ export default function TaolApp(): JSX.Element {
               } else if (e.key === 'Escape') setEdit(null)
             }}
           />
+          {valList && (
+            <datalist id={`taol-datalist-${sel.col}`}>
+              {valList.map((v) => (
+                <option key={v} value={v} />
+              ))}
+            </datalist>
+          )}
         </div>
         <div className="taol-grid-wrap">
           <table className={`taol-table${frozen.rows ? ' freeze-r' : ''}${frozen.cols ? ' freeze-c' : ''}`}>
@@ -560,7 +805,11 @@ export default function TaolApp(): JSX.Element {
               <tr>
                 <th className="taol-corner" />
                 {cols.map((c) => (
-                  <th key={c} className="taol-col-head">
+                  <th
+                    key={c}
+                    className="taol-col-head"
+                    style={sheet.widths?.[c] != null ? { width: sheet.widths[c], minWidth: sheet.widths[c] } : undefined}
+                  >
                     <span>{indexToCol(c)}</span>
                     <button
                       type="button"
@@ -633,6 +882,51 @@ export default function TaolApp(): JSX.Element {
                         >
                           Appliquer le filtre
                         </button>
+                        <div className="taol-menu-sep" />
+                        <p className="taol-menu-label">Largeur colonne {indexToCol(c)} (px) :</p>
+                        <div className="taol-menu-row">
+                          <input
+                            type="number"
+                            className="taol-size"
+                            min={30}
+                            max={400}
+                            value={widthDraft}
+                            onChange={(e) => setWidthDraft(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              mutate((w) => {
+                                const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                                setColWidth(sh, c, widthDraft.trim() === '' ? null : Number(widthDraft))
+                              })
+                              setColMenu(null)
+                            }}
+                          >
+                            Appliquer
+                          </button>
+                        </div>
+                        <div className="taol-menu-sep" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setValFor(c)
+                            setValDraft((sheet.validations?.[c] ?? []).join('\n'))
+                            setColMenu(null)
+                          }}
+                        >
+                          Validation (liste)\u2026{sheet.validations?.[c]?.length ? ` (${sheet.validations[c].length})` : ''}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCfFor(c)
+                            setCfDraft({ op: '>', value: '', bg: '#fee2e2' })
+                            setColMenu(null)
+                          }}
+                        >
+                          Mise en forme conditionnelle\u2026{sheet.cf?.some((r) => r.col === c) ? ' \u2022' : ''}
+                        </button>
                       </div>
                     )}
                   </th>
@@ -645,12 +939,32 @@ export default function TaolApp(): JSX.Element {
                   <th className="taol-row-head">{r + 1}</th>
                   {cols.map((c) => {
                     const key = keyOf(c, r)
+                    const cover = coveredBy(sheet, c, r)
+                    if (cover && cover !== key) return null
+                    const mbox = cover ? sheet.merged?.[cover] : undefined
                     const cell = sheet.cells[key]
                     const active = c === sel.col && r === sel.row
+                    const s = cell?.s
+                    const cfBg = sheet.cf?.find((rule) => rule.col === c && cfMatch(rule, cell?.v ?? null))?.bg
+                    const style: React.CSSProperties = {}
+                    if (s?.bold) style.fontWeight = 'bold'
+                    if (s?.italic) style.fontStyle = 'italic'
+                    if (s?.underline) style.textDecoration = 'underline'
+                    if (s?.fontFamily) style.fontFamily = s.fontFamily
+                    if (s?.fontSize) style.fontSize = `${s.fontSize}px`
+                    if (s?.color) style.color = s.color
+                    const bg = s?.bg ?? cfBg
+                    if (bg) style.backgroundColor = bg
+                    if (s?.align) style.textAlign = s.align
+                    const w = sheet.widths?.[c]
+                    const sparkMax = s?.spark ? colSparkMax(sheet, c) : 0
                     return (
                       <td
                         key={key}
                         data-key={key}
+                        colSpan={mbox ? mbox.c2 - mbox.c1 + 1 : undefined}
+                        rowSpan={mbox ? mbox.r2 - mbox.r1 + 1 : undefined}
+                        style={{ ...style, ...(w != null ? { minWidth: w } : {}) }}
                         className={`taol-cell${active ? ' active' : ''}${inRange(c, r) ? ' in-range' : ''}${inFill(c, r) && !active ? ' in-fill' : ''}${cell?.f !== undefined ? ' is-formula' : ''}`}
                         onClick={(e) => selectCell(c, r, e.shiftKey)}
                         onDoubleClick={() => {
@@ -659,7 +973,17 @@ export default function TaolApp(): JSX.Element {
                           setTimeout(() => formulaRef.current?.focus(), 0)
                         }}
                       >
-                        {cell ? fmtDisplay(cell.v ?? null) : ''}
+                        {cell ? fmtWithStyle(cell.v ?? null, s) : ''}
+                        {s?.spark && typeof cell?.v === 'number' && sparkMax > 0 && (
+                          <span className="taol-spark">
+                            <span style={{ width: `${Math.min(100, Math.round((Math.abs(cell.v) / sparkMax) * 100))}%` }} />
+                          </span>
+                        )}
+                        {s?.comment && (
+                          <span className="taol-comment-mark" title={s.comment}>
+                            💬
+                          </span>
+                        )}
                         {active && <span className="taol-fill-handle" title="Recopier vers le bas/droite" onMouseDown={onFillDown} />}
                       </td>
                     )
@@ -733,6 +1057,126 @@ export default function TaolApp(): JSX.Element {
                   Coller à {selKey}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {commentFor && (
+          <div className="taol-modal-overlay" onClick={() => setCommentFor(null)}>
+            <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">Commentaire \u2014 {keyOf(commentFor.col, commentFor.row)}</p>
+              <textarea
+                className="taol-paste-area"
+                rows={4}
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                placeholder="Note sur cette cellule\u2026"
+                autoFocus
+              />
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setCommentFor(null)}>
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="db-btn"
+                  onClick={() => {
+                    const box: Box = { c1: commentFor.col, r1: commentFor.row, c2: commentFor.col, r2: commentFor.row }
+                    const txt = commentDraft.trim()
+                    mutate((w) => {
+                      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                      applyStyle(sh, box, { comment: txt === '' ? null : txt })
+                    })
+                    setCommentFor(null)
+                  }}
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {valFor !== null && (
+          <div className="taol-modal-overlay" onClick={() => setValFor(null)}>
+            <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">Validation \u2014 colonne {indexToCol(valFor)} (une valeur par ligne)</p>
+              <textarea
+                className="taol-paste-area"
+                rows={6}
+                value={valDraft}
+                onChange={(e) => setValDraft(e.target.value)}
+                placeholder={'Ex. :\nValid\u00e9\nEn cours\nRefus\u00e9'}
+                autoFocus
+              />
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setValFor(null)}>
+                  Annuler
+                </button>
+                <button type="button" className="db-btn" onClick={saveValidation}>
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {cfFor !== null && sheet && (
+          <div className="taol-modal-overlay" onClick={() => setCfFor(null)}>
+            <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">Mise en forme conditionnelle \u2014 colonne {indexToCol(cfFor)}</p>
+              <div className="taol-cf-row">
+                <select
+                  className="taol-select"
+                  value={cfDraft.op}
+                  onChange={(e) => setCfDraft((d) => ({ ...d, op: e.target.value as '>' | '<' }))}
+                >
+                  <option value=">">sup\u00e9rieur \u00e0</option>
+                  <option value="<">inf\u00e9rieur \u00e0</option>
+                </select>
+                <input
+                  type="number"
+                  className="taol-size taol-cf-val"
+                  value={cfDraft.value}
+                  onChange={(e) => setCfDraft((d) => ({ ...d, value: e.target.value }))}
+                  placeholder="valeur"
+                />
+                <span className="taol-color-label">Fond :</span>
+                <ColorSwatches value={cfDraft.bg} onChange={(c) => setCfDraft((d) => ({ ...d, bg: c }))} title="Couleur de fond" />
+              </div>
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setCfFor(null)}>
+                  Annuler
+                </button>
+                <button type="button" className="db-btn" onClick={saveCf}>
+                  Ajouter la r\u00e8gle
+                </button>
+              </div>
+              {sheet.cf && sheet.cf.some((r) => r.col === cfFor) && (
+                <>
+                  <div className="taol-menu-sep" />
+                  <p className="taol-menu-label">R\u00e8gles actives :</p>
+                  {sheet.cf
+                    .filter((r) => r.col === cfFor)
+                    .map((r, i) => (
+                      <div key={i} className="taol-menu-row">
+                        <span className="taol-cf-chip" style={{ background: r.bg }} />
+                        <span>
+                          {indexToCol(r.col)} {r.op} {r.value}
+                        </span>
+                        <button
+                          type="button"
+                          className="taol-mini"
+                          onClick={() =>
+                            mutate((w) => {
+                              const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                              sh.cf = (sh.cf ?? []).filter((x) => x !== r)
+                            })
+                          }
+                        >
+                          \u00d7
+                        </button>
+                      </div>
+                    ))}
+                </>
+              )}
             </div>
           </div>
         )}

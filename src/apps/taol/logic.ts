@@ -3,12 +3,17 @@ export type CellValue = number | string | boolean | null | { e: string }
 export interface Cell {
   v?: CellValue
   f?: string
+  s?: CellStyle
 }
 
 export interface Sheet {
   id: string
   name: string
   cells: Record<string, Cell>
+  cf?: CfRule[]
+  merged?: Record<string, Box>
+  validations?: Record<number, string[]>
+  widths?: Record<number, number>
 }
 
 export interface Workbook {
@@ -769,3 +774,116 @@ export function searchCells(sh: Sheet, q: string): { col: number; row: number }[
   return out
 }
 
+
+// ---------- Mise en forme (PR B) ----------
+
+export type NumFmt = 'general' | 'number' | 'percent' | 'euro' | 'date' | 'text'
+
+export interface CellStyle {
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  fontFamily?: string
+  fontSize?: number
+  color?: string
+  bg?: string
+  align?: 'left' | 'center' | 'right'
+  numFmt?: NumFmt
+  spark?: boolean
+  comment?: string
+}
+
+export interface Box {
+  c1: number
+  r1: number
+  c2: number
+  r2: number
+}
+
+export interface CfRule {
+  col: number
+  op: '>' | '<'
+  value: number
+  bg: string
+}
+
+export function fmtNumRaw(n: number): string {
+  return String(parseFloat(n.toPrecision(12)))
+}
+
+export function fmtWithStyle(v: CellValue, s?: CellStyle): string {
+  if (s?.numFmt && s.numFmt !== 'general' && typeof v === 'number') {
+    if (s.numFmt === 'percent') return `${fmtNumRaw(v * 100)} %`
+    if (s.numFmt === 'euro') return `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €`
+    if (s.numFmt === 'number') return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (s.numFmt === 'text') return String(v)
+  }
+  if (s?.numFmt === 'date' && typeof v === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  }
+  return fmtDisplay(v)
+}
+
+export type StylePatch = { [K in keyof CellStyle]?: CellStyle[K] | null }
+
+export function applyStyle(sh: Sheet, box: Box, patch: StylePatch): void {
+  for (let r = box.r1; r <= box.r2; r++) {
+    for (let c = box.c1; c <= box.c2; c++) {
+      const key = keyOf(c, r)
+      const cell = sh.cells[key] ?? (sh.cells[key] = {})
+      const next: CellStyle = { ...cell.s }
+      for (const [k, val] of Object.entries(patch)) {
+        if (val === undefined) continue
+        if (val === null || val === '') delete (next as Record<string, unknown>)[k]
+        else (next as Record<string, unknown>)[k] = val
+      }
+      if (Object.keys(next).length === 0) delete cell.s
+      else cell.s = next
+    }
+  }
+}
+
+export function mergeCells(sh: Sheet, box: Box): string {
+  const anchor = keyOf(box.c1, box.r1)
+  sh.merged = { ...(sh.merged ?? {}), [anchor]: box }
+  for (let r = box.r1; r <= box.r2; r++) {
+    for (let c = box.c1; c <= box.c2; c++) {
+      const key = keyOf(c, r)
+      if (key !== anchor) delete sh.cells[key]
+    }
+  }
+  return anchor
+}
+
+export function coveredBy(sh: Sheet, c: number, r: number): string | null {
+  for (const [k, box] of Object.entries(sh.merged ?? {})) {
+    if (c >= box.c1 && c <= box.c2 && r >= box.r1 && r <= box.r2) return k
+  }
+  return null
+}
+
+export function unmergeAt(sh: Sheet, c: number, r: number): void {
+  const hit = coveredBy(sh, c, r)
+  if (hit && sh.merged) delete sh.merged[hit]
+}
+
+export function cfMatch(rule: CfRule, v: CellValue): boolean {
+  if (typeof v !== 'number') return false
+  return rule.op === '>' ? v > rule.value : v < rule.value
+}
+
+export function colSparkMax(sh: Sheet, col: number): number {
+  let max = 0
+  for (const [k, cell] of Object.entries(sh.cells)) {
+    const p = parseKey(k)
+    if (p && p.col === col && typeof cell.v === 'number') max = Math.max(max, Math.abs(cell.v))
+  }
+  return max
+}
+
+export function setColWidth(sh: Sheet, col: number, w: number | null): void {
+  sh.widths = { ...(sh.widths ?? {}) }
+  if (w === null || w <= 0) delete sh.widths[col]
+  else sh.widths[col] = Math.max(30, Math.min(400, Math.round(w)))
+}

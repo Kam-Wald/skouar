@@ -476,3 +476,147 @@
     display: none !important;
   }
 }
+
+/* ---------- Mise en forme (PR B) ---------- */
+
+.taol-fmtbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.taol-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 0.8rem;
+  max-width: 230px;
+}
+
+.taol-font {
+  max-width: 190px;
+}
+
+.taol-size {
+  width: 54px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 4px;
+  font-size: 0.8rem;
+}
+
+.taol-tgl {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.taol-tgl.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.taol-tgl:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.taol-mini {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0 2px;
+}
+
+.taol-color-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.taol-bg-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.taol-width-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.taol-spark {
+  display: inline-block;
+  width: 48px;
+  height: 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.taol-spark > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.taol-comment-mark {
+  margin-left: 6px;
+  font-size: 0.65rem;
+  vertical-align: super;
+  cursor: help;
+}
+
+.taol-cf-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.taol-cf-val {
+  width: 90px;
+}
+
+.taol-cf-chip {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.taol-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+@media print {
+  .taol-fmtbar {
+    display: none !important;
+  }
+}
