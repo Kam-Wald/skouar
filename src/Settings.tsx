@@ -4,7 +4,7 @@ import { BG_PRESETS, launcherBgCss, loadLauncherBg, saveLauncherBg, type Launche
 import { exportBackup, importBackup } from './shared/backup'
 import { notify } from './shared/notify'
 import { useDismiss } from './shared/useDismiss'
-import { ACCENTS, applyTheme, getAccent, getTheme } from './ThemeButton'
+import { ACCENTS, applyTheme, getAccent, getTheme, type ThemeChoice } from './ThemeButton'
 import { HL_THEMES } from './apps/kod/themes'
 import { KEYMAP_ACTIONS, keymapToText, parseKeymapText } from './apps/kod/keymap'
 
@@ -89,7 +89,7 @@ export default function SettingsButton({ appId, appName }: Props) {
     return () => window.removeEventListener(SETTINGS_EVENT, on)
   }, [appId])
 
-  const choose = (t: string, a: string): void => {
+  const choose = (t: ThemeChoice, a: string): void => {
     applyTheme(t, a)
     setTheme(t)
     setAccent(a)
@@ -186,6 +186,9 @@ export default function SettingsButton({ appId, appName }: Props) {
             <section>
               <h3>🌐 Général — tout Skouar</h3>
               <div className="theme-row">
+                <button className={`db-btn${theme === 'system' ? ' active' : ''}`} onClick={() => choose('system', accent)}>
+                  🖥️ Système
+                </button>
                 <button className={`db-btn${theme === 'light' ? ' active' : ''}`} onClick={() => choose('light', accent)}>
                   ☀️ Clair
                 </button>
