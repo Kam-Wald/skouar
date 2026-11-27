@@ -11,6 +11,7 @@ import {
   columnValues,
   coveredBy,
   csvExport,
+  dateToSerial,
   deleteColsWb,
   deleteRowsWb,
   emptyView,
@@ -25,13 +26,16 @@ import {
   parseInput,
   parseKey,
   recalcWorkbook,
+  replaceCells,
   searchCells,
   serializeFormula,
   setColWidth,
   shiftRefs,
   statusOf,
+  toggleHidden,
   tsvParse,
   tsvSerializeRange,
+  unhideAll,
   unmergeAt,
   usedRange,
   viewRows,
@@ -82,10 +86,13 @@ export default function TaolApp(): JSX.Element {
   const [colMenu, setColMenu] = useState<number | null>(null)
   const [rowMenu, setRowMenu] = useState<number | null>(null)
   const [filterDraft, setFilterDraft] = useState<string[] | null>(null)
-  const [search, setSearch] = useState<{ q: string; matches: Pos[]; idx: number } | null>(null)
+  const [search, setSearch] = useState<{ q: string; rep: string; matches: Pos[]; idx: number; showRep: boolean } | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [fillTo, setFillTo] = useState<Pos | null>(null)
-  const [frozen, setFrozen] = useState({ rows: true, cols: false })
+  const [frozen, setFrozen] = useState({ rows: 1, cols: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [gotoOpen, setGotoOpen] = useState(false)
+  const [gotoVal, setGotoVal] = useState('')
   const [commentFor, setCommentFor] = useState<Pos | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const [valFor, setValFor] = useState<number | null>(null)
@@ -133,7 +140,7 @@ export default function TaolApp(): JSX.Element {
   const nCols = Math.max(26, Math.min(COLS, used.maxC + 3))
   const nRows = Math.max(50, Math.min(ROWS, used.maxR + 6))
   const displayRows = sheet ? viewRows(sheet, view) : []
-  const valList = sheet?.validations?.[sel.col]
+  const valList = sheet ? sheet.validations?.[sel.col] ?? columnValues(sheet, sel.col).filter((v) => v !== '').slice(0, 50) : undefined
 
   useEffect(() => {
     setWidthInput(sheet?.widths?.[sel.col] != null ? String(sheet.widths[sel.col]) : '')
@@ -164,6 +171,13 @@ export default function TaolApp(): JSX.Element {
 
   const commitEdit = (text: string, advance = true): void => {
     const parsed = parseInput(text)
+    if (sheet && text.trim() !== '' && parsed.f === undefined && typeof parsed.v === 'string') {
+      const list = sheet.validations?.[sel.col]
+      if (list && !list.includes(parsed.v)) {
+        notify(`Valeur non autorisée en colonne ${indexToCol(sel.col)} : ${list.join(' · ')}`)
+        return
+      }
+    }
     setCell(sel.col, sel.row, text.trim() === '' ? undefined : parsed)
     if (advance) setSel((s) => ({ col: s.col, row: Math.min(s.row + 1, nRows - 1) }))
   }
@@ -571,7 +585,36 @@ export default function TaolApp(): JSX.Element {
     if (!wb || !sheet) return
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'f') {
       e.preventDefault()
-      setSearch({ q: '', matches: [], idx: 0 })
+      setSearch({ q: '', rep: '', matches: [], idx: 0, showRep: false })
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'h') {
+      e.preventDefault()
+      setSearch({ q: '', rep: '', matches: [], idx: 0, showRep: true })
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'g') {
+      e.preventDefault()
+      setGotoVal(selKey)
+      setGotoOpen(true)
+      return
+    }
+    if (k === 'F5') {
+      e.preventDefault()
+      setGotoVal(selKey)
+      setGotoOpen(true)
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && (k === ';' || k === ':')) {
+      e.preventDefault()
+      const t = new Date()
+      const val: CellValue = e.shiftKey ? `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : dateToSerial(t.getFullYear(), t.getMonth() + 1, t.getDate())
+      mutate((w) => {
+        const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+        const key = keyOf(sel.col, sel.row)
+        const cell = sh.cells[key] ?? {}
+        sh.cells[key] = { v: val, s: { ...cell.s, ...(e.shiftKey ? {} : { numFmt: 'date' as NumFmt }) } }
+      })
       return
     }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') {
@@ -637,6 +680,7 @@ export default function TaolApp(): JSX.Element {
       setColMenu(null)
       setRowMenu(null)
       setSearch(null)
+      setGotoOpen(false)
       setCommentFor(null)
       setValFor(null)
       setCfFor(null)
@@ -667,6 +711,22 @@ export default function TaolApp(): JSX.Element {
   if (!wb || !sheet) return <div className="taol-main" ref={mainRef} />
 
   const cols = Array.from({ length: nCols }, (_, c) => c)
+  const colLeft: number[] = []
+  {
+    let acc = 41
+    for (let c = 0; c < nCols; c++) {
+      colLeft[c] = acc
+      acc += (sheet.widths?.[c] ?? 76) + 1
+    }
+  }
+  const rowTop: number[] = []
+  {
+    let acc = 27
+    for (let r = 0; r < nRows; r++) {
+      rowTop[r] = acc
+      acc += 27
+    }
+  }
   const inRange = (c: number, r: number): boolean => !!range && c >= range.c1 && c <= range.c2 && r >= range.r1 && r <= range.r2
   const inFill = (c: number, r: number): boolean =>
     !!fillTo && c >= Math.min(sel.col, fillTo.col) && c <= Math.max(sel.col, fillTo.col) && r >= Math.min(sel.row, fillTo.row) && r <= Math.max(sel.row, fillTo.row)
@@ -730,7 +790,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON, SI.CONDITIONS, RECHERCHEV, SOMME.SI/NB.SI/MOYENNE.SI (+.SI.ET), TEXTE, AUJOURDHUI, DATE, JOUR, MOIS, ANNEE, ARRONDI/ARRONDI.SUP/ARRONDI.INF, ENT, MOD, ABS, PUISSANCE, ESTNUM, ESTVIDE, ESTTEXTE, ESTERREUR, JOINDRE, CONCAT, NBCAR, GAUCHE, DROITE, STXT ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1 ; % en suffixe).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle. Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme.
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle. Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme. Ctrl+H : rechercher-remplacer · Ctrl+G / F5 : atteindre · Ctrl+; : date du jour · Ctrl+Maj+; : heure · zoom −/+ en haut · volets : figer ici / libérer · masquer lignes/colonnes via les menus ▼ · auto-complétion sur la colonne (validation bloquante si liste définie).
           </p>
         </div>
       }
@@ -745,13 +805,31 @@ export default function TaolApp(): JSX.Element {
           </button>
           <span className="taol-sep" />
           <label className="taol-freeze">
-            <input type="checkbox" checked={frozen.rows} onChange={(e) => setFrozen((f) => ({ ...f, rows: e.target.checked }))} />
+            <input type="checkbox" checked={frozen.rows > 0} onChange={(e) => setFrozen((f) => ({ ...f, rows: e.target.checked ? 1 : 0 }))} />
             Figer ligne 1
           </label>
           <label className="taol-freeze">
-            <input type="checkbox" checked={frozen.cols} onChange={(e) => setFrozen((f) => ({ ...f, cols: e.target.checked }))} />
+            <input type="checkbox" checked={frozen.cols > 0} onChange={(e) => setFrozen((f) => ({ ...f, cols: e.target.checked ? 1 : 0 }))} />
             Figer colonne A
           </label>
+          <button type="button" className="db-btn" title="Figer les volets jusqu'à la cellule active" onClick={() => setFrozen({ rows: sel.row, cols: sel.col })}>
+            Figer ici
+          </button>
+          <button type="button" className="db-btn" title="Libérer les volets" disabled={frozen.rows === 0 && frozen.cols === 0} onClick={() => setFrozen({ rows: 0, cols: 0 })}>
+            Libérer
+          </button>
+          <span className="taol-sep" />
+          <span className="taol-zoom">
+            <button type="button" className="taol-mini" title="Zoom arrière" onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}>
+              −
+            </button>
+            <button type="button" className="taol-zoom-val" title="Zoom 100 %" onClick={() => setZoom(1)}>
+              {Math.round(zoom * 100)} %
+            </button>
+            <button type="button" className="taol-mini" title="Zoom avant" onClick={() => setZoom((z) => Math.min(2, Math.round((z + 0.25) * 100) / 100))}>
+              +
+            </button>
+          </span>
           <span className="taol-sep" />
           <span className="taol-wb-name">
             {sheet.name}
@@ -925,16 +1003,21 @@ export default function TaolApp(): JSX.Element {
             </datalist>
           )}
         </div>
-        <div className="taol-grid-wrap">
-          <table className={`taol-table${frozen.rows ? ' freeze-r' : ''}${frozen.cols ? ' freeze-c' : ''}`}>
+        <div className="taol-grid-wrap" style={{ zoom } as React.CSSProperties}>
+          <table className="taol-table">
             <thead>
               <tr>
-                <th className="taol-corner" />
-                {cols.map((c) => (
+                <th className="taol-corner" style={{ zIndex: 4 }} />
+                {cols.map((c) => {
+                  if (sheet.hiddenCols?.[c]) return null
+                  return (
                   <th
                     key={c}
-                    className="taol-col-head"
-                    style={sheet.widths?.[c] != null ? { width: sheet.widths[c], minWidth: sheet.widths[c] } : undefined}
+                    className={`taol-col-head${frozen.cols > 0 && c < frozen.cols ? ' fz' : ''}`}
+                    style={{
+                      ...(sheet.widths?.[c] != null ? { width: sheet.widths[c], minWidth: sheet.widths[c] } : {}),
+                      ...(frozen.cols > 0 && c < frozen.cols ? { position: 'sticky', left: colLeft[c], zIndex: 3 } : {})
+                    }}
                   >
                     <span className="taol-col-label" title="Sélectionner toute la colonne" onClick={(e) => { e.stopPropagation(); selectCol(c, e.shiftKey) }}>
                       {indexToCol(c)}
@@ -1086,16 +1169,47 @@ export default function TaolApp(): JSX.Element {
                         >
                           Mise en forme conditionnelle…{sheet.cf?.some((r) => r.col === c) ? ' •' : ''}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => {
+                              const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                              toggleHidden(sh, 'col', c)
+                            })
+                            setColMenu(null)
+                          }}
+                        >
+                          Masquer la colonne {indexToCol(c)}
+                        </button>
+                        {sheet.hiddenCols && Object.keys(sheet.hiddenCols).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              mutate((w) => {
+                                const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                                unhideAll(sh, 'col')
+                              })
+                              setColMenu(null)
+                            }}
+                          >
+                            Afficher toutes les colonnes ({Object.keys(sheet.hiddenCols).length} masquée(s))
+                          </button>
+                        )}
                       </div>
                     )}
                   </th>
-                ))}
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
               {displayRows.map((r) => (
                 <tr key={r}>
-                  <th className="taol-row-head" onClick={(e) => selectRow(r, e.shiftKey)}>
+                  <th
+                    className={`taol-row-head${frozen.rows > 0 && r < frozen.rows ? ' fz' : ''}`}
+                    style={frozen.rows > 0 && r < frozen.rows ? { position: 'sticky', top: rowTop[r], zIndex: 3 } : undefined}
+                    onClick={(e) => selectRow(r, e.shiftKey)}
+                  >
                     <span title="Sélectionner toute la ligne">{r + 1}</span>
                     <button
                       type="button"
@@ -1140,11 +1254,38 @@ export default function TaolApp(): JSX.Element {
                         >
                           Supprimer cette ligne
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => {
+                              const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                              toggleHidden(sh, 'row', r)
+                            })
+                            setRowMenu(null)
+                          }}
+                        >
+                          Masquer la ligne {r + 1}
+                        </button>
+                        {sheet.hiddenRows && Object.keys(sheet.hiddenRows).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              mutate((w) => {
+                                const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                                unhideAll(sh, 'row')
+                              })
+                              setRowMenu(null)
+                            }}
+                          >
+                            Afficher toutes les lignes ({Object.keys(sheet.hiddenRows).length} masquée(s))
+                          </button>
+                        )}
                       </div>
                     )}
                   </th>
                   {cols.map((c) => {
                     const key = keyOf(c, r)
+                    if (sheet.hiddenCols?.[c]) return null
                     const cover = coveredBy(sheet, c, r)
                     if (cover && cover !== key) return null
                     const mbox = cover ? sheet.merged?.[cover] : undefined
@@ -1164,14 +1305,22 @@ export default function TaolApp(): JSX.Element {
                     if (s?.align) style.textAlign = s.align
                     const w = sheet.widths?.[c]
                     const sparkMax = s?.spark ? colSparkMax(sheet, c) : 0
+                    const isFz = (frozen.rows > 0 && r < frozen.rows) || (frozen.cols > 0 && c < frozen.cols)
+                    const fzStyle: React.CSSProperties = isFz
+                      ? {
+                          position: 'sticky',
+                          ...(frozen.rows > 0 && r < frozen.rows ? { top: rowTop[r], zIndex: 1 } : {}),
+                          ...(frozen.cols > 0 && c < frozen.cols ? { left: colLeft[c], zIndex: Math.max(1, frozen.rows > 0 && r < frozen.rows ? 2 : 1) } : {})
+                        }
+                      : {}
                     return (
                       <td
                         key={key}
                         data-key={key}
                         colSpan={mbox ? mbox.c2 - mbox.c1 + 1 : undefined}
                         rowSpan={mbox ? mbox.r2 - mbox.r1 + 1 : undefined}
-                        style={{ ...style, ...(w != null ? { minWidth: w } : {}) }}
-                        className={`taol-cell${active ? ' active' : ''}${inRange(c, r) ? ' in-range' : ''}${inFill(c, r) && !active ? ' in-fill' : ''}${cell?.f !== undefined ? ' is-formula' : ''}`}
+                        style={{ ...style, ...(w != null ? { minWidth: w } : {}), ...fzStyle }}
+                        className={`taol-cell${isFz ? ' fz' : ''}${active ? ' active' : ''}${inRange(c, r) ? ' in-range' : ''}${inFill(c, r) && !active ? ' in-fill' : ''}${cell?.f !== undefined ? ' is-formula' : ''}`}
                         onClick={(e) => selectCell(c, r, e.shiftKey)}
                         onDoubleClick={() => {
                           selectCell(c, r, false)
@@ -1221,7 +1370,7 @@ export default function TaolApp(): JSX.Element {
               value={search.q}
               onChange={(e) => {
                 const q = e.target.value
-                setSearch({ q, matches: sheet ? searchCells(sheet, q) : [], idx: 0 })
+                setSearch({ q, rep: search.rep, matches: sheet ? searchCells(sheet, q) : [], idx: 0, showRep: search.showRep })
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && search.matches.length) {
@@ -1234,12 +1383,101 @@ export default function TaolApp(): JSX.Element {
                 } else if (e.key === 'Escape') setSearch(null)
               }}
             />
+            {search.showRep && (
+              <>
+                <input
+                  className="taol-search-input taol-replace-input"
+                  placeholder="Remplacer par…"
+                  value={search.rep}
+                  onChange={(e) => setSearch((s) => (s ? { ...s, rep: e.target.value } : s))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setSearch(null)
+                  }}
+                />
+                <button
+                  type="button"
+                  className="db-btn"
+                  title="Remplacer l'occurrence courante"
+                  disabled={!search.q || !search.matches.length}
+                  onClick={() => {
+                    if (!sheet || !search.q || !search.matches.length) return
+                    const m = search.matches[search.idx % search.matches.length]
+                    mutate((w) => {
+                      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                      replaceCells(sh, search.q, search.rep, { c1: m.col, r1: m.row, c2: m.col, r2: m.row })
+                    })
+                    setSearch((s) => (s ? { ...s, matches: [], idx: 0 } : s))
+                  }}
+                >
+                  Remplacer
+                </button>
+                <button
+                  type="button"
+                  className="db-btn"
+                  title="Tout remplacer dans la feuille"
+                  disabled={!search.q}
+                  onClick={() => {
+                    if (!sheet || !search.q) return
+                    let n = 0
+                    mutate((w) => {
+                      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                      n = replaceCells(sh, search.q, search.rep)
+                    })
+                    notify(`${n} remplacement(s)`)
+                    setSearch((s) => (s ? { ...s, matches: [], idx: 0 } : s))
+                  }}
+                >
+                  Tout remplacer
+                </button>
+              </>
+            )}
             <span className="taol-search-count">
               {search.matches.length ? `${(search.idx % search.matches.length) + 1}/${search.matches.length}` : '0'}
             </span>
             <button type="button" className="db-btn" onClick={() => setSearch(null)}>
               ×
             </button>
+          </div>
+        )}
+        {gotoOpen && (
+          <div className="taol-modal-overlay" onClick={() => setGotoOpen(false)}>
+            <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">Atteindre (Ctrl+G / F5) — cellule ou plage, ex. B5 ou A1:C3</p>
+              <input
+                className="taol-formula"
+                autoFocus
+                value={gotoVal}
+                onChange={(e) => setGotoVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const parts = gotoVal.trim().toUpperCase().split(':')
+                    const p1 = parseKey(parts[0])
+                    if (!p1) {
+                      notify('Référence invalide')
+                      return
+                    }
+                    if (parts[1]) {
+                      const p2 = parseKey(parts[1])
+                      if (p2) {
+                        setSel({ col: p1.col, row: p1.row })
+                        setAnchor({ col: p1.col, row: p1.row })
+                        setRange({ c1: Math.min(p1.col, p2.col), r1: Math.min(p1.row, p2.row), c2: Math.max(p1.col, p2.col), r2: Math.max(p1.row, p2.row) })
+                      }
+                    } else {
+                      setSel(p1)
+                      setAnchor(p1)
+                      setRange(null)
+                    }
+                    setGotoOpen(false)
+                  } else if (e.key === 'Escape') setGotoOpen(false)
+                }}
+              />
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setGotoOpen(false)}>
+                  Annuler
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {pasteOpen && (

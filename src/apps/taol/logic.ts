@@ -714,6 +714,7 @@ export function compareValues(a: CellValue, b: CellValue): number {
 export function viewRows(sh: Sheet, view: ViewState): number[] {
   const used = usedRange(sh)
   let rows = Array.from({ length: used.maxR + 1 }, (_, r) => r)
+  if (sh.hiddenRows) rows = rows.filter((r) => !sh.hiddenRows![r])
   for (const [cStr, allowed] of Object.entries(view.filters)) {
     if (!allowed) continue
     const c = Number(cStr)
@@ -1357,3 +1358,38 @@ Object.assign(FUNCS, {
     return s.slice(start - 1, start - 1 + n)
   }
 } as Record<string, (args: Node[], ctx: EvalCtx) => CellValue>)
+
+// ---------- Confort de saisie (PR E) : remplacer, lignes/colonnes masquées ----------
+
+export function replaceCells(sh: Sheet, q: string, rep: string, box?: Box): number {
+  if (!q) return 0
+  let n = 0
+  for (const [key, cell] of Object.entries(sh.cells)) {
+    if (box) {
+      const p = parseKey(key)
+      if (!p || p.col < box.c1 || p.col > box.c2 || p.row < box.r1 || p.row > box.r2) continue
+    }
+    if (cell.f !== undefined) {
+      const nf = cell.f.split(q).join(rep)
+      if (nf !== cell.f) {
+        cell.f = nf
+        n++
+      }
+    } else if (typeof cell.v === 'string' && cell.v.includes(q)) {
+      cell.v = cell.v.split(q).join(rep)
+      n++
+    }
+  }
+  return n
+}
+
+export function toggleHidden(sh: Sheet, axis: 'row' | 'col', idx: number): void {
+  const rec = axis === 'row' ? (sh.hiddenRows ??= {}) : (sh.hiddenCols ??= {})
+  if (rec[idx]) delete rec[idx]
+  else rec[idx] = true
+}
+
+export function unhideAll(sh: Sheet, axis: 'row' | 'col'): void {
+  if (axis === 'row') sh.hiddenRows = undefined
+  else sh.hiddenCols = undefined
+}

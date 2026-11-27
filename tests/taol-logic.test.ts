@@ -439,3 +439,31 @@ describe('fonctions essentielles (PR D)', () => {
     expect(ev(sh, 'ESTERREUR(1/0)')).toBe(true)
   })
 })
+
+describe('confort de saisie (PR E)', () => {
+  it('replaceCells : valeurs et formules, avec ou sans plage', async () => {
+    const { replaceCells } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 'pomme' }, A2: { v: 'poire' }, B1: { f: 'A1&"!"' }, C3: { v: 'pomme' } } }
+    expect(replaceCells(sh, 'pomme', 'pêche')).toBe(2)
+    expect(sh.cells.A1.v).toBe('pêche')
+    expect(sh.cells.C3.v).toBe('pêche')
+    expect(replaceCells(sh, 'A1', 'A9', { c1: 0, r1: 0, c2: 0, r2: 0 })).toBe(0)
+    expect(replaceCells(sh, 'A1', 'A9', { c1: 1, r1: 0, c2: 1, r2: 0 })).toBe(1)
+    expect(sh.cells.B1.f).toBe('A9&"!"')
+    expect(replaceCells(sh, '', 'x')).toBe(0)
+  })
+
+  it('lignes masquées exclues de la vue ; toggleHidden / unhideAll', async () => {
+    const { viewRows, toggleHidden, unhideAll, emptyView } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 1 }, A2: { v: 2 }, A3: { v: 3 } } }
+    expect(viewRows(sh, emptyView())).toEqual([0, 1, 2])
+    toggleHidden(sh, 'row', 1)
+    expect(viewRows(sh, emptyView())).toEqual([0, 2])
+    toggleHidden(sh, 'row', 1)
+    expect(viewRows(sh, emptyView())).toEqual([0, 1, 2])
+    toggleHidden(sh, 'col', 0)
+    expect(sh.hiddenCols?.[0]).toBe(true)
+    unhideAll(sh, 'col')
+    expect(sh.hiddenCols).toBeUndefined()
+  })
+})
