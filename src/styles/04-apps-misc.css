@@ -502,8 +502,8 @@
 
 .launcher-theme {
   position: absolute;
-  top: 14px;
-  right: 16px;
+  top: 12px;
+  right: 28px;
   z-index: 10;
 }
 

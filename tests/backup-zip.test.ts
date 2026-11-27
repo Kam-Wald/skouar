@@ -101,11 +101,15 @@ describe('launcherBg', () => {
     expect(launcherBgCss(loadLauncherBg())).toContain('radial-gradient')
     saveLauncherBg({ type: 'grid', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
     expect(launcherBgCss(loadLauncherBg())).toContain('linear-gradient')
+    saveLauncherBg({ type: 'waves', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
+    expect(launcherBgCss(loadLauncherBg())).toContain('repeating-linear-gradient')
+    saveLauncherBg({ type: 'rings', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
+    expect(launcherBgCss(loadLauncherBg())).toContain('repeating-radial-gradient')
     saveLauncherBg(null)
   })
 
-  it('BG_PRESETS : au moins 6 presets, tous avec voile de lisibilité', () => {
-    expect(BG_PRESETS.length).toBeGreaterThanOrEqual(6)
+  it('BG_PRESETS : 16 presets, tous avec voile de lisibilité', () => {
+    expect(BG_PRESETS.length).toBe(16)
     for (const p of BG_PRESETS) {
       expect(launcherBgCss(p.bg)).toContain('var(--launcher-scrim)')
     }
