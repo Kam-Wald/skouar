@@ -1,0 +1,550 @@
+.sk-batch-check {
+  accent-color: var(--accent);
+  flex: none;
+}
+.sk-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex: none;
+  background: var(--panel-2);
+}
+.sk-lib-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sk-lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.sk-lib-sub {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.sk-mini {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  flex: none;
+}
+.sk-mini:hover {
+  color: #ef4444;
+  background: var(--panel-2);
+}
+.sk-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sk-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.sk-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.sk-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.sk-btn.ghost {
+  background: transparent;
+}
+.sk-btn.danger {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.sk-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.sk-input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+.sk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sk-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+  border: 2px dashed var(--border);
+  margin: 18px;
+  border-radius: var(--radius);
+}
+.sk-empty-icon {
+  font-size: 56px;
+}
+.sk-empty h2 {
+  margin: 0;
+}
+.sk-batch-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
+  z-index: 50;
+  font-size: 13px;
+}
+.sk-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sk-ed-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  flex-wrap: wrap;
+}
+.sk-ed-title {
+  font-size: 15px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40vw;
+}
+.sk-ed-dims {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  flex: 1;
+}
+.sk-rename {
+  width: 260px;
+}
+.sk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  flex: none;
+}
+.sk-tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sk-tb-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+.sk-filters {
+  max-width: 420px;
+}
+.sk-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.sk-slider input {
+  width: 90px;
+  accent-color: var(--accent);
+}
+.sk-slider-val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  min-width: 38px;
+  text-align: right;
+}
+.sk-aspect {
+  width: 76px;
+}
+.sk-color {
+  width: 34px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+}
+.sk-num {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.sk-num input {
+  width: 60px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.sk-canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background:
+    repeating-conic-gradient(var(--panel-2) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px;
+}
+.sk-canvas {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  max-width: 100%;
+}
+.sk-canvas.cropping {
+  cursor: crosshair;
+}
+.sk-crop-hint {
+  margin-top: 8px;
+}
+
+/* ===== Skeud v2 : presets ===== */
+.sk-tb-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.sk-presets {
+  max-width: 340px;
+}
+.sk-preset-row {
+  display: inline-flex;
+  gap: 4px;
+  overflow-x: auto;
+  max-width: 46vw;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+.sk-preset {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+.sk-preset:hover {
+  border-color: var(--accent);
+}
+.sk-preset.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.sk-chip-row {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sk-chip-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sk-chip-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.sk-frame-hint {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+}
+.sk-frame-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sk-check input {
+  accent-color: var(--accent);
+}
+.sk-frames {
+  max-width: 52vw;
+}
+
+/* ===== Skeud v3 : calques, zoom, comparatif ===== */
+.sk-layer-panel {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.sk-layer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sk-layer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sk-layer-text {
+  resize: vertical;
+  font-size: 14px;
+}
+.sk-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.sk-align {
+  width: 110px;
+}
+.sk-sticker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+.sk-sticker-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 20px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.sk-sticker-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.sk-canvas.comparing {
+  cursor: ew-resize;
+}
+.sk-zoombar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.sk-zoombar input {
+  width: 160px;
+  accent-color: var(--accent);
+}
+.sk-zoom-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 44px;
+}
+
+/* ===== Skeud v4 : barre slim + onglets ===== */
+.sk-toolbar {
+  flex-wrap: nowrap;
+}
+.sk-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sk-tab-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sk-tab-btn:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.sk-tab-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.sk-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-wrap: wrap;
+  flex: none;
+  max-height: 132px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sk-panel-col {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.sk-preset-wrap {
+  max-width: none;
+  overflow: visible;
+  flex-wrap: wrap;
+}
+.sk-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: none;
+  width: 100%;
+}
+.sk-fine {
+  font-size: 12px;
+  width: 100%;
+}
+.sk-fine-sum {
+  cursor: pointer;
+  user-select: none;
+  display: inline-block;
+}
+.sk-fine[open] .sk-filters {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 16px;
+}
+
+/* ===== Sélecteur de couleur partagé (palette fixe + récents + pipette) ===== */
+.cs-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 360px;
+}
+.cs-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+.cs-swatch:hover {
+  transform: scale(1.12);
+}
+.cs-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cs-recent {
+  border-style: dashed;
+}
+.cs-custom {
+  width: 30px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 1px;
+  cursor: pointer;
+}
+
+/* ===== Skeud v5 : templates, palette, animé ===== */
+.sk-palette {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.sk-pal-swatch {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 7px;
+  cursor: copy;
+}
+
+.settings-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
