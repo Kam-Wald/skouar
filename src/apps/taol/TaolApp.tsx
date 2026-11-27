@@ -604,7 +604,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/soulign\u00e9, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu \u25bc de colonne : largeur, validation (liste), mise en forme conditionnelle.
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle.
           </p>
         </div>
       }
@@ -640,15 +640,15 @@ export default function TaolApp(): JSX.Element {
             value={curStyle?.fontFamily ?? ''}
             onChange={(e) => applyFmt({ fontFamily: e.target.value === '' ? null : e.target.value })}
           >
-            <option value="">Police par d\u00e9faut</option>
-            <optgroup label="Polices int\u00e9gr\u00e9es">
+            <option value="">Police par défaut</option>
+            <optgroup label="Polices intégrées">
               {EMBEDDED_FONTS.map((f) => (
                 <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
                   {f.label}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="Polices du syst\u00e8me">
+            <optgroup label="Polices du système">
               {SYSTEM_FONTS.map((f) => (
                 <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
                   {f.label}
@@ -673,7 +673,7 @@ export default function TaolApp(): JSX.Element {
           <button type="button" className={`taol-tgl${curStyle?.italic ? ' on' : ''}`} title="Italique" onClick={() => applyFmt({ italic: !curStyle?.italic })}>
             <i>I</i>
           </button>
-          <button type="button" className={`taol-tgl${curStyle?.underline ? ' on' : ''}`} title="Soulign\u00e9" onClick={() => applyFmt({ underline: !curStyle?.underline })}>
+          <button type="button" className={`taol-tgl${curStyle?.underline ? ' on' : ''}`} title="Souligné" onClick={() => applyFmt({ underline: !curStyle?.underline })}>
             <u>U</u>
           </button>
           <span className="taol-sep" />
@@ -682,14 +682,14 @@ export default function TaolApp(): JSX.Element {
           </span>
           <ColorSwatches value={curStyle?.color ?? '#000000'} onChange={(c) => applyFmt({ color: c })} title="Couleur du texte" />
           <button type="button" className="taol-mini" title="Effacer la couleur du texte" onClick={() => applyFmt({ color: null })}>
-            \u00d7
+            ×
           </button>
           <span className="taol-color-label taol-bg-label" title="Couleur de fond">
             Fond
           </span>
           <ColorSwatches value={curStyle?.bg ?? '#ffffff'} onChange={(c) => applyFmt({ bg: c })} title="Couleur de fond" />
           <button type="button" className="taol-mini" title="Effacer la couleur de fond" onClick={() => applyFmt({ bg: null })}>
-            \u00d7
+            ×
           </button>
           <span className="taol-sep" />
           {(['left', 'center', 'right'] as const).map((a) => (
@@ -697,10 +697,10 @@ export default function TaolApp(): JSX.Element {
               key={a}
               type="button"
               className={`taol-tgl${curStyle?.align === a ? ' on' : ''}`}
-              title={`Aligner ${a === 'left' ? '\u00e0 gauche' : a === 'center' ? 'au centre' : '\u00e0 droite'}`}
+              title={`Aligner ${a === 'left' ? 'à gauche' : a === 'center' ? 'au centre' : 'à droite'}`}
               onClick={() => applyFmt({ align: curStyle?.align === a ? null : a })}
             >
-              {a === 'left' ? '\u21e4' : a === 'center' ? '\u21d4' : '\u21e5'}
+              {a === 'left' ? '⇤' : a === 'center' ? '⇔' : '⇥'}
             </button>
           ))}
           <span className="taol-sep" />
@@ -713,10 +713,10 @@ export default function TaolApp(): JSX.Element {
               applyFmt({ numFmt: v === 'general' ? null : v })
             }}
           >
-            <option value="general">G\u00e9n\u00e9ral</option>
+            <option value="general">Général</option>
             <option value="number">Nombre (1,50)</option>
             <option value="percent">Pourcentage (50 %)</option>
-            <option value="euro">Euro (1,50 \u20ac)</option>
+            <option value="euro">Euro (1,50 €)</option>
             <option value="date">Date (JJ/MM/AAAA)</option>
             <option value="text">Texte</option>
           </select>
@@ -732,7 +732,7 @@ export default function TaolApp(): JSX.Element {
           <button
             type="button"
             className="taol-tgl"
-            title="Fusionner la plage s\u00e9lectionn\u00e9e"
+            title="Fusionner la plage sélectionnée"
             disabled={!range || (range.c2 === range.c1 && range.r2 === range.r1)}
             onClick={doMerge}
           >
@@ -741,11 +741,11 @@ export default function TaolApp(): JSX.Element {
           <button
             type="button"
             className="taol-tgl"
-            title="D\u00e9fusionner la cellule active"
+            title="Défusionner la cellule active"
             disabled={!sheet || !coveredBy(sheet, sel.col, sel.row)}
             onClick={doUnmerge}
           >
-            D\u00e9fusionner
+            Défusionner
           </button>
           <button
             type="button"
@@ -915,7 +915,7 @@ export default function TaolApp(): JSX.Element {
                             setColMenu(null)
                           }}
                         >
-                          Validation (liste)\u2026{sheet.validations?.[c]?.length ? ` (${sheet.validations[c].length})` : ''}
+                          Validation (liste)…{sheet.validations?.[c]?.length ? ` (${sheet.validations[c].length})` : ''}
                         </button>
                         <button
                           type="button"
@@ -925,7 +925,7 @@ export default function TaolApp(): JSX.Element {
                             setColMenu(null)
                           }}
                         >
-                          Mise en forme conditionnelle\u2026{sheet.cf?.some((r) => r.col === c) ? ' \u2022' : ''}
+                          Mise en forme conditionnelle…{sheet.cf?.some((r) => r.col === c) ? ' •' : ''}
                         </button>
                       </div>
                     )}
@@ -1063,13 +1063,13 @@ export default function TaolApp(): JSX.Element {
         {commentFor && (
           <div className="taol-modal-overlay" onClick={() => setCommentFor(null)}>
             <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
-              <p className="taol-modal-title">Commentaire \u2014 {keyOf(commentFor.col, commentFor.row)}</p>
+              <p className="taol-modal-title">Commentaire — {keyOf(commentFor.col, commentFor.row)}</p>
               <textarea
                 className="taol-paste-area"
                 rows={4}
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
-                placeholder="Note sur cette cellule\u2026"
+                placeholder="Note sur cette cellule…"
                 autoFocus
               />
               <div className="taol-modal-actions">
@@ -1098,13 +1098,13 @@ export default function TaolApp(): JSX.Element {
         {valFor !== null && (
           <div className="taol-modal-overlay" onClick={() => setValFor(null)}>
             <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
-              <p className="taol-modal-title">Validation \u2014 colonne {indexToCol(valFor)} (une valeur par ligne)</p>
+              <p className="taol-modal-title">Validation — colonne {indexToCol(valFor)} (une valeur par ligne)</p>
               <textarea
                 className="taol-paste-area"
                 rows={6}
                 value={valDraft}
                 onChange={(e) => setValDraft(e.target.value)}
-                placeholder={'Ex. :\nValid\u00e9\nEn cours\nRefus\u00e9'}
+                placeholder={'Ex. :\nValidé\nEn cours\nRefusé'}
                 autoFocus
               />
               <div className="taol-modal-actions">
@@ -1121,15 +1121,15 @@ export default function TaolApp(): JSX.Element {
         {cfFor !== null && sheet && (
           <div className="taol-modal-overlay" onClick={() => setCfFor(null)}>
             <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
-              <p className="taol-modal-title">Mise en forme conditionnelle \u2014 colonne {indexToCol(cfFor)}</p>
+              <p className="taol-modal-title">Mise en forme conditionnelle — colonne {indexToCol(cfFor)}</p>
               <div className="taol-cf-row">
                 <select
                   className="taol-select"
                   value={cfDraft.op}
                   onChange={(e) => setCfDraft((d) => ({ ...d, op: e.target.value as '>' | '<' }))}
                 >
-                  <option value=">">sup\u00e9rieur \u00e0</option>
-                  <option value="<">inf\u00e9rieur \u00e0</option>
+                  <option value=">">supérieur à</option>
+                  <option value="<">inférieur à</option>
                 </select>
                 <input
                   type="number"
@@ -1146,13 +1146,13 @@ export default function TaolApp(): JSX.Element {
                   Annuler
                 </button>
                 <button type="button" className="db-btn" onClick={saveCf}>
-                  Ajouter la r\u00e8gle
+                  Ajouter la règle
                 </button>
               </div>
               {sheet.cf && sheet.cf.some((r) => r.col === cfFor) && (
                 <>
                   <div className="taol-menu-sep" />
-                  <p className="taol-menu-label">R\u00e8gles actives :</p>
+                  <p className="taol-menu-label">Règles actives :</p>
                   {sheet.cf
                     .filter((r) => r.col === cfFor)
                     .map((r, i) => (
@@ -1171,7 +1171,7 @@ export default function TaolApp(): JSX.Element {
                             })
                           }
                         >
-                          \u00d7
+                          ×
                         </button>
                       </div>
                     ))}
