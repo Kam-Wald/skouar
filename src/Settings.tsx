@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import ColorSwatches from './shared/ColorSwatches'
 import { BG_PRESETS, launcherBgCss, loadLauncherBg, saveLauncherBg, type LauncherBg } from './shared/launcherBg'
-import { exportBackup, importBackup } from './shared/backup'
+import { exportBackup, importBackup, snapshotBeforeImport } from './shared/backup'
+import { APP_DB_MAP, deleteDatabaseSafe } from './shared/db'
 import { notify } from './shared/notify'
 import { useDismiss } from './shared/useDismiss'
 import { ACCENTS, applyTheme, getAccent, getTheme, type ThemeChoice } from './ThemeButton'
@@ -101,22 +102,20 @@ export default function SettingsButton({ appId, appName }: Props) {
     saveAppSettings('kod', next, true)
   }
 
-  const wipeApp = (): void => {
+  const wipeApp = async (): Promise<void> => {
     if (!appId) return
     if (!armed) {
       setArmed(true)
       return
     }
     localStorage.removeItem(KEY)
-    const map: Record<string, string> = {
-      kod: 'skouar-kod',
-      blocs: 'skouar-blocs',
-      skrid: 'skouar-skrid',
-      ler: 'skouar-ler'
+    const name = APP_DB_MAP[appId]
+    if (name) {
+      await deleteDatabaseSafe(name)
     }
-    const name = map[appId]
-    if (name && 'indexedDB' in window) {
-      indexedDB.deleteDatabase(name)
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith(`skouar:${appId}`)) localStorage.removeItem(k)
     }
     location.reload()
   }
@@ -145,11 +144,13 @@ export default function SettingsButton({ appId, appName }: Props) {
 
   const doImport = async (f: File): Promise<void> => {
     try {
+      const how = await snapshotBeforeImport()
+      notify(how === 'localStorage' ? 'Sauvegarde de sécurité enregistrée avant import' : 'Sauvegarde de sécurité téléchargée (ZIP) avant import')
       const r = await importBackup(f)
       notify(`Sauvegarde importée : ${r.ls} réglage(s), ${r.dbs} base(s) — rechargement…`)
       setTimeout(() => location.reload(), 900)
-    } catch {
-      notify('Fichier ZIP illisible')
+    } catch (e) {
+      notify(`Import interrompu (${e instanceof Error ? e.message : 'ZIP illisible'}) — vos données actuelles sont intactes, une sauvegarde de sécurité a été faite avant`)
     }
   }
 

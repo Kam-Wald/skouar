@@ -23,5 +23,54 @@ export function kvOf(db: Dexie): {
 export function createAppDb(name: string, versions: { version: number; stores: Record<string, string> }[]): Dexie {
   const db = new Dexie(name)
   for (const v of versions) db.version(v.version).stores(v.stores)
+  registerDb(db)
   return db
+}
+
+const openDbs: Dexie[] = []
+
+export function registerDb(db: Dexie): void {
+  if (!openDbs.includes(db)) openDbs.push(db)
+}
+
+export function closeAllDbs(): void {
+  for (const d of openDbs) {
+    try {
+      d.close()
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function deleteDatabaseSafe(name: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve(false)
+    closeAllDbs()
+    let done = false
+    const finish = (ok: boolean): void => {
+      if (!done) {
+        done = true
+        resolve(ok)
+      }
+    }
+    try {
+      const req = indexedDB.deleteDatabase(name)
+      req.onsuccess = () => finish(true)
+      req.onerror = () => finish(false)
+      req.onblocked = () => setTimeout(() => finish(false), timeoutMs)
+      setTimeout(() => finish(false), timeoutMs + 1000)
+    } catch {
+      finish(false)
+    }
+  })
+}
+
+export const APP_DB_MAP: Record<string, string> = {
+  blocs: 'skouar',
+  skrid: 'skouar-skrid',
+  ler: 'skouar-ler',
+  skeud: 'skouar-skeud',
+  kod: 'skouar-kod',
+  cockpit: 'skouar-cockpit'
 }

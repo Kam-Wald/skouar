@@ -1,6 +1,8 @@
 import { zipFiles, unzipFiles, entryText } from '../apps/kod/zip'
+import { deleteDatabaseSafe } from './db'
 
 const LS_PREFIX = 'skouar:'
+const PREIMPORT_PREFIX = 'skouar:preImport:'
 
 const b64encode = (buf: ArrayBufferLike): string => {
   const bytes = new Uint8Array(buf)
@@ -97,6 +99,30 @@ export async function exportBackup(): Promise<Blob> {
   ])
 }
 
+export async function snapshotBeforeImport(): Promise<'localStorage' | 'download'> {
+  const data = await dumpAll()
+  const json = JSON.stringify(data)
+  const ts = Date.now()
+  if (json.length < 3_500_000) {
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith(PREIMPORT_PREFIX)).sort()
+    for (const k of keys.slice(0, Math.max(0, keys.length - 1))) localStorage.removeItem(k)
+    localStorage.setItem(`${PREIMPORT_PREFIX}${ts}`, json)
+    return 'localStorage'
+  }
+  const zip = await zipFiles([
+    { name: 'localStorage.json', data: JSON.stringify(data.localStorage) },
+    { name: 'idb.json', data: json }
+  ])
+  if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof document !== 'undefined') {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(zip)
+    a.download = `skouar-avant-import-${new Date(ts).toISOString().replace(/[:T]/g, '-').slice(0, 16)}.zip`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+  }
+  return 'download'
+}
+
 export async function importBackup(zip: Blob): Promise<{ ls: number; dbs: number }> {
   const entries = await unzipFiles(zip)
   const lsEntry = entries.find((e) => e.name === 'localStorage.json')
@@ -115,12 +141,10 @@ export async function importBackup(zip: Blob): Promise<{ ls: number; dbs: number
   if (idbEntry && 'indexedDB' in window) {
     const parsed = JSON.parse(entryText(idbEntry)) as Record<string, Record<string, { keyPath: IDBValidKey | null; autoIncrement: boolean; records: [IDBValidKey, unknown][] }>>
     for (const [dbName, stores] of Object.entries(parsed)) {
-      await new Promise<void>((res) => {
-        const del = indexedDB.deleteDatabase(dbName)
-        del.onsuccess = () => res()
-        del.onerror = () => res()
-        del.onblocked = () => res()
-      })
+      const deleted = await deleteDatabaseSafe(dbName)
+      if (!deleted) {
+        throw new Error(`suppression de « ${dbName} » bloquée (connexion ouverte) — import interrompu, données actuelles intactes`)
+      }
       const db = await new Promise<IDBDatabase>((res, rej) => {
         const r = indexedDB.open(dbName, 1)
         r.onupgradeneeded = () => {

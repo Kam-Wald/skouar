@@ -1,4 +1,4 @@
-import { kvOf, uid } from '../../shared/db'
+import { kvOf, registerDb, uid } from '../../shared/db'
 export { uid }
 import Dexie, { type Table } from 'dexie'
 
@@ -79,6 +79,7 @@ class KodDB extends Dexie {
 }
 
 export const db = new KodDB('skouar-kod')
+registerDb(db)
 db.version(1).stores({
   nodes: 'id, parentId, name, kind, updatedAt',
   ui: 'id',

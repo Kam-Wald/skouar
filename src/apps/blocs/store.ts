@@ -1,4 +1,5 @@
-import { uid } from '../../shared/db'
+import { registerDb, uid } from '../../shared/db'
+import { notify } from '../../shared/notify'
 export { uid }
 import Dexie, { type Table } from 'dexie'
 import type {
@@ -26,6 +27,7 @@ class BlocsDatabase extends Dexie {
   constructor() {
     super('skouar')
     this.version(1).stores({ kv: 'key' })
+    registerDb(this)
   }
 }
 
@@ -134,12 +136,18 @@ function isValidState(x: unknown): x is BlocsState {
 }
 
 export async function loadState(): Promise<BlocsState> {
+  let row: KvRow | undefined
+  let idbOk = true
   try {
-    const row = await db.kv.get(STATE_KEY)
-    if (row && isValidState(row.value)) return migrateState(row.value as BlocsState)
-    return purgeTrash((row?.value ?? seedState()) as BlocsState)
+    row = await db.kv.get(STATE_KEY)
   } catch {
-    // IndexedDB indisponible : on tente la migration puis le seed
+    idbOk = false
+  }
+  if (row && isValidState(row.value)) return migrateState(row.value as BlocsState)
+  if (row) return purgeTrash(row.value as BlocsState)
+  if (!idbOk) {
+    notify("Stockage IndexedDB indisponible : état neuf chargé en mémoire, RIEN n'a été écrasé. Exportez une sauvegarde ZIP dès que possible.")
+    return seedState()
   }
   try {
     const raw = localStorage.getItem(LEGACY_KEY)
@@ -155,13 +163,7 @@ export async function loadState(): Promise<BlocsState> {
   } catch {
     // ignore
   }
-  const seeded = seedState()
-  try {
-    await db.kv.put({ key: STATE_KEY, value: seeded })
-  } catch {
-    // ignore
-  }
-  return seeded
+  return seedState()
 }
 
 export const TRASH_DAYS = 30
