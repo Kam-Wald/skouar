@@ -8,7 +8,10 @@ export default function AppTile({ app, idx }: { app: AppMeta; idx: string }): JS
       <span className="app-tile-icon" aria-hidden>
         {app.icon}
       </span>
-      <span className="app-tile-name">{app.name}</span>
+      <span className="app-tile-name">
+        {app.name}
+        <span className="app-tile-tag"> · {app.tag}</span>
+      </span>
       <span className="app-tile-desc">{app.description}</span>
       <span className="app-tile-badge">Bientôt</span>
     </div>
@@ -22,7 +25,10 @@ export default function AppTile({ app, idx }: { app: AppMeta; idx: string }): JS
           {app.icon}
         </span>
       )}
-      <span className="app-tile-name">{app.name}</span>
+      <span className="app-tile-name">
+        {app.name}
+        <span className="app-tile-tag"> · {app.tag}</span>
+      </span>
       <span className="app-tile-desc">{app.description}</span>
     </Link>
   )

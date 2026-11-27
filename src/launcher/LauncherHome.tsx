@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppTile from '../shared/AppTile'
 import { launcherBgCss, loadLauncherBg, type LauncherBg } from '../shared/launcherBg'
 import { apps } from '../apps/registry'
@@ -8,14 +8,30 @@ import SettingsButton from '../Settings'
 export default function LauncherHome() {
   const [q, setQ] = useState('')
   const [bg, setBg] = useState<LauncherBg | null>(() => loadLauncherBg())
+  const searchRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const on = () => setBg(loadLauncherBg())
     window.addEventListener('skouar:settings', on)
     return () => window.removeEventListener('skouar:settings', on)
   }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      const typing = t instanceof HTMLElement && !!t.closest('input, textarea, select, [contenteditable="true"]')
+      if (e.key === '/' && !typing) {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === 'Escape' && t === searchRef.current) {
+        if (q) setQ('')
+        else searchRef.current?.blur()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [q])
   const query = q.trim().toLowerCase()
   const visible = query
-    ? apps.filter((a) => `${a.name} ${a.description}`.toLowerCase().includes(query))
+    ? apps.filter((a) => `${a.name} ${a.description} ${a.tag}`.toLowerCase().includes(query))
     : apps
 
   return (
@@ -43,13 +59,19 @@ export default function LauncherHome() {
         </div>
       </header>
       <input
+        ref={searchRef}
         className="launcher-search"
         type="search"
         aria-label="Rechercher une application"
-        placeholder="Rechercher une app… (ex. : code, pdf, écriture)"
+        placeholder="Rechercher une app… ( / )"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
+      {query && (
+        <p className="launcher-count" role="status" aria-live="polite">
+          {visible.length === 0 ? 'Aucune app' : `${visible.length} app${visible.length > 1 ? 's' : ''}`}
+        </p>
+      )}
       <main className="launcher-grid" id="launcher-main">
         {visible.map((app) => (
           <AppTile key={app.id} app={app} idx={String(apps.indexOf(app) + 1).padStart(2, '0')} />

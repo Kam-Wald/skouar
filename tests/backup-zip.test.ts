@@ -30,7 +30,7 @@ if (typeof Blob !== 'undefined' && !(Blob.prototype as unknown as { stream?: unk
 }
 import { zipFiles, unzipFiles, entryText } from '../src/apps/kod/zip'
 import { exportBackup, importBackup } from '../src/shared/backup'
-import { launcherBgCss, saveLauncherBg, loadLauncherBg } from '../src/shared/launcherBg'
+import { BG_PRESETS, launcherBgCss, saveLauncherBg, loadLauncherBg } from '../src/shared/launcherBg'
 
 describe('zip roundtrip', () => {
   it('zipFiles/unzipFiles : aller-retour fidèle', async () => {
@@ -94,13 +94,20 @@ describe('launcherBg', () => {
     expect(launcherBgCss(null)).toBeUndefined()
     saveLauncherBg({ type: 'solid', c1: '#123456', c2: '#000000', angle: 135 })
     expect(loadLauncherBg()?.type).toBe('solid')
-    expect(launcherBgCss(loadLauncherBg())).toBe('#123456')
+    expect(launcherBgCss(loadLauncherBg())).toBe('linear-gradient(var(--launcher-scrim), var(--launcher-scrim)), #123456')
     saveLauncherBg({ type: 'gradient', c1: '#111111', c2: '#155b60', angle: 90 })
-    expect(launcherBgCss(loadLauncherBg())).toBe('linear-gradient(90deg, #111111, #155b60)')
+    expect(launcherBgCss(loadLauncherBg())).toBe('linear-gradient(var(--launcher-scrim), var(--launcher-scrim)), linear-gradient(90deg, #111111, #155b60)')
     saveLauncherBg({ type: 'dots', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
     expect(launcherBgCss(loadLauncherBg())).toContain('radial-gradient')
     saveLauncherBg({ type: 'grid', c1: '#ffffff', c2: '#0b0f19', angle: 0 })
     expect(launcherBgCss(loadLauncherBg())).toContain('linear-gradient')
     saveLauncherBg(null)
+  })
+
+  it('BG_PRESETS : au moins 6 presets, tous avec voile de lisibilité', () => {
+    expect(BG_PRESETS.length).toBeGreaterThanOrEqual(6)
+    for (const p of BG_PRESETS) {
+      expect(launcherBgCss(p.bg)).toContain('var(--launcher-scrim)')
+    }
   })
 })

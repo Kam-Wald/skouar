@@ -38,6 +38,7 @@
   --border: rgba(148, 163, 184, 0.16);
   --glass: rgba(13, 17, 27, 0.72);
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --launcher-scrim: rgba(7, 10, 18, 0.62);
   --radius: 14px;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
@@ -117,16 +118,16 @@ a {
 
 .launcher-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
-  width: min(720px, 100%);
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 0.8rem;
+  width: min(980px, 100%);
 }
 
 .app-tile {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1.25rem;
+  padding: 1rem;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -147,6 +148,15 @@ a {
   font-size: 1.1rem;
 }
 
+.app-tile-tag {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
 .app-tile-desc {
   color: var(--muted);
   font-size: 0.9rem;
@@ -155,6 +165,43 @@ a {
 .launcher-footer {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.launcher-count {
+  margin: -1.5rem 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.bg-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bg-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.75rem;
+}
+
+.bg-preset.active {
+  border-color: var(--accent);
+}
+
+.bg-preset .sw {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .blocs-app {
@@ -1463,6 +1510,7 @@ th.drag-over {
   --border: rgba(16, 24, 40, 0.1);
   --glass: rgba(255, 255, 255, 0.78);
   --shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
+  --launcher-scrim: rgba(244, 246, 251, 0.68);
 }
 
 :root[data-theme='light'] body {

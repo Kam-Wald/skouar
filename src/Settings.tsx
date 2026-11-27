@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ColorSwatches from './shared/ColorSwatches'
-import { loadLauncherBg, saveLauncherBg, type LauncherBg } from './shared/launcherBg'
+import { BG_PRESETS, launcherBgCss, loadLauncherBg, saveLauncherBg, type LauncherBg } from './shared/launcherBg'
 import { exportBackup, importBackup } from './shared/backup'
 import { notify } from './shared/notify'
 import { useDismiss } from './shared/useDismiss'
@@ -232,6 +232,29 @@ export default function SettingsButton({ appId, appName }: Props) {
                   <option value="grid">Grille</option>
                 </select>
               </label>
+              <div className="settings-field">
+                <span>Pré-réglages</span>
+                <div className="bg-presets">
+                  <button
+                    type="button"
+                    className={`bg-preset${bgType === 'none' ? ' active' : ''}`}
+                    onClick={() => applyBg('none')}
+                  >
+                    Aucun
+                  </button>
+                  {BG_PRESETS.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      className={`bg-preset${bgType === p.bg.type && bgC1 === p.bg.c1 && bgC2 === p.bg.c2 && bgAngle === p.bg.angle ? ' active' : ''}`}
+                      onClick={() => applyBg(p.bg.type, p.bg.c1, p.bg.c2, p.bg.angle)}
+                    >
+                      <span className="sw" style={{ background: launcherBgCss(p.bg) }} aria-hidden />
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {bgType !== 'none' && (
                 <>
                   <div className="settings-field">
