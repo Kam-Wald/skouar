@@ -38,6 +38,7 @@
   --border: rgba(148, 163, 184, 0.16);
   --glass: rgba(13, 17, 27, 0.72);
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --launcher-scrim: rgba(7, 10, 18, 0.62);
   --radius: 14px;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
@@ -1463,6 +1464,7 @@ th.drag-over {
   --border: rgba(16, 24, 40, 0.1);
   --glass: rgba(255, 255, 255, 0.78);
   --shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
+  --launcher-scrim: rgba(244, 246, 251, 0.68);
 }
 
 :root[data-theme='light'] body {

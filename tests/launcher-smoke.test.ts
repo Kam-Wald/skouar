@@ -39,4 +39,29 @@ describe('Launcher (smoke jsdom)', () => {
     expect(soon).toBeGreaterThanOrEqual(4)
     root.unmount()
   })
+
+  it('raccourci « / » focusse la recherche, « Échap » la quitte', async () => {
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { MemoryRouter } = await import('react-router-dom')
+    const LauncherHome = (await import('../src/launcher/LauncherHome')).default
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    const root = createRoot(div)
+    await React.act(async () => {
+      root.render(React.createElement(MemoryRouter, null, React.createElement(LauncherHome)))
+    })
+    const search = div.querySelector('.launcher-search') as HTMLInputElement
+    expect(search).toBeTruthy()
+    await React.act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }))
+    })
+    expect(document.activeElement).toBe(search)
+    await React.act(async () => {
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(document.activeElement).not.toBe(search)
+    root.unmount()
+    div.remove()
+  })
 })
