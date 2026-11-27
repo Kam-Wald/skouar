@@ -2,36 +2,43 @@
 
 Lanceur d'applications **local-first** : une coque unique (le « launcher ») regroupe des applications modulaires, installable en **PWA** (icône sur le bureau / écran d'accueil) et utilisable 100 % hors ligne.
 
-Première app : **Karneto** 🗒 — un éditeur de pages/bases de données type Notion (pages, titres, listes à puces, tâches), dont les données restent dans le navigateur.
+Apps actives (6) : **Karneto** 🗒 (pages + BDD type Notion), **Skrid** ✍️ (traitement de texte), **Ler** 📕 (visionneuse/annotatrice de PDF), **Skeud** 🖼️ (images), **Kod** 💻 (éditeur de code), **Cockpit** 🎛️ (productivité) — toutes 100 % local, données dans le navigateur. 4 autres « Bientôt » : Taol, Tres, Kemm, Klevet (voir « Les applis Skouar » ci-dessous).
 
 ## Stack
 
 - Vite + React 18 + TypeScript
 - React Router : `/` = launcher, `/app/<id>` = une app
 - `vite-plugin-pwa` : manifest + service worker (mode `generateSW`)
-- Stockage local-first : `localStorage` (v1)
+- Stockage local-first : IndexedDB via **Dexie** (`createAppDb` par app, `src/shared/db.ts`) + `localStorage` pour les réglages ; 38 polices woff2 embarquées (`src/assets/fonts/`, 100 % offline)
+- Tests : vitest + jsdom + fake-indexeddb (`npm test`, `npm run typecheck`), exécutés en CI
 
 ## Commandes
 
 ```bash
 npm install
-npm run dev      # dev server (http://localhost:5173)
-npm run build    # typecheck + build de production dans dist/
-npm run preview  # sert dist/ en local
-npm run icons    # régénère les icônes PWA dans public/icons
+npm run dev        # dev server (http://localhost:5173)
+npm run build      # typecheck + build de production dans dist/
+npm run preview    # sert dist/ en local
+npm test           # tests vitest
+npm run typecheck  # tsc --noEmit
+npm run icons      # régénère les icônes PWA dans public/icons
 ```
 
 ## Structure
 
 ```
 src/
-  main.tsx, App.tsx          point d'entrée + routes
-  styles.css                 thème sombre
-  launcher/LauncherHome.tsx  la place : grille de tuiles d'apps
-  apps/registry.ts           registre des apps (1 entrée = 1 nouvelle app)
-  apps/blocs/                app « Blocs » : types, store local-first, éditeur
-public/                      icon.svg + icônes PNG générées
-scripts/gen-icons.mjs        génération des PNG sans dépendance externe
+  main.tsx, App.tsx            point d'entrée + routes
+  styles.css                   thèmes clair/sombre
+  fonts.css                    @font-face des 38 polices embarquées
+  launcher/LauncherHome.tsx    la place : recherche + grille de tuiles d'apps
+  apps/registry.ts             registre des apps (1 entrée = 1 nouvelle app)
+  apps/blocs|skrid|ler|skeud|kod|cockpit/   les 6 apps actives (Karneto = blocs)
+  shared/                      AppShell, AppTile, db (Dexie), launcherBg, backup ZIP, réglages…
+  assets/fonts/                polices woff2 (latin + latin-ext)
+public/                        logo + icônes PWA PNG + icônes d'apps (app-icons/)
+scripts/gen-icons.mjs          génération des PNG sans dépendance externe
+tests/                         tests vitest (logique + smoke jsdom)
 ```
 
 ## Utilisation de Karneto
@@ -39,7 +46,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - Barre latérale : créer / sélectionner / supprimer des pages.
 - `Entrée` crée un bloc après le bloc courant, `Backspace` dans un bloc vide le supprime.
 - La barre d'outils convertit le bloc actif (paragraphe, H1, H2, puce, tâche).
-- Sauvegarde automatique (debounced) dans `localStorage`.
+- Sauvegarde automatique (debounced) dans IndexedDB (Dexie).
 
 ## CI/CD et déploiement (GitHub Actions + Pages)
 
@@ -97,7 +104,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - Logo Skouar : le visuel retenu est embarqué tel quel en PNG : source = `public/logo-source.png` (1024×1024, nouveau visuel fourni, embarqué tel quel) ; `npm run icons` génère `public/icons/icon-192.png`, `icon-512.png`, `icon-512-maskable.png` et les variantes v1–v4. Favicon = `icons/icon-512.png` (index.html), tuile launcher = même PNG. Accent du launcher = teal (override `--accent` dans `.launcher`), `theme-color` PWA = `#0d9488`.
 - Logo de l’app Karneto : `public/app-icons/calepin.svg`, réutilisable comme base pour les prochaines apps.
 
-## Les applis Skouar (retenues)
+## Les applis Skouar (6 actives, 4 « Bientôt » — source de vérité : `src/apps/registry.ts`)
 
 - **Karneto** 📓 — actif : pages + BDD (voir fonctionnalités ci-dessus)
 - **Skrid** ✍️ — actif : traitement de texte léger. **3 vues** en haut de la sidebar : ✍️ **Document** (défaut, édition pure), 🖋️ **Écrivain** (plan du livre, objectifs 🎯, réordonnancement ↑↓, export PDF 📄), 📊 **Stats** (mots par chapitre, objectifs atteints). **31 templates** de texte 📋 (motivation, résiliation, compte-rendu, discours, CV, recette…), mode focus 🎯, police serif, autosave + undo persisté, **barre de mise en forme exhaustive** (polices, H1–H4, citation, bloc code, interligne, gras/italique/souligné/barré, couleur de police et de fond, listes à puces/numérotées/à cocher, liens, tableaux, images, ligne horizontale, retraits, alignements, effacer le format, undo/redo ↶↷), sidebar **redimensionnable** (poignée ⇆, mêmes bornes 180–440px que Karneto, largeur partagée), **Ctrl+F** recherche/remplacement, **commentaires en marge** 💬, **mode lecture** 📖 (plein écran, taille de police A−/A+), **stats de session** (mots/jour, graphe 14 jours, streak 🔥), **drag & drop** des chapitres dans la sidebar, **export chapitre** en PDF/HTML/Markdown/.doc + livre PDF avec **numéros de page en haut et en bas** (options), panneau **raccourcis ?**, **spellcheck FR** natif, fond légèrement différent en vue Écrivain, **vue Document façon traitement de texte** (feuille A4 à l'écran + règles en cm haut/gauche), chapitres dans la sidebar **uniquement en vue Écrivain** + navigation ‹ › entre chapitres en vue Document, **16 polices système** dans la barre (noms affichés dans leur propre police), barre d'outils qui **revient à la ligne sans scrollbar**, rubrique **Fiches & mémos** dans la sidebar (11 types de fiches 🧍📍🎒🐾🏛️📅💡💬🎬📖📌 avec champs dédiés, 🗒️ mémos **épinglables** 📌 et **colorables**, **références `@fiche`** cliquables depuis le texte (popover @ au curseur) ; les fiches sont des **formulaires dans le contenu** (champs label+valeur, sans éditeur libre, export en tableau), exclus du plan/stats/export PDF du livre), **options PDF en opt-in uniquement** (popover ⬇ : « Page X sur Y », titre en pied de page, sommaire auto, saut de page/chapitre, page de garde, format A4/A5/livret 2×A5 sur A4 paysage, marges étroites/normales/larges, police PDF sans/serif/mono)
@@ -106,7 +113,7 @@ scripts/gen-icons.mjs        génération des PNG sans dépendance externe
 - - **Polices embarquées** : 38 polices woff2 (latin + latin-ext, accents FR complets dont œ) dans `src/assets/fonts/` via `@fontsource/*` + `@font-face` dans `src/fonts.css`, **triées par ordre alphabétique** dans Skrid + Skeud (Alegreya, Abril Fatface, Archivo, Atkinson Hyperlegible, Bebas Neue, Bitter, Bodoni Moda, Caveat, Cinzel, Cormorant Garamond, DM Sans, DM Serif Display, Fraunces, Great Vibes, Inconsolata, Instrument Serif, JetBrains Mono, Josefin Sans, Lexend, Libre Baskerville, Lora, Merriweather, Montserrat, Newsreader, Open Sans, Orbitron, Oswald, Pacifico, Permanent Marker, Playfair Display, Poppins, Raleway, Roboto, Rubik, Special Elite, Space Grotesk, Work Sans)
 - **Taol** 🧮 — tableur local (formules, tris/filtres, graphiques, export CSV) — bientôt
 - **Tres** ✏️ — dessin & présentations (formes vectorielles + diapos, export SVG/PNG) — bientôt
-- **Kod** 💻 — éditeur de code léger et 100 % local : coloration maison (~20 langages), onglets, arbre de fichiers (projet local Dexie + dossier/fichier réel via File System Access), recherche dans le fichier (Ctrl+F) et dans tout le projet (Ctrl+Shift+F), numéros de ligne, indentation auto, Ctrl+S, enregistrer-sous, barre de statut Ln/Col ; v3 : paires auto-fermantes, commenter (Ctrl+/), déplacer/dupliquer ligne (Alt+↑↓, Ctrl+Maj+D), pliage de blocs (gouttière), guides d'indentation + surlignage de la paire d'accolades, panneau Problèmes (TODO/lignes longues/espaces), glisser-déposer dans l'arbre + import de fichiers (bouton ou drop fenêtre), Ctrl+P aller au fichier, 5 thèmes de coloration, mode focus (sidebar/minimap masquées, pleine largeur), bouton « + » nouvel onglet avec choix d'extension, 34 modèles de fichiers (langages/projet/config/docs/extraits, dont Vue 3, Svelte 5, Pinia, Vite+Vue, SvelteKit) dans la sidebar, guides d'indentation quasi invisibles, réglages globaux (⚙️ dans chaque sidebar : thème, accent, largeur sidebar, réglages Kod, effacement des données d'une appli) ; v2 : rechercher-remplacer (Ctrl+H, fichier + tout le projet), multi-curseur (Ctrl+D / Ctrl+Maj+L), aperçu rendu md/html en split-view, minimap cliquable + plan des symboles, extraits (snippets) + palette Ctrl+K, historique local des versions (50/fichier) ; launcher : recherche d'apps + récents ; a11y (focus-visible, skip-link, aria, reduced-motion) ; PWA : splash boot, prompt d'installation custom, icône maskable avec marge ; v4 : diagnostics de syntaxe en direct (JS/TS, JSON/YAML) dans ⚠️ Problèmes, recherche/remplacement en regex (bouton .* + $1), sélection colonne (Alt+clic), Ctrl+G aller à la ligne + signets 🔖 dans la gouttière + replier/déplier tout, onglets épinglés 📌 + Ctrl+Maj+T + menu clic droit (fermer les autres/à droite), diff visuel vs historique (Comparer), volet split (glisser un onglet sur le bord droit), Emmet sur Tab (html/css/vue), aperçu images/SVG, détection des changements externes du dossier disque + rechargement ⟳, raccourcis clavier personnalisables (⚙️ Kod, ex. `find: C-F`) ; v5 : multi-projets (sélecteur 🗂 en haut de sidebar, onglets/état par projet), aller-à-la-définition (Ctrl+F12 / Ctrl+clic, index des symboles + résolution des imports relatifs), mini-git 100 % local 🌿 (commits fichier/projet, branches, diff, restauration — sans serveur), export/import du projet en ZIP 📦 (zip.ts maison, deflate via CompressionStream), extraits (snippets) personnels ✂️ éditables + partage JSON ; refactor : KodApp découpé en `lib.ts` (helpers purs) + `useKodApp.tsx` (état/logique) + `ctx.ts` + `parts/` (Sidebar/TabsBar/EditorPane/Overlays via contexte) ; tests vitest dans `tests/` (`npm test`, `npm run typecheck`), exécutés en CI
+- **Kod** 💻 — **actif** : éditeur de code léger et 100 % local : coloration maison (~20 langages), onglets, arbre de fichiers (projet local Dexie + dossier/fichier réel via File System Access), recherche dans le fichier (Ctrl+F) et dans tout le projet (Ctrl+Shift+F), numéros de ligne, indentation auto, Ctrl+S, enregistrer-sous, barre de statut Ln/Col ; v3 : paires auto-fermantes, commenter (Ctrl+/), déplacer/dupliquer ligne (Alt+↑↓, Ctrl+Maj+D), pliage de blocs (gouttière), guides d'indentation + surlignage de la paire d'accolades, panneau Problèmes (TODO/lignes longues/espaces), glisser-déposer dans l'arbre + import de fichiers (bouton ou drop fenêtre), Ctrl+P aller au fichier, 5 thèmes de coloration, mode focus (sidebar/minimap masquées, pleine largeur), bouton « + » nouvel onglet avec choix d'extension, 34 modèles de fichiers (langages/projet/config/docs/extraits, dont Vue 3, Svelte 5, Pinia, Vite+Vue, SvelteKit) dans la sidebar, guides d'indentation quasi invisibles, réglages globaux (⚙️ dans chaque sidebar : thème, accent, largeur sidebar, réglages Kod, effacement des données d'une appli) ; v2 : rechercher-remplacer (Ctrl+H, fichier + tout le projet), multi-curseur (Ctrl+D / Ctrl+Maj+L), aperçu rendu md/html en split-view, minimap cliquable + plan des symboles, extraits (snippets) + palette Ctrl+K, historique local des versions (50/fichier) ; launcher : recherche d'apps + récents ; a11y (focus-visible, skip-link, aria, reduced-motion) ; PWA : splash boot, prompt d'installation custom, icône maskable avec marge ; v4 : diagnostics de syntaxe en direct (JS/TS, JSON/YAML) dans ⚠️ Problèmes, recherche/remplacement en regex (bouton .* + $1), sélection colonne (Alt+clic), Ctrl+G aller à la ligne + signets 🔖 dans la gouttière + replier/déplier tout, onglets épinglés 📌 + Ctrl+Maj+T + menu clic droit (fermer les autres/à droite), diff visuel vs historique (Comparer), volet split (glisser un onglet sur le bord droit), Emmet sur Tab (html/css/vue), aperçu images/SVG, détection des changements externes du dossier disque + rechargement ⟳, raccourcis clavier personnalisables (⚙️ Kod, ex. `find: C-F`) ; v5 : multi-projets (sélecteur 🗂 en haut de sidebar, onglets/état par projet), aller-à-la-définition (Ctrl+F12 / Ctrl+clic, index des symboles + résolution des imports relatifs), mini-git 100 % local 🌿 (commits fichier/projet, branches, diff, restauration — sans serveur), export/import du projet en ZIP 📦 (zip.ts maison, deflate via CompressionStream), extraits (snippets) personnels ✂️ éditables + partage JSON ; refactor : KodApp découpé en `lib.ts` (helpers purs) + `useKodApp.tsx` (état/logique) + `ctx.ts` + `parts/` (Sidebar/TabsBar/EditorPane/Overlays via contexte) ; tests vitest dans `tests/` (`npm test`, `npm run typecheck`), exécutés en CI
 
 
 ## Structure transverse (`src/shared/`)
@@ -126,6 +133,7 @@ Chaque appli garde sa propre base Dexie (isolation volontaire : effacement par a
 
 - [ ] Test de l'installation PWA en ligne (bureau + tablette) sur l'URL Pages
 - [x] Stockage IndexedDB (Dexie, migration auto depuis localStorage) + export/import JSON (boutons ↓ Exporter / ↑ Importer dans Blocs)
+- [x] Sauvegarde globale de toutes les apps en **ZIP** (export/import via ⚙️ Réglages, `src/shared/backup.ts`)
 - [x] Synchro P2P optionnelle (Yjs + Trystero/WebRTC, zéro serveur) : bouton ⇄ Sync dans Blocs, code de salon à partager entre appareils (v1 : état synchronisé par document, le plus récent l’emporte)
 - [ ] Synchro CRDT fine par bloc + mini-serveur perso (y-sweet, Rust) en alternative
 - [x] Pages imbriquées (sous-pages, niveaux, suppression qui rebranche les enfants) + recherche (titre, blocs, cellules de BDD) dans la barre latérale
