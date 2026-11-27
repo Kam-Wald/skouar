@@ -55,7 +55,13 @@ tests/                         tests vitest (logique + smoke jsdom)
 - Prérequis manuel une seule fois : Settings → Pages → Source = « GitHub Actions »
 - En local, `base` reste `/` ; en CI il devient automatiquement `/skouar/` (`vite.config.ts`)
 
+## Conventions de contribution
+
+Voir [AGENTS.md](AGENTS.md) : stack, commandes, structure, conventions de commits/PR/tests et notes opérationnelles (merge, branches, gh).
+
 ## Fonctionnalités de Karneto (ex-« Blocs »)
+
+> Changelog cumulatif des fusions — l'état réel du code est dans `src/` (registre des apps : `src/apps/registry.ts`).
 
 - **Annuler/rétablir** (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y), **mise en forme inline** (Ctrl+B/I/U)
 - Mentions `[[page]]` + panneau **liens entrants/sortants**, **étiquettes (tags)** colorées + filtre
