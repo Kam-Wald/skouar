@@ -13,6 +13,13 @@ import './styles/06-skeud-settings.css'
 
 applyTheme(getTheme(), getAccent())
 
+const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null
+const onSystemTheme = () => applyTheme(getTheme(), getAccent())
+if (mq) {
+  if (mq.addEventListener) mq.addEventListener('change', onSystemTheme)
+  else mq.addListener(onSystemTheme)
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <HashRouter>

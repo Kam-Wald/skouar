@@ -3,29 +3,39 @@ import { useDismiss } from './shared/useDismiss'
 
 export const ACCENTS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6']
 
-export function getTheme(): string {
-  return localStorage.getItem('skouar:theme') || 'dark'
+export type ThemeChoice = 'system' | 'dark' | 'light'
+
+export function getTheme(): ThemeChoice {
+  const v = localStorage.getItem('skouar:theme')
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system'
 }
 export function getAccent(): string {
   return localStorage.getItem('skouar:accent') || '#4f46e5'
 }
-export function applyTheme(theme: string, accent: string): void {
-  document.documentElement.dataset.theme = theme
+export function resolveTheme(choice: ThemeChoice): 'dark' | 'light' {
+  if (choice === 'system') {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  }
+  return choice
+}
+export function applyTheme(choice: ThemeChoice, accent: string): void {
+  document.documentElement.dataset.theme = resolveTheme(choice)
   document.documentElement.style.setProperty('--accent', accent)
   if (/^#[0-9a-fA-F]{6}$/.test(accent)) {
     document.documentElement.style.setProperty('--accent-soft', `${accent}2e`)
   }
-  localStorage.setItem('skouar:theme', theme)
+  localStorage.setItem('skouar:theme', choice)
   localStorage.setItem('skouar:accent', accent)
 }
 
 export default function ThemeButton() {
-  const [theme, setTheme] = useState(getTheme())
+  const [theme, setTheme] = useState<ThemeChoice>(getTheme())
   const [accent, setAccent] = useState(getAccent())
   const [open, setOpen] = useState(false)
   useDismiss('theme', open, () => setOpen(false))
+  const resolved = resolveTheme(theme)
 
-  const choose = (t: string, a: string) => {
+  const choose = (t: ThemeChoice, a: string) => {
     applyTheme(t, a)
     setTheme(t)
     setAccent(a)
@@ -34,11 +44,14 @@ export default function ThemeButton() {
   return (
     <div className="theme-wrap" data-pop="theme">
       <button className="blocs-io" title="Thème et couleur d'accent" onClick={() => setOpen((o) => !o)}>
-        {theme === 'dark' ? '🌙' : '☀️'} Thème
+        {resolved === 'dark' ? '🌙' : '☀️'} Thème
       </button>
       {open && (
         <div className="theme-pop">
           <div className="theme-row">
+            <button className={`db-btn${theme === 'system' ? ' active' : ''}`} onClick={() => choose('system', accent)}>
+              🖥️ Système
+            </button>
             <button className={`db-btn${theme === 'light' ? ' active' : ''}`} onClick={() => choose('light', accent)}>
               ☀️ Clair
             </button>
