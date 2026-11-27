@@ -51,11 +51,11 @@ export const apps: AppMeta[] = [
   {
     id: 'taol',
     name: 'Taol',
-    description: 'Tableur local : formules, tris, filtres, graphiques, export CSV.',
+    description: 'Tableur local : formules (SOMME, MOYENNE, SI…), multi-feuilles, export CSV, impression.',
     tag: 'tableur',
     icon: '🧮',
     logo: `${import.meta.env.BASE_URL}app-icons/taol.svg`,
-    soon: true
+    component: lazy(() => import('./taol/TaolApp'))
   },
   {
     id: 'tres',

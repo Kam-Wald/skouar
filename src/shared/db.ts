@@ -72,5 +72,6 @@ export const APP_DB_MAP: Record<string, string> = {
   ler: 'skouar-ler',
   skeud: 'skouar-skeud',
   kod: 'skouar-kod',
-  cockpit: 'skouar-cockpit'
+  cockpit: 'skouar-cockpit',
+  taol: 'skouar-taol'
 }
