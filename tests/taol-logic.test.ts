@@ -267,3 +267,80 @@ describe('mise en forme (PR B)', () => {
     expect(sh.widths?.[1]).toBe(30)
   })
 })
+
+describe('structure (PR C) : insérer/supprimer lignes & colonnes', () => {
+  it('noms de feuille avec espace : roundtrip quoté', async () => {
+    const { parseFormula, serializeFormula } = await import('../src/apps/taol/logic')
+    expect(serializeFormula(parseFormula("'Feuil 1'!A1+Data!B2"))).toBe("'Feuil 1'!A1+Data!B2")
+    expect(serializeFormula(parseFormula('SOMME(#REF!;B1)'))).toBe('SOMME(#REF!;B1)')
+  })
+
+  it('insertRowsWb décale cellules, refs (absolus, inter-feuilles) — les refs au-dessus ne bougent pas', async () => {
+    const { insertRowsWb } = await import('../src/apps/taol/logic')
+    const wb: Workbook = {
+      sheets: [
+        { id: 's1', name: 'Feuil 1', cells: { A1: { v: 10 }, A3: { f: '$A$1+A1*2' }, B5: { v: 9 } } },
+        { id: 's2', name: 'Data', cells: { A1: { f: "'Feuil 1'!A3+Data!B5" } } }
+      ],
+      activeSheetId: 's1',
+      activeCell: 'A1'
+    }
+    insertRowsWb(wb, 's1', 1, 2)
+    const s1 = wb.sheets[0]
+    expect(s1.cells.A1).toEqual({ v: 10 })
+    expect(s1.cells.A3).toBeUndefined()
+    expect(s1.cells.A5).toEqual({ f: '$A$1+A1*2' })
+    expect(s1.cells.B7).toEqual({ v: 9 })
+    expect(wb.sheets[1].cells.A1.f).toBe("'Feuil 1'!A5+Data!B5")
+  })
+
+  it('deleteRowsWb : plage rognée, cellules supprimées, #REF! si ref supprimée, refs au-delà reculent', async () => {
+    const { deleteRowsWb } = await import('../src/apps/taol/logic')
+    const wb: Workbook = {
+      sheets: [
+        {
+          id: 's1',
+          name: 'F',
+          cells: { A1: { f: 'SOMME(A2:A4)' }, A2: { v: 1 }, A3: { v: 2 }, A4: { v: 3 }, A5: { v: 5 }, A6: { f: 'A5+1' }, B1: { f: 'A3' } }
+        }
+      ],
+      activeSheetId: 's1',
+      activeCell: 'A1'
+    }
+    deleteRowsWb(wb, 's1', 1, 2)
+    const s1 = wb.sheets[0]
+    expect(s1.cells.A1.f).toBe('SOMME(A2:A2)')
+    expect(s1.cells.A2).toEqual({ v: 3 })
+    expect(s1.cells.A3).toEqual({ v: 5 })
+    expect(s1.cells.A4).toEqual({ f: 'A3+1' })
+    expect(s1.cells.A5).toBeUndefined()
+    expect(s1.cells.B1.f).toBe('#REF!')
+    expect(serializeFormula(parseFormula(s1.cells.B1.f!))).toBe('#REF!')
+  })
+
+  it('insertColsWb/deleteColsWb : cellules, largeurs, validations, cf, fusions suivent la colonne', async () => {
+    const { insertColsWb, deleteColsWb } = await import('../src/apps/taol/logic')
+    const sh: Sheet = {
+      id: 's1',
+      name: 'F',
+      cells: { B2: { v: 1 } },
+      widths: { 1: 120 },
+      validations: { 1: ['a', 'b'] },
+      cf: [{ col: 1, op: '>', value: 5, bg: '#fee2e2' }],
+      merged: { B2: { c1: 1, r1: 1, c2: 2, r2: 1 } }
+    }
+    const wb: Workbook = { sheets: [sh], activeSheetId: 's1', activeCell: 'A1' }
+    insertColsWb(wb, 's1', 0, 1)
+    expect(sh.cells.C2).toEqual({ v: 1 })
+    expect(sh.cells.B2).toBeUndefined()
+    expect(sh.widths?.[2]).toBe(120)
+    expect(sh.validations?.[2]).toEqual(['a', 'b'])
+    expect(sh.cf?.[0].col).toBe(2)
+    expect(sh.merged?.C2).toEqual({ c1: 2, r1: 1, c2: 3, r2: 1 })
+    deleteColsWb(wb, 's1', 2, 2)
+    expect(sh.cells.C2).toBeUndefined()
+    expect(sh.widths?.[2]).toBeUndefined()
+    expect(sh.validations?.[2]).toBeUndefined()
+    expect(sh.cf ?? []).toHaveLength(0)
+  })
+})

@@ -14,6 +14,8 @@ export interface Sheet {
   merged?: Record<string, Box>
   validations?: Record<number, string[]>
   widths?: Record<number, number>
+  hiddenRows?: Record<number, boolean>
+  hiddenCols?: Record<number, boolean>
 }
 
 export interface Workbook {
@@ -73,6 +75,7 @@ type Tok =
   | { t: 'str'; v: string }
   | { t: 'id'; v: string }
   | { t: 'op'; v: string }
+  | { t: 'err'; v: string }
   | { t: 'lp' }
   | { t: 'rp' }
   | { t: 'sep' }
@@ -133,6 +136,13 @@ export function tokenize(src: string): Tok[] {
       }
       continue
     }
+    if (c === '#') {
+      const m = /^#[A-Za-z][A-Za-z0-9/]*[!?]/.exec(src.slice(i))
+      if (!m) throw new CalcError('#VALEUR!')
+      toks.push({ t: 'err', v: m[0].toUpperCase() })
+      i += m[0].length
+      continue
+    }
     if (/[A-Za-z_$]/.test(c)) {
       const m = /^[A-Za-z_$][A-Za-z0-9_$.]*/.exec(src.slice(i))
       if (!m) throw new CalcError('#VALEUR!')
@@ -191,6 +201,7 @@ export type Node =
   | { t: 'num'; v: number }
   | { t: 'str'; v: string }
   | { t: 'bool'; v: boolean }
+  | { t: 'err'; v: string }
   | { t: 'ref'; sheet: string | null; col: number; row: number; absCol: boolean; absRow: boolean }
   | { t: 'range'; sheet: string | null; c1: number; r1: number; c2: number; r2: number }
   | { t: 'call'; name: string; args: Node[] }
@@ -279,6 +290,7 @@ export function parseFormula(src: string): Node {
     const t = next()
     if (t.t === 'num') return { t: 'num', v: t.v }
     if (t.t === 'str') return { t: 'str', v: t.v }
+    if (t.t === 'err') return { t: 'err', v: t.v }
     if (t.t === 'lp') {
       const e = parseExpr()
       const c = next()
@@ -436,6 +448,8 @@ export function evalNode(n: Node, ctx: EvalCtx): CellValue {
     case 'str':
     case 'bool':
       return n.v
+    case 'err':
+      return err(n.v)
     case 'ref': {
       const full = `${n.sheet ?? ctx.currentSheet}!${keyOf(n.col, n.row)}`
       if (ctx.stack.includes(full)) return err('#CIRC!')
@@ -611,6 +625,10 @@ export function shiftRefs(n: Node, dc: number, dr: number): Node {
   }
 }
 
+function serSheet(s: string): string {
+  return /[^A-Za-z0-9_$]/.test(s) ? `'${s.replace(/'/g, "''")}'!` : `${s}!`
+}
+
 export function serializeFormula(n: Node): string {
   switch (n.t) {
     case 'num':
@@ -619,10 +637,12 @@ export function serializeFormula(n: Node): string {
       return `"${n.v.replace(/"/g, '""')}"`
     case 'bool':
       return n.v ? 'VRAI' : 'FAUX'
+    case 'err':
+      return n.v
     case 'ref':
-      return `${n.sheet ? `${n.sheet}!` : ''}${formatRef(n.col, n.row, n.absCol, n.absRow)}`
+      return `${n.sheet ? serSheet(n.sheet) : ''}${formatRef(n.col, n.row, n.absCol, n.absRow)}`
     case 'range':
-      return `${n.sheet ? `${n.sheet}!` : ''}${formatRef(n.c1, n.r1)}${formatRef(n.c2, n.r2, true, true)}`.replace(':$', ':')
+      return `${n.sheet ? serSheet(n.sheet) : ''}${formatRef(n.c1, n.r1)}:${formatRef(n.c2, n.r2)}`
     case 'call':
       return `${n.name}(${n.args.map(serializeFormula).join(';')})`
     case 'un':
@@ -886,4 +906,158 @@ export function setColWidth(sh: Sheet, col: number, w: number | null): void {
   sh.widths = { ...(sh.widths ?? {}) }
   if (w === null || w <= 0) delete sh.widths[col]
   else sh.widths[col] = Math.max(30, Math.min(400, Math.round(w)))
+}
+
+// ---------- Structure : insérer / supprimer lignes & colonnes (PR C) ----------
+
+type Axis = 'row' | 'col'
+
+function shiftRefCoord(c: number, at: number, delta: number): number | null {
+  if (delta > 0) return c >= at ? c + delta : c
+  const n = -delta
+  if (c >= at && c < at + n) return null
+  return c >= at + n ? c - n : c
+}
+
+function shiftEdgeCoord(c: number, at: number, delta: number): number {
+  if (delta > 0) return c >= at ? c + delta : c
+  const n = -delta
+  if (c >= at + n) return c - n
+  if (c >= at) return at
+  return c
+}
+
+export function moveRefs(n: Node, axis: Axis, at: number, delta: number, matchSheet: (s: string | null) => boolean): Node {
+  const isDel = delta < 0
+  switch (n.t) {
+    case 'ref': {
+      if (!matchSheet(n.sheet)) return n
+      const c = shiftRefCoord(axis === 'row' ? n.row : n.col, at, delta)
+      if (c === null) return { t: 'err', v: '#REF!' }
+      return axis === 'row' ? { ...n, row: c } : { ...n, col: c }
+    }
+    case 'range': {
+      if (!matchSheet(n.sheet)) return n
+      if (isDel) {
+        const nd = -delta
+        const a1 = axis === 'row' ? n.r1 : n.c1
+        const a2 = axis === 'row' ? n.r2 : n.c2
+        if (a1 >= at && a2 < at + nd) return { t: 'err', v: '#REF!' }
+      }
+      const s1 = shiftEdgeCoord(axis === 'row' ? n.r1 : n.c1, at, delta)
+      const s2 = shiftEdgeCoord(axis === 'row' ? n.r2 : n.c2, at, delta)
+      return axis === 'row' ? { ...n, r1: s1, r2: s2 } : { ...n, c1: s1, c2: s2 }
+    }
+    case 'call':
+      return { ...n, args: n.args.map((a) => moveRefs(a, axis, at, delta, matchSheet)) }
+    case 'un':
+      return { ...n, a: moveRefs(n.a, axis, at, delta, matchSheet) }
+    case 'bin':
+      return { ...n, a: moveRefs(n.a, axis, at, delta, matchSheet), b: moveRefs(n.b, axis, at, delta, matchSheet) }
+    default:
+      return n
+  }
+}
+
+function shiftAllRefs(wb: Workbook, target: Sheet, axis: Axis, at: number, delta: number): void {
+  for (const s of wb.sheets) {
+    const isTarget = s.id === target.id
+    const match = (refSheet: string | null): boolean =>
+      refSheet === null ? isTarget : refSheet.toLowerCase() === target.name.toLowerCase() || refSheet === target.id
+    for (const cell of Object.values(s.cells)) {
+      if (cell.f === undefined) continue
+      try {
+        cell.f = serializeFormula(moveRefs(parseFormula(cell.f), axis, at, delta, match))
+      } catch {}
+    }
+  }
+}
+
+function remapCells(sh: Sheet, axis: Axis, at: number, delta: number): void {
+  const isDel = delta < 0
+  const n = Math.abs(delta)
+  const next: Record<string, Cell> = {}
+  for (const [key, cell] of Object.entries(sh.cells)) {
+    const p = parseKey(key)
+    if (!p) continue
+    const c = axis === 'row' ? p.row : p.col
+    if (isDel && c >= at && c < at + n) continue
+    const c2 = isDel ? (c >= at + n ? c - n : c) : c >= at ? c + delta : c
+    next[keyOf(axis === 'row' ? p.col : c2, axis === 'row' ? c2 : p.row)] = cell
+  }
+  sh.cells = next
+}
+
+function shiftKeyed<T>(rec: Record<number, T> | undefined, at: number, delta: number): Record<number, T> | undefined {
+  if (!rec) return undefined
+  const isDel = delta < 0
+  const n = Math.abs(delta)
+  const out: Record<number, T> = {}
+  for (const [k, v] of Object.entries(rec)) {
+    const c = Number(k)
+    if (isDel && c >= at && c < at + n) continue
+    const c2 = isDel ? (c >= at + n ? c - n : c) : c >= at ? c + delta : c
+    out[c2] = v
+  }
+  return out
+}
+
+function shiftMerged(sh: Sheet, axis: Axis, at: number, delta: number): void {
+  if (!sh.merged) return
+  const isDel = delta < 0
+  const n = Math.abs(delta)
+  const out: Record<string, Box> = {}
+  for (const box of Object.values(sh.merged)) {
+    const a1 = axis === 'row' ? box.r1 : box.c1
+    const a2 = axis === 'row' ? box.r2 : box.c2
+    if (isDel && a1 >= at && a2 < at + n) continue
+    const s1 = shiftEdgeCoord(a1, at, delta)
+    const s2 = shiftEdgeCoord(a2, at, delta)
+    const nb = axis === 'row' ? { ...box, r1: s1, r2: s2 } : { ...box, c1: s1, c2: s2 }
+    out[keyOf(nb.c1, nb.r1)] = nb
+  }
+  sh.merged = out
+}
+
+function shiftSheetMeta(sh: Sheet, axis: Axis, at: number, delta: number): void {
+  shiftMerged(sh, axis, at, delta)
+  if (axis === 'col') {
+    sh.widths = shiftKeyed(sh.widths, at, delta)
+    sh.validations = shiftKeyed(sh.validations, at, delta)
+    sh.hiddenCols = shiftKeyed(sh.hiddenCols, at, delta)
+    if (sh.cf) {
+      const out: CfRule[] = []
+      for (const r of sh.cf) {
+        const c = shiftRefCoord(r.col, at, delta)
+        if (c !== null) out.push({ ...r, col: c })
+      }
+      sh.cf = out
+    }
+  } else {
+    sh.hiddenRows = shiftKeyed(sh.hiddenRows, at, delta)
+  }
+}
+
+function structuralOp(wb: Workbook, sheetId: string, axis: Axis, at: number, delta: number): void {
+  const sh = wb.sheets.find((s) => s.id === sheetId)
+  if (!sh || delta === 0) return
+  shiftAllRefs(wb, sh, axis, at, delta)
+  remapCells(sh, axis, at, delta)
+  shiftSheetMeta(sh, axis, at, delta)
+}
+
+export function insertRowsWb(wb: Workbook, sheetId: string, at: number, count: number): void {
+  structuralOp(wb, sheetId, 'row', at, count)
+}
+
+export function deleteRowsWb(wb: Workbook, sheetId: string, r1: number, r2: number): void {
+  structuralOp(wb, sheetId, 'row', r1, -(r2 - r1 + 1))
+}
+
+export function insertColsWb(wb: Workbook, sheetId: string, at: number, count: number): void {
+  structuralOp(wb, sheetId, 'col', at, count)
+}
+
+export function deleteColsWb(wb: Workbook, sheetId: string, c1: number, c2: number): void {
+  structuralOp(wb, sheetId, 'col', c1, -(c2 - c1 + 1))
 }

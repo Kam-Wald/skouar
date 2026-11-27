@@ -11,10 +11,14 @@ import {
   columnValues,
   coveredBy,
   csvExport,
+  deleteColsWb,
+  deleteRowsWb,
   emptyView,
   fmtDisplay,
   fmtWithStyle,
   indexToCol,
+  insertColsWb,
+  insertRowsWb,
   keyOf,
   mergeCells,
   parseFormula,
@@ -58,6 +62,7 @@ interface Clip {
   r1: number
   c2: number
   r2: number
+  cells: Record<string, Cell>
 }
 
 interface Pos {
@@ -75,6 +80,7 @@ export default function TaolApp(): JSX.Element {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [views, setViews] = useState<Record<string, ViewState>>({})
   const [colMenu, setColMenu] = useState<number | null>(null)
+  const [rowMenu, setRowMenu] = useState<number | null>(null)
   const [filterDraft, setFilterDraft] = useState<string[] | null>(null)
   const [search, setSearch] = useState<{ q: string; matches: Pos[]; idx: number } | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
@@ -236,13 +242,76 @@ export default function TaolApp(): JSX.Element {
     setEdit(null)
   }
 
+  const selectRow = (r: number, extend: boolean): void => {
+    if (extend) {
+      setSel({ col: sel.col, row: r })
+      setRange({ c1: 0, r1: Math.min(anchor.row, r), c2: nCols - 1, r2: Math.max(anchor.row, r) })
+    } else {
+      setSel({ col: 0, row: r })
+      setAnchor({ col: 0, row: r })
+      setRange({ c1: 0, r1: r, c2: nCols - 1, r2: r })
+    }
+    setEdit(null)
+  }
+
+  const selectCol = (c: number, extend: boolean): void => {
+    if (extend) {
+      setSel({ col: c, row: sel.row })
+      setRange({ c1: Math.min(anchor.col, c), r1: 0, c2: Math.max(anchor.col, c), r2: nRows - 1 })
+    } else {
+      setSel({ col: c, row: 0 })
+      setAnchor({ col: c, row: 0 })
+      setRange({ c1: c, r1: 0, c2: c, r2: nRows - 1 })
+    }
+    setEdit(null)
+  }
+
   const copySelection = (): void => {
     if (!sheet) return
     const box = range ?? { c1: sel.col, r1: sel.row, c2: sel.col, r2: sel.row }
     const text = tsvSerializeRange(sheet, box.c1, box.r1, box.c2, box.r2)
-    setClip({ text, ...box })
+    const cells: Record<string, Cell> = {}
+    for (let r = box.r1; r <= box.r2; r++) {
+      for (let c = box.c1; c <= box.c2; c++) {
+        const cell = sheet.cells[keyOf(c, r)]
+        if (cell) cells[keyOf(c - box.c1, r - box.r1)] = structuredClone(cell)
+      }
+    }
+    setClip({ text, ...box, cells })
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {})
     notify('Copié')
+  }
+
+  const pasteClip = (): void => {
+    if (!clip || !wb) return
+    const dc0 = sel.col
+    const dr0 = sel.row
+    const snapshot = clip.cells
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      for (const [k, cell] of Object.entries(snapshot)) {
+        const p = parseKey(k)
+        if (!p) continue
+        const dc = p.col
+        const dr = p.row
+        const key = keyOf(dc0 + dc, dr0 + dr)
+        const st = cell.s ? { s: { ...cell.s } } : {}
+        if (cell.f !== undefined) {
+          try {
+            sh.cells[key] = { f: serializeFormula(shiftRefs(parseFormula(cell.f), dc, dr)), ...st }
+          } catch {
+            delete sh.cells[key]
+          }
+        } else if (cell.v !== undefined && cell.v !== null && cell.v !== '') {
+          sh.cells[key] = { v: cell.v, ...st }
+        } else if (cell.s) {
+          sh.cells[key] = { s: { ...cell.s } }
+        } else {
+          delete sh.cells[key]
+        }
+      }
+    })
+    notify('Collé')
   }
 
   const pasteText = (text: string): void => {
@@ -279,7 +348,7 @@ export default function TaolApp(): JSX.Element {
 
   const paste = (): void => {
     if (clip) {
-      pasteText(clip.text)
+      pasteClip()
       return
     }
     if (navigator.clipboard?.readText) {
@@ -311,20 +380,66 @@ export default function TaolApp(): JSX.Element {
           const dc = c - src.col
           const dr = r - src.row
           const key = keyOf(c, r)
+          const st = cell.s ? { s: { ...cell.s } } : {}
           if (cell.f !== undefined) {
             try {
-              sh.cells[key] = { f: serializeFormula(shiftRefs(parseFormula(cell.f), dc, dr)) }
+              sh.cells[key] = { f: serializeFormula(shiftRefs(parseFormula(cell.f), dc, dr)), ...st }
             } catch {
               delete sh.cells[key]
             }
           } else if (cell.v !== undefined && cell.v !== null) {
-            sh.cells[key] = { v: cell.v }
+            sh.cells[key] = { v: cell.v, ...st }
+          } else if (cell.s) {
+            sh.cells[key] = { s: { ...cell.s } }
           } else {
             delete sh.cells[key]
           }
         }
       }
     })
+  }
+
+  const fillBox = (box: Box, dir: 'down' | 'right'): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      for (let r = box.r1; r <= box.r2; r++) {
+        for (let c = box.c1; c <= box.c2; c++) {
+          if (dir === 'down' && r === box.r1) continue
+          if (dir === 'right' && c === box.c1) continue
+          const src = dir === 'down' ? sh.cells[keyOf(c, box.r1)] : sh.cells[keyOf(box.c1, r)]
+          const key = keyOf(c, r)
+          const dc = dir === 'right' ? c - box.c1 : 0
+          const dr = dir === 'down' ? r - box.r1 : 0
+          if (!src) {
+            delete sh.cells[key]
+            continue
+          }
+          const st = src.s ? { s: { ...src.s } } : {}
+          if (src.f !== undefined) {
+            try {
+              sh.cells[key] = { f: serializeFormula(shiftRefs(parseFormula(src.f), dc, dr)), ...st }
+            } catch {
+              delete sh.cells[key]
+            }
+          } else if (src.v !== undefined && src.v !== null) {
+            sh.cells[key] = { v: src.v, ...st }
+          } else if (src.s) {
+            sh.cells[key] = { s: { ...src.s } }
+          } else {
+            delete sh.cells[key]
+          }
+        }
+      }
+    })
+  }
+
+  const fillDir = (dir: 'down' | 'right'): void => {
+    if (!sheet) return
+    const box: Box = range ?? { c1: sel.col, r1: sel.row, c2: sel.col, r2: sel.row }
+    const target: Box = dir === 'down' ? { ...box, r2: Math.max(box.r2, sel.row + 1) } : { ...box, c2: Math.max(box.c2, sel.col + 1) }
+    if (dir === 'down' && target.r2 <= target.r1) return
+    if (dir === 'right' && target.c2 <= target.c1) return
+    fillBox(target, dir)
   }
 
   const onFillDown = (e: React.MouseEvent): void => {
@@ -469,6 +584,16 @@ export default function TaolApp(): JSX.Element {
       e.preventDefault()
       return
     }
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'd') {
+      e.preventDefault()
+      fillDir('down')
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'r') {
+      e.preventDefault()
+      fillDir('right')
+      return
+    }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') {
       e.preventDefault()
       if (e.shiftKey) redo()
@@ -510,6 +635,7 @@ export default function TaolApp(): JSX.Element {
     if (k === 'Escape') {
       setEdit(null)
       setColMenu(null)
+      setRowMenu(null)
       setSearch(null)
       setCommentFor(null)
       setValFor(null)
@@ -604,7 +730,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle.
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle. Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme.
           </p>
         </div>
       }
@@ -810,11 +936,13 @@ export default function TaolApp(): JSX.Element {
                     className="taol-col-head"
                     style={sheet.widths?.[c] != null ? { width: sheet.widths[c], minWidth: sheet.widths[c] } : undefined}
                   >
-                    <span>{indexToCol(c)}</span>
+                    <span className="taol-col-label" title="Sélectionner toute la colonne" onClick={(e) => { e.stopPropagation(); selectCol(c, e.shiftKey) }}>
+                      {indexToCol(c)}
+                    </span>
                     <button
                       type="button"
                       className="taol-col-menu-btn"
-                      title="Trier / filtrer cette colonne"
+                      title="Menu de la colonne (tri, filtre, structure…)"
                       onClick={(e) => {
                         e.stopPropagation()
                         setColMenu(colMenu === c ? null : c)
@@ -851,6 +979,37 @@ export default function TaolApp(): JSX.Element {
                           }}
                         >
                           Effacer le tri
+                        </button>
+                        <div className="taol-menu-sep" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => insertColsWb(w, w.activeSheetId, c, 1))
+                            setColMenu(null)
+                          }}
+                        >
+                          Insérer une colonne à gauche
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => insertColsWb(w, w.activeSheetId, c + 1, 1))
+                            setColMenu(null)
+                          }}
+                        >
+                          Insérer une colonne à droite
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => deleteColsWb(w, w.activeSheetId, c, c))
+                            setSel((s) => ({ col: Math.min(s.col, c), row: s.row }))
+                            setAnchor((s) => ({ col: Math.min(s.col, c), row: s.row }))
+                            setRange(null)
+                            setColMenu(null)
+                          }}
+                        >
+                          Supprimer cette colonne
                         </button>
                         <div className="taol-menu-sep" />
                         <p className="taol-menu-label">Filtrer (valeurs visibles) :</p>
@@ -936,7 +1095,54 @@ export default function TaolApp(): JSX.Element {
             <tbody>
               {displayRows.map((r) => (
                 <tr key={r}>
-                  <th className="taol-row-head">{r + 1}</th>
+                  <th className="taol-row-head" onClick={(e) => selectRow(r, e.shiftKey)}>
+                    <span title="Sélectionner toute la ligne">{r + 1}</span>
+                    <button
+                      type="button"
+                      className="taol-col-menu-btn"
+                      title="Menu de la ligne"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRowMenu(rowMenu === r ? null : r)
+                      }}
+                    >
+                      ▼
+                    </button>
+                    {rowMenu === r && (
+                      <div className="taol-menu taol-menu-row" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => insertRowsWb(w, w.activeSheetId, r, 1))
+                            setRowMenu(null)
+                          }}
+                        >
+                          Insérer une ligne au-dessus
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => insertRowsWb(w, w.activeSheetId, r + 1, 1))
+                            setRowMenu(null)
+                          }}
+                        >
+                          Insérer une ligne en-dessous
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mutate((w) => deleteRowsWb(w, w.activeSheetId, r, r))
+                            setSel({ col: sel.col, row: r })
+                            setAnchor({ col: sel.col, row: r })
+                            setRange(null)
+                            setRowMenu(null)
+                          }}
+                        >
+                          Supprimer cette ligne
+                        </button>
+                      </div>
+                    )}
+                  </th>
                   {cols.map((c) => {
                     const key = keyOf(c, r)
                     const cover = coveredBy(sheet, c, r)
