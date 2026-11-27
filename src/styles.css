@@ -148,6 +148,15 @@ a {
   font-size: 1.1rem;
 }
 
+.app-tile-tag {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
 .app-tile-desc {
   color: var(--muted);
   font-size: 0.9rem;

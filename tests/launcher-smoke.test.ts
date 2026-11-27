@@ -37,6 +37,11 @@ describe('Launcher (smoke jsdom)', () => {
     expect(tiles).toBeGreaterThanOrEqual(4)
     const soon = div.querySelectorAll('.app-tile.soon').length
     expect(soon).toBeGreaterThanOrEqual(4)
+    const text = div.textContent ?? ''
+    for (const tag of ['notes & bdd', 'écriture', 'pdf', 'photos', 'éditeur de code', 'productivité & focus', 'tableur', 'dessin & vectoriel', 'conversion', 'audio']) {
+      expect(text).toContain(tag)
+    }
+    expect(div.querySelectorAll('.app-tile-tag').length).toBe(10)
     root.unmount()
   })
 

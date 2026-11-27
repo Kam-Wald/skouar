@@ -4,6 +4,7 @@ export interface AppMeta {
   id: string
   name: string
   description: string
+  tag: string
   icon: string
   logo?: string
   soon?: boolean
@@ -15,6 +16,7 @@ export const apps: AppMeta[] = [
     id: 'blocs',
     name: 'Karneto',
     description: 'Pages et bases de données type Notion.',
+    tag: 'notes & bdd',
     icon: '📓',
     logo: `${import.meta.env.BASE_URL}app-icons/calepin.svg`,
     component: lazy(() => import('./blocs/BlocsApp'))
@@ -23,6 +25,7 @@ export const apps: AppMeta[] = [
     id: 'skrid',
     name: 'Skrid',
     description: 'Traitement de texte léger, pensé pour écrire un livre (chapitres, compteurs, export PDF).',
+    tag: 'écriture',
     icon: '✍️',
     logo: `${import.meta.env.BASE_URL}app-icons/skrid.svg`,
     component: lazy(() => import('./skrid/SkridApp'))
@@ -31,6 +34,7 @@ export const apps: AppMeta[] = [
     id: 'ler',
     name: 'Ler',
     description: 'Visionneuse et annotatrice de PDF 100 % local (recherche, surlignage, texte, signature, fusion/extraction de pages).',
+    tag: 'pdf',
     icon: '📕',
     logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`,
     component: lazy(() => import('./ler/LerApp'))
@@ -39,6 +43,7 @@ export const apps: AppMeta[] = [
     id: 'skeud',
     name: 'Skeud',
     description: 'Visionneuse + retouche d’images (recadrage, filtres, cadres, traitement par lot).',
+    tag: 'photos',
     icon: '🖼️',
     logo: `${import.meta.env.BASE_URL}app-icons/skeud.svg`,
     component: lazy(() => import('./skeud/SkeudApp'))
@@ -47,6 +52,7 @@ export const apps: AppMeta[] = [
     id: 'taol',
     name: 'Taol',
     description: 'Tableur local : formules, tris, filtres, graphiques, export CSV.',
+    tag: 'tableur',
     icon: '🧮',
     logo: `${import.meta.env.BASE_URL}app-icons/taol.svg`,
     soon: true
@@ -55,6 +61,7 @@ export const apps: AppMeta[] = [
     id: 'tres',
     name: 'Tres',
     description: 'Dessin & présentations : formes, flèches, diapos, export SVG/PNG.',
+    tag: 'dessin & vectoriel',
     icon: '✏️',
     logo: `${import.meta.env.BASE_URL}app-icons/tres.svg`,
     soon: true
@@ -63,6 +70,7 @@ export const apps: AppMeta[] = [
     id: 'kod',
     name: 'Kod',
     description: 'Éditeur de code léger et agréable : coloration, onglets, arbre de fichiers, recherche.',
+    tag: 'éditeur de code',
     icon: '💻',
     logo: `${import.meta.env.BASE_URL}app-icons/kod.svg`,
     component: lazy(() => import('./kod/KodApp'))
@@ -71,6 +79,7 @@ export const apps: AppMeta[] = [
     id: 'kemm',
     name: 'Kemm',
     description: 'Convertisseur de fichiers 100 % local (images, audio, CSV/JSON…).',
+    tag: 'conversion',
     icon: '🔄',
     logo: `${import.meta.env.BASE_URL}app-icons/kemm.svg`,
     soon: true
@@ -79,6 +88,7 @@ export const apps: AppMeta[] = [
     id: 'cockpit',
     name: 'Cockpit',
     description: 'Pilotage de ta journée : minuteurs Pomodoro, suivi du temps, kanban, matrice urgent/important, rituels — 100 % local.',
+    tag: 'productivité & focus',
     icon: '🎛️',
     logo: `${import.meta.env.BASE_URL}app-icons/cockpit.svg`,
     component: lazy(() => import('./cockpit/CockpitApp'))
@@ -87,6 +97,7 @@ export const apps: AppMeta[] = [
     id: 'klevet',
     name: 'Klevet',
     description: 'Édition audio 100 % local (façon Audacity-lite) : enregistrer au micro, couper, gain, fondus, export WAV.',
+    tag: 'audio',
     icon: '🎙️',
     logo: `${import.meta.env.BASE_URL}app-icons/klevet.svg`,
     soon: true
