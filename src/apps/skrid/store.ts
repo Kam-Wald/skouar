@@ -1,4 +1,4 @@
-import { uid } from '../../shared/db'
+import { registerDb, uid } from '../../shared/db'
 export { uid }
 import Dexie, { type Table } from 'dexie'
 
@@ -73,6 +73,7 @@ class SkridDb extends Dexie {
   constructor() {
     super('skouar-skrid')
     this.version(1).stores({ kv: 'key' })
+    registerDb(this)
   }
 }
 

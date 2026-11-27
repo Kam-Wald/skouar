@@ -55,6 +55,12 @@ tests/                         tests vitest (logique + smoke jsdom)
 - Prérequis manuel une seule fois : Settings → Pages → Source = « GitHub Actions »
 - En local, `base` reste `/` ; en CI il devient automatiquement `/skouar/` (`vite.config.ts`)
 
+## Données & sauvegardes
+
+- Toutes les données restent sur l'appareil : IndexedDB (Dexie, une base par app) + `localStorage` pour les réglages. Le service worker de la PWA ne touche jamais au stockage.
+- **Exportez régulièrement un ZIP** (⚙️ Réglages → « Exporter toutes mes données ») ; l'import d'un ZIP crée d'abord une sauvegarde de sécurité automatique (snapshot local ou ZIP téléchargé) avant de restaurer.
+- Piège : le serveur de dev (`http://localhost:5173`) et la PWA déployée ont des **stockages séparés** — tester en local puis ouvrir la PWA installée ne montre pas les mêmes données.
+
 ## Conventions de contribution
 
 Voir [AGENTS.md](AGENTS.md) : stack, commandes, structure, conventions de commits/PR/tests et notes opérationnelles (merge, branches, gh).

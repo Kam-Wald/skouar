@@ -39,6 +39,17 @@ CI (`.github/workflows/ci.yml`) : `npm ci` + `npm run build` + `npm test` sur ch
 - Pas de commentaires ajoutés dans le code ; pas de `alert()`/`prompt()` (toasts + popovers inline, voir `src/shared/notify.ts`).
 - Ne pas toucher à l'ordre des imports CSS (cf. ci-dessus).
 
+## Règles de non-régression — données (OBLIGATOIRES, la suite est destinée à être partagée)
+
+Les données des utilisateurs vivent en IndexedDB (Dexie, une base par app — voir `APP_DB_MAP` dans `src/shared/db.ts`) et en `localStorage` (clés `skouar:*`). Règles absolues :
+
+- **Jamais d'écrasement silencieux au chargement** : si la lecture IDB échoue, on charge un état neuf en mémoire + toast d'erreur, mais on n'écrit RIEN (`loadState` de blocs ne `put` que sur migration legacy réussie).
+- **Toute opération destructive** (`indexedDB.deleteDatabase`, import de sauvegarde) passe par `deleteDatabaseSafe` (`src/shared/db.ts`) : `closeAllDbs()` d'abord, attente réelle de la suppression (jamais de résolution sur `onblocked`), timeout + erreur explicite.
+- **Avant tout import ZIP** : `snapshotBeforeImport()` (`src/shared/backup.ts`) obligatoire — snapshot en localStorage (< 3,5 Mo) ou téléchargement d'un ZIP `skouar-avant-import-*.zip`.
+- Toute nouvelle app avec persistance : déclarer sa base dans `APP_DB_MAP` + `registerDb` + test dans `tests/data-safety.test.ts` (le map doit couvrir toutes les apps).
+- **Piège des deux origines** : `http://localhost:5173` (dev) et la PWA déployée ont des stockages SÉPARÉS — ne jamais conclure à une perte de données sans vérifier l'origine. Documenté aussi dans le README.
+- Recommander l'export ZIP régulier (bouton ⚙️ Réglages) ; le service worker ne touche jamais à IndexedDB/localStorage.
+
 ## Notes opérationnelles (session Vibe / gh)
 
 - L'API de merge GitHub peut être bloquée (« Mutating GitHub API calls are not allowed ») : merger alors en **squash manuel** — `git checkout main && git pull --ff-only && git merge --squash <branche> && git commit -m "… (#NN)" && git push origin main` — puis supprimer la branche distante (la PR se ferme automatiquement) et poser un commentaire explicatif sur la PR.
