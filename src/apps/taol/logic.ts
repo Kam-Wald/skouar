@@ -460,6 +460,7 @@ export function evalNode(n: Node, ctx: EvalCtx): CellValue {
     case 'call': {
       const fn = FUNCS[n.name]
       if (!fn) throw new CalcError('#NOM?')
+      for (const a of n.args) if (a.t === 'err') return err(a.v)
       return fn(n.args, ctx)
     }
     case 'un': {
@@ -838,9 +839,15 @@ export function fmtWithStyle(v: CellValue, s?: CellStyle): string {
     if (s.numFmt === 'number') return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     if (s.numFmt === 'text') return String(v)
   }
-  if (s?.numFmt === 'date' && typeof v === 'string') {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
-    if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  if (s?.numFmt === 'date') {
+    if (typeof v === 'string') {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`
+    }
+    if (typeof v === 'number') {
+      const { y, m, d } = serialToYmd(v)
+      return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+    }
   }
   return fmtDisplay(v)
 }
@@ -1061,3 +1068,292 @@ export function insertColsWb(wb: Workbook, sheetId: string, at: number, count: n
 export function deleteColsWb(wb: Workbook, sheetId: string, c1: number, c2: number): void {
   structuralOp(wb, sheetId, 'col', c1, -(c2 - c1 + 1))
 }
+
+// ---------- Fonctions essentielles (PR D) ----------
+
+function cellsOf(a: Node, ctx: EvalCtx): CellValue[][] | null {
+  if (a.t === 'range') {
+    const m: CellValue[][] = []
+    for (let r = a.r1; r <= a.r2; r++) {
+      const row: CellValue[] = []
+      for (let c = a.c1; c <= a.c2; c++) row.push(ctx.getCell(a.sheet, c, r))
+      m.push(row)
+    }
+    return m
+  }
+  if (a.t === 'ref') return [[ctx.getCell(a.sheet, a.col, a.row)]]
+  return null
+}
+
+function critScalar(s: string): CellValue {
+  const t = s.trim()
+  if (NUM_RE.test(t)) return parseFloat(t.replace(',', '.'))
+  return t
+}
+
+export function matchCriteria(v: CellValue, crit: CellValue): boolean {
+  if (typeof crit === 'number' || typeof crit === 'boolean') return compareValues(v, crit) === 0
+  if (typeof crit === 'string') {
+    const t = crit.trim()
+    const m = /^(<=|>=|<>|=|<|>)(.*)$/.exec(t)
+    if (m) {
+      const c = compareValues(v, critScalar(m[2]))
+      switch (m[1]) {
+        case '=': return c === 0
+        case '<>': return c !== 0
+        case '<': return c < 0
+        case '<=': return c <= 0
+        case '>': return c > 0
+        case '>=': return c >= 0
+      }
+    }
+    if (t.includes('*') || t.includes('?')) {
+      const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const re = new RegExp('^' + t.split('*').map((p) => p.split('?').map(esc).join('.')).join('.*') + '$', 'i')
+      return typeof v === 'string' && re.test(v)
+    }
+    if (t === '') return v === null || v === ''
+    return typeof v === 'string' && v.toLowerCase() === t.toLowerCase()
+  }
+  return false
+}
+
+function siSimple(args: Node[], ctx: EvalCtx, mode: 'somme' | 'nb' | 'moyenne'): CellValue {
+  if (args.length < 2) throw new CalcError('#VALEUR!')
+  const m = cellsOf(args[0], ctx)
+  if (!m) throw new CalcError('#VALEUR!')
+  const crit = evalNode(args[1], ctx)
+  const sm = args[2] !== undefined ? cellsOf(args[2], ctx) : m
+  if (!sm) throw new CalcError('#VALEUR!')
+  let s = 0
+  let n = 0
+  for (let i = 0; i < m.length; i++) {
+    for (let j = 0; j < m[i].length; j++) {
+      if (!matchCriteria(m[i][j], crit)) continue
+      const sv = sm[Math.min(i, sm.length - 1)]?.[Math.min(j, sm[0].length - 1)]
+      if (mode === 'nb') n++
+      else if (typeof sv === 'number') {
+        s += sv
+        n++
+      }
+    }
+  }
+  if (mode === 'nb') return n
+  if (mode === 'moyenne') return n === 0 ? err('#DIV/0!') : s / n
+  return s
+}
+
+function siEt(args: Node[], ctx: EvalCtx, start: number): { ranges: CellValue[][][]; crits: CellValue[] } {
+  const ranges: CellValue[][][] = []
+  const crits: CellValue[] = []
+  for (let i = start; i + 1 < args.length; i += 2) {
+    const m = cellsOf(args[i], ctx)
+    if (!m) throw new CalcError('#VALEUR!')
+    ranges.push(m)
+    crits.push(evalNode(args[i + 1], ctx))
+  }
+  if (ranges.length === 0) throw new CalcError('#VALEUR!')
+  return { ranges, crits }
+}
+
+function siEtMatch(ranges: CellValue[][][], crits: CellValue[], i: number, j: number): boolean {
+  for (let k = 0; k < ranges.length; k++) {
+    const cell = ranges[k][Math.min(i, ranges[k].length - 1)]?.[Math.min(j, ranges[k][0].length - 1)]
+    if (!matchCriteria(cell, crits[k])) return false
+  }
+  return true
+}
+
+const EPOCH = Date.UTC(1899, 11, 30)
+
+export function dateToSerial(y: number, m: number, d: number): number {
+  return Math.round((Date.UTC(y, m - 1, d) - EPOCH) / 86400000)
+}
+
+export function serialToYmd(n: number): { y: number; m: number; d: number } {
+  const dt = new Date(EPOCH + Math.round(n) * 86400000)
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() }
+}
+
+function asSerial(v: CellValue): number {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string') {
+    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim())
+    if (iso) return dateToSerial(+iso[1], +iso[2], +iso[3])
+    const fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v.trim())
+    if (fr) return dateToSerial(+fr[3], +fr[2], +fr[1])
+  }
+  throw new CalcError('#VALEUR!')
+}
+
+function decOf(fmt: string): number {
+  const m = /[,.]((?:[#0?]+))/.exec(fmt)
+  return m ? m[1].length : 0
+}
+
+export function formatTexte(v: CellValue, fmtRaw: string): string {
+  const fmt = fmtRaw.toUpperCase()
+  if (/JJ|AAAA/.test(fmt)) {
+    try {
+      const { y, m, d } = serialToYmd(asSerial(v))
+      return fmt
+        .replace(/JJ/g, String(d).padStart(2, '0'))
+        .replace(/MM/g, String(m).padStart(2, '0'))
+        .replace(/AAAA/g, String(y).padStart(4, '0'))
+    } catch {
+      return strOf(v)
+    }
+  }
+  if (/HH/.test(fmt) && typeof v === 'string' && /^\d{1,2}:\d{2}/.test(v.trim())) return v.trim()
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'))
+  if (!Number.isFinite(n)) return strOf(v)
+  const dec = decOf(fmt)
+  if (fmt.includes('%')) {
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec, style: 'percent' })
+  }
+  const thousands = /[0#][\s  ][0#]/.test(fmt)
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: thousands })
+}
+
+Object.assign(FUNCS, {
+  RECHERCHEV: (args, ctx) => {
+    if (args.length < 3) throw new CalcError('#VALEUR!')
+    const lookup = evalNode(args[0], ctx)
+    const table = cellsOf(args[1], ctx)
+    if (!table || table.length === 0 || table[0].length === 0) return err('#N/A!')
+    const colIdx = Math.round(toNumber(evalNode(args[2], ctx)))
+    if (colIdx < 1 || colIdx > table[0].length) return err('#REF!')
+    const approx = args[3] === undefined ? true : truthy(evalNode(args[3], ctx))
+    if (!approx) {
+      for (let i = 0; i < table.length; i++) if (compareValues(table[i][0], lookup) === 0) return table[i][colIdx - 1] ?? null
+      return err('#N/A!')
+    }
+    let best = -1
+    for (let i = 0; i < table.length; i++) {
+      if (compareValues(table[i][0], lookup) <= 0) best = i
+      else break
+    }
+    if (best < 0) return err('#N/A!')
+    return table[best][colIdx - 1] ?? null
+  },
+  'SOMME.SI': (args, ctx) => siSimple(args, ctx, 'somme'),
+  'NB.SI': (args, ctx) => siSimple(args, ctx, 'nb'),
+  'MOYENNE.SI': (args, ctx) => siSimple(args, ctx, 'moyenne'),
+  'SOMME.SI.ET': (args, ctx) => {
+    const { ranges, crits } = siEt(args, ctx, 1)
+    const sm = cellsOf(args[0], ctx)
+    if (!sm) throw new CalcError('#VALEUR!')
+    let s = 0
+    for (let i = 0; i < ranges[0].length; i++)
+      for (let j = 0; j < ranges[0][i].length; j++)
+        if (siEtMatch(ranges, crits, i, j)) {
+          const sv = sm[Math.min(i, sm.length - 1)]?.[Math.min(j, sm[0].length - 1)]
+          if (typeof sv === 'number') s += sv
+        }
+    return s
+  },
+  'NB.SI.ET': (args, ctx) => {
+    const { ranges, crits } = siEt(args, ctx, 0)
+    let n = 0
+    for (let i = 0; i < ranges[0].length; i++)
+      for (let j = 0; j < ranges[0][i].length; j++) if (siEtMatch(ranges, crits, i, j)) n++
+    return n
+  },
+  'MOYENNE.SI.ET': (args, ctx) => {
+    const { ranges, crits } = siEt(args, ctx, 1)
+    const sm = cellsOf(args[0], ctx)
+    if (!sm) throw new CalcError('#VALEUR!')
+    let s = 0
+    let n = 0
+    for (let i = 0; i < ranges[0].length; i++)
+      for (let j = 0; j < ranges[0][i].length; j++)
+        if (siEtMatch(ranges, crits, i, j)) {
+          const sv = sm[Math.min(i, sm.length - 1)]?.[Math.min(j, sm[0].length - 1)]
+          if (typeof sv === 'number') {
+            s += sv
+            n++
+          }
+        }
+    return n === 0 ? err('#DIV/0!') : s / n
+  },
+  'SI.CONDITIONS': (args, ctx) => {
+    for (let i = 0; i + 1 < args.length; i += 2) {
+      if (truthy(evalNode(args[i], ctx))) return evalNode(args[i + 1], ctx)
+    }
+    if (args.length % 2 === 1) return evalNode(args[args.length - 1], ctx)
+    return err('#N/A!')
+  },
+  TEXTE: (args, ctx) => {
+    if (args.length < 2) throw new CalcError('#VALEUR!')
+    return formatTexte(evalNode(args[0], ctx), strOf(evalNode(args[1], ctx)))
+  },
+  AUJOURDHUI: () => {
+    const t = new Date()
+    return dateToSerial(t.getFullYear(), t.getMonth() + 1, t.getDate())
+  },
+  DATE: (args, ctx) => {
+    if (args.length < 3) throw new CalcError('#VALEUR!')
+    return dateToSerial(Math.round(toNumber(evalNode(args[0], ctx))), Math.round(toNumber(evalNode(args[1], ctx))), Math.round(toNumber(evalNode(args[2], ctx))))
+  },
+  JOUR: (args, ctx) => serialToYmd(asSerial(evalNode(args[0], ctx))).d,
+  MOIS: (args, ctx) => serialToYmd(asSerial(evalNode(args[0], ctx))).m,
+  ANNEE: (args, ctx) => serialToYmd(asSerial(evalNode(args[0], ctx))).y,
+  ARRONDI: (args, ctx) => {
+    const n = toNumber(evalNode(args[0], ctx))
+    const d = args[1] !== undefined ? Math.round(toNumber(evalNode(args[1], ctx))) : 0
+    const f = Math.pow(10, d)
+    return (Math.sign(n) * Math.round(Math.abs(n) * f)) / f
+  },
+  'ARRONDI.SUP': (args, ctx) => {
+    const n = toNumber(evalNode(args[0], ctx))
+    const d = args[1] !== undefined ? Math.round(toNumber(evalNode(args[1], ctx))) : 0
+    const f = Math.pow(10, d)
+    return (Math.sign(n) * Math.ceil(Math.abs(n) * f - 1e-9)) / f
+  },
+  'ARRONDI.INF': (args, ctx) => {
+    const n = toNumber(evalNode(args[0], ctx))
+    const d = args[1] !== undefined ? Math.round(toNumber(evalNode(args[1], ctx))) : 0
+    const f = Math.pow(10, d)
+    return (Math.sign(n) * Math.floor(Math.abs(n) * f + 1e-9)) / f
+  },
+  ENT: (args, ctx) => Math.floor(toNumber(evalNode(args[0], ctx))),
+  MOD: (args, ctx) => {
+    const n = toNumber(evalNode(args[0], ctx))
+    const d = toNumber(evalNode(args[1], ctx))
+    if (d === 0) return err('#DIV/0!')
+    return n - d * Math.floor(n / d)
+  },
+  ABS: (args, ctx) => Math.abs(toNumber(evalNode(args[0], ctx))),
+  PUISSANCE: (args, ctx) => Math.pow(toNumber(evalNode(args[0], ctx)), toNumber(evalNode(args[1], ctx))),
+  ESTNUM: (args, ctx) => typeof evalNode(args[0], ctx) === 'number',
+  ESTVIDE: (args, ctx) => evalNode(args[0], ctx) === null,
+  ESTTEXTE: (args, ctx) => typeof evalNode(args[0], ctx) === 'string',
+  ESTERREUR: (args, ctx) => isErr(evalNode(args[0], ctx)),
+  JOINDRE: (args, ctx) => {
+    if (args.length < 1) throw new CalcError('#VALEUR!')
+    const d = strOf(evalNode(args[0], ctx))
+    return flatValues(args.slice(1), ctx)
+      .filter((v) => v !== null && v !== '')
+      .map(strOf)
+      .join(d)
+  },
+  CONCAT: (args, ctx) => flatValues(args, ctx).map(strOf).join(''),
+  NBCAR: (args, ctx) => strOf(evalNode(args[0], ctx)).length,
+  GAUCHE: (args, ctx) => {
+    const s = strOf(evalNode(args[0], ctx))
+    const n = args[1] !== undefined ? Math.max(0, Math.round(toNumber(evalNode(args[1], ctx)))) : 1
+    return s.slice(0, n)
+  },
+  DROITE: (args, ctx) => {
+    const s = strOf(evalNode(args[0], ctx))
+    const n = args[1] !== undefined ? Math.max(0, Math.round(toNumber(evalNode(args[1], ctx)))) : 1
+    return n >= s.length ? s : s.slice(s.length - n)
+  },
+  STXT: (args, ctx) => {
+    if (args.length < 3) throw new CalcError('#VALEUR!')
+    const s = strOf(evalNode(args[0], ctx))
+    const start = Math.max(1, Math.round(toNumber(evalNode(args[1], ctx))))
+    const n = Math.round(toNumber(evalNode(args[2], ctx)))
+    return s.slice(start - 1, start - 1 + n)
+  }
+} as Record<string, (args: Node[], ctx: EvalCtx) => CellValue>)

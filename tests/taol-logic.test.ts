@@ -344,3 +344,98 @@ describe('structure (PR C) : insérer/supprimer lignes & colonnes', () => {
     expect(sh.cf ?? []).toHaveLength(0)
   })
 })
+
+describe('fonctions essentielles (PR D)', () => {
+  function shWith(cells: Sheet['cells']): Sheet {
+    return { id: 's1', name: 'F', cells }
+  }
+  function ev(sh: Sheet, f: string): CellValue {
+    // évalue via un classeur à une feuille
+    const wb: Workbook = { sheets: [sh], activeSheetId: sh.id, activeCell: 'A1' }
+    recalcWorkbook(wb)
+    return evalNode(parseFormula(f), { currentSheet: sh.id, getCell: (s, c, r) => {
+      const t = s ? wb.sheets.find((x) => x.name.toLowerCase() === s.toLowerCase()) ?? wb.sheets[0] : wb.sheets[0]
+      return t.cells[keyOf(c, r)]?.v ?? null
+    }, stack: [] })
+  }
+
+  it('RECHERCHEV exact, approché, #N/A!, #REF! colonne', async () => {
+    const sh = shWith({ A1: { v: 'pomme' }, B1: { v: 1 }, A2: { v: 'poire' }, B2: { v: 2 }, A3: { v: 'raisin' }, B3: { v: 3 } })
+    expect(ev(sh, 'RECHERCHEV("poire";A1:B3;2;FAUX)')).toBe(2)
+    const shS = shWith({ A1: { v: 'abricot' }, B1: { v: 1 }, A2: { v: 'poire' }, B2: { v: 2 }, A3: { v: 'raisin' }, B3: { v: 3 } })
+    expect(ev(shS, 'RECHERCHEV("prune";A1:B3;2)')).toBe(2)
+    expect(ev(shS, 'RECHERCHEV("abricot";A1:B3;2)')).toBe(1)
+    expect(ev(sh, 'RECHERCHEV("abricot";A1:B3;2;FAUX)')).toEqual({ e: '#N/A!' })
+    expect(ev(sh, 'RECHERCHEV("poire";A1:B3;5)')).toEqual({ e: '#REF!' })
+    const shN = shWith({ A1: { v: 10 }, B1: { v: 'a' }, A2: { v: 20 }, B2: { v: 'b' }, A3: { v: 30 }, B3: { v: 'c' } })
+    expect(ev(shN, 'RECHERCHEV(25;A1:B3;2)')).toBe('b')
+  })
+
+  it('SOMME.SI / NB.SI / MOYENNE.SI avec critères', async () => {
+    const sh = shWith({ A1: { v: 1 }, A2: { v: 5 }, A3: { v: 9 }, B1: { v: 100 }, B2: { v: 200 }, B3: { v: 300 } })
+    expect(ev(sh, 'SOMME.SI(A1:A3;">4";B1:B3)')).toBe(500)
+    expect(ev(sh, 'SOMME.SI(A1:A3;">4")')).toBe(14)
+    expect(ev(sh, 'NB.SI(A1:A3;"<>5")')).toBe(2)
+    expect(ev(sh, 'MOYENNE.SI(A1:A3;">=5";B1:B3)')).toBe(250)
+    expect(ev(sh, 'SOMME.SI(A1:A3;"p*")')).toBe(0)
+  })
+
+  it('SOMME.SI.ET / NB.SI.ET multi-critères', async () => {
+    const sh = shWith({
+      A1: { v: 'x' }, A2: { v: 'x' }, A3: { v: 'y' },
+      B1: { v: 1 }, B2: { v: 2 }, B3: { v: 3 },
+      C1: { v: 10 }, C2: { v: 20 }, C3: { v: 30 }
+    })
+    expect(ev(sh, 'SOMME.SI.ET(C1:C3;A1:A3;"x";B1:B3;">1")')).toBe(20)
+    expect(ev(sh, 'NB.SI.ET(A1:A3;"x";B1:B3;">=1")')).toBe(2)
+  })
+
+  it('SI.CONDITIONS', async () => {
+    const sh = shWith({ A1: { v: 15 } })
+    expect(ev(sh, 'SI.CONDITIONS(A1<10;"petit";A1<20;"moyen";VRAI;"grand")')).toBe('moyen')
+    expect(ev(sh, 'SI.CONDITIONS(A1>100;"x")')).toEqual({ e: '#N/A!' })
+  })
+
+  it('TEXTE : nombre, %, date', async () => {
+    const { formatTexte, dateToSerial } = await import('../src/apps/taol/logic')
+    expect(formatTexte(1234.5, '0,00')).toContain('234,50')
+    expect(formatTexte(0.5, '0%')).toBe('50 %')
+    expect(formatTexte(dateToSerial(2026, 1, 5), 'JJ/MM/AAAA')).toBe('05/01/2026')
+  })
+
+  it('dates : AUJOURDHUI, DATE, JOUR/MOIS/ANNEE, serial <-> JJ/MM/AAAA', async () => {
+    const { dateToSerial, serialToYmd, fmtWithStyle } = await import('../src/apps/taol/logic')
+    expect(serialToYmd(dateToSerial(2026, 2, 28))).toEqual({ y: 2026, m: 2, d: 28 })
+    const sh = shWith({ A1: { v: 1 } })
+    expect(ev(sh, 'ANNEE(DATE(2026;1;5))')).toBe(2026)
+    expect(ev(sh, 'MOIS(DATE(2026;1;5))')).toBe(1)
+    expect(ev(sh, 'JOUR(DATE(2026;1;5))')).toBe(5)
+    expect(ev(sh, 'JOUR("2026-01-05")')).toBe(5)
+    expect(fmtWithStyle(dateToSerial(2026, 1, 5), { numFmt: 'date' })).toBe('05/01/2026')
+    expect(ev(sh, 'AUJOURDHUI()') ).toEqual(dateToSerial(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))
+  })
+
+  it('maths + texte : ARRONDI*, ENT, MOD, ABS, PUISSANCE, JOINDRE, NBCAR, GAUCHE, DROITE, STXT, EST*', async () => {
+    const sh = shWith({ A1: { v: 'Bonjour' } })
+    expect(ev(sh, 'ARRONDI(2.5;0)')).toBe(3)
+    expect(ev(sh, 'ARRONDI(-2.5;0)')).toBe(-3)
+    expect(ev(sh, 'ARRONDI(2.345;2)')).toBe(2.35)
+    expect(ev(sh, 'ARRONDI.SUP(2.1;0)')).toBe(3)
+    expect(ev(sh, 'ARRONDI.INF(2.9;0)')).toBe(2)
+    expect(ev(sh, 'ENT(2.9)')).toBe(2)
+    expect(ev(sh, 'ENT(-2.1)')).toBe(-3)
+    expect(ev(sh, 'MOD(-3;2)')).toBe(1)
+    expect(ev(sh, 'ABS(-4)')).toBe(4)
+    expect(ev(sh, 'PUISSANCE(2;10)')).toBe(1024)
+    expect(ev(sh, 'JOINDRE("-";"a";"b";A1)')).toBe('a-b-Bonjour')
+    expect(ev(sh, 'CONCAT("a";1;"b")')).toBe('a1b')
+    expect(ev(sh, 'NBCAR(A1)')).toBe(7)
+    expect(ev(sh, 'GAUCHE(A1;3)')).toBe('Bon')
+    expect(ev(sh, 'DROITE(A1;3)')).toBe('our')
+    expect(ev(sh, 'STXT(A1;2;3)')).toBe('onj')
+    expect(ev(sh, 'ESTNUM(1)')).toBe(true)
+    expect(ev(sh, 'ESTVIDE(B1)')).toBe(true)
+    expect(ev(sh, 'ESTTEXTE(A1)')).toBe(true)
+    expect(ev(sh, 'ESTERREUR(1/0)')).toBe(true)
+  })
+})

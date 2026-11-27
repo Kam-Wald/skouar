@@ -728,7 +728,7 @@ export default function TaolApp(): JSX.Element {
             🖨 Imprimer / PDF
           </button>
           <p className="taol-hint">
-            « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1).
+            « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON, SI.CONDITIONS, RECHERCHEV, SOMME.SI/NB.SI/MOYENNE.SI (+.SI.ET), TEXTE, AUJOURDHUI, DATE, JOUR, MOIS, ANNEE, ARRONDI/ARRONDI.SUP/ARRONDI.INF, ENT, MOD, ABS, PUISSANCE, ESTNUM, ESTVIDE, ESTTEXTE, ESTERREUR, JOINDRE, CONCAT, NBCAR, GAUCHE, DROITE, STXT ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1 ; % en suffixe).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
             Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle. Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme.
           </p>
