@@ -3,7 +3,9 @@ import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import { loadWorkbook, saveWorkbook, uid } from './store'
 import {
+  columnValues,
   csvExport,
+  emptyView,
   fmtDisplay,
   indexToCol,
   keyOf,
@@ -11,11 +13,18 @@ import {
   parseInput,
   parseKey,
   recalcWorkbook,
+  searchCells,
   serializeFormula,
   shiftRefs,
+  statusOf,
+  tsvParse,
+  tsvSerializeRange,
   usedRange,
+  viewRows,
   type Cell,
+  type CellValue,
   type Sheet,
+  type ViewState,
   type Workbook
 } from './logic'
 
@@ -29,22 +38,50 @@ function rawOf(cell: Cell | undefined): string {
   return typeof cell.v === 'string' ? cell.v : fmtDisplay(cell.v)
 }
 
+interface Clip {
+  text: string
+  c1: number
+  r1: number
+  c2: number
+  r2: number
+}
+
+interface Pos {
+  col: number
+  row: number
+}
+
 export default function TaolApp(): JSX.Element {
   const [wb, setWb] = useState<Workbook | null>(null)
-  const [sel, setSel] = useState({ col: 0, row: 0 })
+  const [sel, setSel] = useState<Pos>({ col: 0, row: 0 })
+  const [anchor, setAnchor] = useState<Pos>({ col: 0, row: 0 })
+  const [range, setRange] = useState<{ c1: number; r1: number; c2: number; r2: number } | null>(null)
   const [edit, setEdit] = useState<string | null>(null)
-  const [clip, setClip] = useState<{ cell: Cell; key: string } | null>(null)
+  const [clip, setClip] = useState<Clip | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [views, setViews] = useState<Record<string, ViewState>>({})
+  const [colMenu, setColMenu] = useState<number | null>(null)
+  const [filterDraft, setFilterDraft] = useState<string[] | null>(null)
+  const [search, setSearch] = useState<{ q: string; matches: Pos[]; idx: number } | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [fillTo, setFillTo] = useState<Pos | null>(null)
+  const [frozen, setFrozen] = useState({ rows: true, cols: false })
   const past = useRef<Workbook[]>([])
   const future = useRef<Workbook[]>([])
   const mainRef = useRef<HTMLDivElement>(null)
   const formulaRef = useRef<HTMLInputElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const pasteRef = useRef<HTMLTextAreaElement>(null)
+  const fillDrag = useRef(false)
 
   useEffect(() => {
     void loadWorkbook().then((w) => {
       setWb(w)
       const p = parseKey(w.activeCell)
-      if (p) setSel(p)
+      if (p) {
+        setSel(p)
+        setAnchor(p)
+      }
     })
   }, [])
 
@@ -52,12 +89,22 @@ export default function TaolApp(): JSX.Element {
     if (wb) saveWorkbook(wb)
   }, [wb])
 
+  useEffect(() => {
+    if (search) setTimeout(() => searchRef.current?.focus(), 0)
+  }, [search !== null])
+
+  useEffect(() => {
+    if (pasteOpen) setTimeout(() => pasteRef.current?.focus(), 0)
+  }, [pasteOpen])
+
   const sheet: Sheet | undefined = wb?.sheets.find((s) => s.id === wb.activeSheetId) ?? wb?.sheets[0]
+  const view = (sheet && views[sheet.id]) || emptyView()
   const selKey = keyOf(sel.col, sel.row)
   const selCell = sheet?.cells[selKey]
   const used = sheet ? usedRange(sheet) : { maxC: 0, maxR: 0 }
   const nCols = Math.max(26, Math.min(COLS, used.maxC + 3))
   const nRows = Math.max(50, Math.min(ROWS, used.maxR + 6))
+  const displayRows = sheet ? viewRows(sheet, view) : []
 
   const mutate = (fn: (w: Workbook) => void): void => {
     if (!wb) return
@@ -94,7 +141,10 @@ export default function TaolApp(): JSX.Element {
     setWb(p)
     setEdit(null)
     const pk = parseKey(p.activeCell)
-    if (pk) setSel(pk)
+    if (pk) {
+      setSel(pk)
+      setAnchor(pk)
+    }
   }
   const redo = (): void => {
     const f = future.current.pop()
@@ -103,13 +153,15 @@ export default function TaolApp(): JSX.Element {
     setWb(f)
     setEdit(null)
     const pk = parseKey(f.activeCell)
-    if (pk) setSel(pk)
+    if (pk) {
+      setSel(pk)
+      setAnchor(pk)
+    }
   }
 
   const addSheet = (): void => {
     if (!wb) return
-    const n = wb.sheets.length + 1
-    const sh: Sheet = { id: uid(), name: `Feuil ${n}`, cells: {} }
+    const sh: Sheet = { id: uid(), name: `Feuil ${wb.sheets.length + 1}`, cells: {} }
     past.current.push(structuredClone(wb))
     future.current = []
     const next = structuredClone(wb)
@@ -144,27 +196,185 @@ export default function TaolApp(): JSX.Element {
     notify(`Feuille « ${sheet.name} » exportée en CSV`)
   }
 
+  const selectCell = (c: number, r: number, extend: boolean): void => {
+    if (extend) {
+      setSel({ col: c, row: r })
+      setRange({ c1: Math.min(anchor.col, c), r1: Math.min(anchor.row, r), c2: Math.max(anchor.col, c), r2: Math.max(anchor.row, r) })
+    } else {
+      setSel({ col: c, row: r })
+      setAnchor({ col: c, row: r })
+      setRange(null)
+    }
+    setEdit(null)
+  }
+
+  const copySelection = (): void => {
+    if (!sheet) return
+    const box = range ?? { c1: sel.col, r1: sel.row, c2: sel.col, r2: sel.row }
+    const text = tsvSerializeRange(sheet, box.c1, box.r1, box.c2, box.r2)
+    setClip({ text, ...box })
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {})
+    notify('Copié')
+  }
+
+  const pasteText = (text: string): void => {
+    if (!sheet || !wb) return
+    const grid = tsvParse(text)
+    if (grid.length === 0) return
+    const dc0 = sel.col
+    const dr0 = sel.row
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      grid.forEach((row, i) => {
+        row.forEach((val, j) => {
+          const key = keyOf(dc0 + j, dr0 + i)
+          if (val.trim() === '') {
+            delete sh.cells[key]
+            return
+          }
+          if (val.startsWith('=')) {
+            try {
+              const shifted = shiftRefs(parseFormula(val.slice(1)), j, i)
+              sh.cells[key] = { f: serializeFormula(shifted) }
+              return
+            } catch {
+              sh.cells[key] = { v: val }
+              return
+            }
+          }
+          sh.cells[key] = parseInput(val)
+        })
+      })
+    })
+    notify('Collé')
+  }
+
+  const paste = (): void => {
+    if (clip) {
+      pasteText(clip.text)
+      return
+    }
+    if (navigator.clipboard?.readText) {
+      navigator.clipboard
+        .readText()
+        .then((t) => {
+          if (t.trim()) pasteText(t)
+        })
+        .catch(() => setPasteOpen(true))
+    } else {
+      setPasteOpen(true)
+    }
+  }
+
+  const applyFill = (to: Pos): void => {
+    if (!sheet) return
+    const src = sel
+    const cell = sheet.cells[keyOf(src.col, src.row)]
+    if (!cell) return
+    const c1 = Math.min(src.col, to.col)
+    const c2 = Math.max(src.col, to.col)
+    const r1 = Math.min(src.row, to.row)
+    const r2 = Math.max(src.row, to.row)
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      for (let r = r1; r <= r2; r++) {
+        for (let c = c1; c <= c2; c++) {
+          if (c === src.col && r === src.row) continue
+          const dc = c - src.col
+          const dr = r - src.row
+          const key = keyOf(c, r)
+          if (cell.f !== undefined) {
+            try {
+              sh.cells[key] = { f: serializeFormula(shiftRefs(parseFormula(cell.f), dc, dr)) }
+            } catch {
+              delete sh.cells[key]
+            }
+          } else if (cell.v !== undefined && cell.v !== null) {
+            sh.cells[key] = { v: cell.v }
+          } else {
+            delete sh.cells[key]
+          }
+        }
+      }
+    })
+  }
+
+  const onFillDown = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    fillDrag.current = true
+    setFillTo(sel)
+    const move = (ev: MouseEvent): void => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      const td = el?.closest('td.taol-cell') as HTMLTableCellElement | null
+      const key = td?.dataset.key
+      if (key) {
+        const p = parseKey(key)
+        if (p) setFillTo(p)
+      }
+    }
+    const up = (ev: MouseEvent): void => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      fillDrag.current = false
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      const td = el?.closest('td.taol-cell') as HTMLTableCellElement | null
+      const key = td?.dataset.key
+      const p = key ? parseKey(key) : null
+      if (p && (p.col !== sel.col || p.row !== sel.row)) applyFill(p)
+      setFillTo(null)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  const setView = (fn: (v: ViewState) => void): void => {
+    if (!sheet) return
+    setViews((vs) => {
+      const v = { ...(vs[sheet.id] ?? emptyView()), sort: vs[sheet.id]?.sort ?? null, filters: { ...(vs[sheet.id]?.filters ?? {}) } }
+      fn(v)
+      return { ...vs, [sheet.id]: v }
+    })
+  }
+
+  const openColMenu = (c: number): void => {
+    setColMenu(c)
+    const cur = view.filters[c] ?? null
+    setFilterDraft(cur ? [...cur] : columnValues(sheet!, c))
+  }
+
+  const statusVals = (): CellValue[] => {
+    if (!sheet) return []
+    const box = range ?? { c1: sel.col, r1: sel.row, c2: sel.col, r2: sel.row }
+    const out: CellValue[] = []
+    for (let r = box.r1; r <= box.r2; r++) {
+      for (let c = box.c1; c <= box.c2; c++) {
+        const cell = sheet.cells[keyOf(c, r)]
+        out.push(cell ? (cell.v ?? null) : null)
+      }
+    }
+    return out
+  }
+  const status = statusOf(statusVals())
+
   const onKeyDown = (e: React.KeyboardEvent): void => {
     const t = e.target as HTMLElement
     if (t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
-    if (!wb) return
+    if (!wb || !sheet) return
     const k = e.key
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'f') {
+      e.preventDefault()
+      setSearch({ q: '', matches: [], idx: 0 })
+      return
+    }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') {
-      if (selCell) setClip({ cell: structuredClone(selCell), key: selKey })
+      copySelection()
       e.preventDefault()
       return
     }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'v') {
-      if (!clip) return
+      paste()
       e.preventDefault()
-      const src = parseKey(clip.key)
-      if (!src) return
-      const dc = sel.col - src.col
-      const dr = sel.row - src.row
-      const cell: Cell = clip.cell.f !== undefined
-        ? { f: serializeFormula(shiftRefs(parseFormula(clip.cell.f), dc, dr)) }
-        : { v: clip.cell.v }
-      setCell(sel.col, sel.row, cell)
       return
     }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') {
@@ -187,7 +397,16 @@ export default function TaolApp(): JSX.Element {
     }
     if (k === 'Backspace' || k === 'Delete') {
       e.preventDefault()
-      setCell(sel.col, sel.row, undefined)
+      if (range) {
+        const box = range
+        mutate((w) => {
+          const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+          for (let r = box.r1; r <= box.r2; r++) for (let c = box.c1; c <= box.c2; c++) delete sh.cells[keyOf(c, r)]
+        })
+        setRange(null)
+      } else {
+        setCell(sel.col, sel.row, undefined)
+      }
       return
     }
     if (k === 'F2') {
@@ -198,15 +417,23 @@ export default function TaolApp(): JSX.Element {
     }
     if (k === 'Escape') {
       setEdit(null)
+      setColMenu(null)
+      setSearch(null)
       return
     }
-    if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight') {
+    if (k.startsWith('Arrow')) {
       e.preventDefault()
       if (edit !== null) return
-      setSel((s) => ({
-        col: Math.max(0, Math.min(nCols - 1, s.col + (k === 'ArrowRight' ? 1 : k === 'ArrowLeft' ? -1 : 0))),
-        row: Math.max(0, Math.min(nRows - 1, s.row + (k === 'ArrowDown' ? 1 : k === 'ArrowUp' ? -1 : 0)))
-      }))
+      const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[k] as [number, number]
+      const next = { col: Math.max(0, Math.min(nCols - 1, sel.col + d[0])), row: Math.max(0, Math.min(nRows - 1, sel.row + d[1])) }
+      if (e.shiftKey) {
+        setSel(next)
+        setRange({ c1: Math.min(anchor.col, next.col), r1: Math.min(anchor.row, next.row), c2: Math.max(anchor.col, next.col), r2: Math.max(anchor.row, next.row) })
+      } else {
+        setSel(next)
+        setAnchor(next)
+        setRange(null)
+      }
       return
     }
     if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -219,7 +446,9 @@ export default function TaolApp(): JSX.Element {
   if (!wb || !sheet) return <div className="taol-main" ref={mainRef} />
 
   const cols = Array.from({ length: nCols }, (_, c) => c)
-  const rows = Array.from({ length: nRows }, (_, r) => r)
+  const inRange = (c: number, r: number): boolean => !!range && c >= range.c1 && c <= range.c2 && r >= range.r1 && r <= range.r2
+  const inFill = (c: number, r: number): boolean =>
+    !!fillTo && c >= Math.min(sel.col, fillTo.col) && c <= Math.max(sel.col, fillTo.col) && r >= Math.min(sel.row, fillTo.row) && r <= Math.max(sel.row, fillTo.row)
 
   return (
     <AppShell
@@ -250,6 +479,8 @@ export default function TaolApp(): JSX.Element {
                     past.current.push(structuredClone(wb))
                     setWb({ ...wb, activeSheetId: s.id, activeCell: 'A1' })
                     setSel({ col: 0, row: 0 })
+                    setAnchor({ col: 0, row: 0 })
+                    setRange(null)
                     setEdit(null)
                   }}
                   onDoubleClick={() => setRenaming(s.id)}
@@ -276,8 +507,9 @@ export default function TaolApp(): JSX.Element {
             🖨 Imprimer / PDF
           </button>
           <p className="taol-hint">
-            « = » devant une saisie = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 absolu).
-            Flèches/Entrée/Tab pour naviguer, F2 pour éditer, Ctrl+C/V pour copier-coller, Ctrl+Z/Y annuler/rétablir.
+            « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1).
+            Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier.
           </p>
         </div>
       }
@@ -291,7 +523,20 @@ export default function TaolApp(): JSX.Element {
             ↷
           </button>
           <span className="taol-sep" />
-          <span className="taol-wb-name">Classeur Skouar — feuille « {sheet.name} »</span>
+          <label className="taol-freeze">
+            <input type="checkbox" checked={frozen.rows} onChange={(e) => setFrozen((f) => ({ ...f, rows: e.target.checked }))} />
+            Figer ligne 1
+          </label>
+          <label className="taol-freeze">
+            <input type="checkbox" checked={frozen.cols} onChange={(e) => setFrozen((f) => ({ ...f, cols: e.target.checked }))} />
+            Figer colonne A
+          </label>
+          <span className="taol-sep" />
+          <span className="taol-wb-name">
+            {sheet.name}
+            {view.sort ? ` — tri ${indexToCol(view.sort.col)} ${view.sort.dir === 1 ? '↑' : '↓'}` : ''}
+            {Object.keys(view.filters).length ? ` — ${Object.keys(view.filters).length} filtre(s)` : ''}
+          </span>
         </div>
         <div className="taol-formula-bar">
           <span className="taol-ref">{selKey}</span>
@@ -310,19 +555,92 @@ export default function TaolApp(): JSX.Element {
           />
         </div>
         <div className="taol-grid-wrap">
-          <table className="taol-table">
+          <table className={`taol-table${frozen.rows ? ' freeze-r' : ''}${frozen.cols ? ' freeze-c' : ''}`}>
             <thead>
               <tr>
                 <th className="taol-corner" />
                 {cols.map((c) => (
                   <th key={c} className="taol-col-head">
-                    {indexToCol(c)}
+                    <span>{indexToCol(c)}</span>
+                    <button
+                      type="button"
+                      className="taol-col-menu-btn"
+                      title="Trier / filtrer cette colonne"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setColMenu(colMenu === c ? null : c)
+                        if (colMenu !== c) openColMenu(c)
+                      }}
+                    >
+                      ▼
+                    </button>
+                    {colMenu === c && sheet && (
+                      <div className="taol-menu" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setView((v) => (v.sort = { col: c, dir: 1 }))
+                            setColMenu(null)
+                          }}
+                        >
+                          Trier croissant (A→Z)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setView((v) => (v.sort = { col: c, dir: -1 }))
+                            setColMenu(null)
+                          }}
+                        >
+                          Trier décroissant (Z→A)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setView((v) => (v.sort = null))
+                            setColMenu(null)
+                          }}
+                        >
+                          Effacer le tri
+                        </button>
+                        <div className="taol-menu-sep" />
+                        <p className="taol-menu-label">Filtrer (valeurs visibles) :</p>
+                        <div className="taol-menu-filters">
+                          {(filterDraft ?? []).map((val) => (
+                            <label key={val} className="taol-menu-check">
+                              <input
+                                type="checkbox"
+                                checked={filterDraft!.includes(val)}
+                                onChange={(e) => {
+                                  setFilterDraft((d) => (d ?? []).filter((x) => x !== val).concat(e.target.checked ? [val] : []))
+                                }}
+                              />
+                              <span>{val === '' ? '(vide)' : val}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const all = columnValues(sheet, c)
+                            const selected = filterDraft ?? []
+                            setView((v) => {
+                              if (selected.length >= all.length) delete v.filters[c]
+                              else v.filters[c] = selected
+                            })
+                            setColMenu(null)
+                          }}
+                        >
+                          Appliquer le filtre
+                        </button>
+                      </div>
+                    )}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {displayRows.map((r) => (
                 <tr key={r}>
                   <th className="taol-row-head">{r + 1}</th>
                   {cols.map((c) => {
@@ -332,18 +650,17 @@ export default function TaolApp(): JSX.Element {
                     return (
                       <td
                         key={key}
-                        className={`taol-cell${active ? ' active' : ''}${cell?.f !== undefined ? ' is-formula' : ''}`}
-                        onClick={() => {
-                          setSel({ col: c, row: r })
-                          setEdit(null)
-                        }}
+                        data-key={key}
+                        className={`taol-cell${active ? ' active' : ''}${inRange(c, r) ? ' in-range' : ''}${inFill(c, r) && !active ? ' in-fill' : ''}${cell?.f !== undefined ? ' is-formula' : ''}`}
+                        onClick={(e) => selectCell(c, r, e.shiftKey)}
                         onDoubleClick={() => {
-                          setSel({ col: c, row: r })
+                          selectCell(c, r, false)
                           setEdit(rawOf(cell))
                           setTimeout(() => formulaRef.current?.focus(), 0)
                         }}
                       >
                         {cell ? fmtDisplay(cell.v ?? null) : ''}
+                        {active && <span className="taol-fill-handle" title="Recopier vers le bas/droite" onMouseDown={onFillDown} />}
                       </td>
                     )
                   })}
@@ -352,6 +669,73 @@ export default function TaolApp(): JSX.Element {
             </tbody>
           </table>
         </div>
+        <div className="taol-status">
+          {range ? (
+            <span>
+              Plage {keyOf(range.c1, range.r1)}:{keyOf(range.c2, range.r2)} — Nb : {status.nb} · Somme : {fmtDisplay(status.somme)} · Moyenne :{' '}
+              {status.moyenne === null ? '—' : fmtDisplay(status.moyenne)}
+            </span>
+          ) : (
+            <span>
+              Cellule {selKey} — Nb : {status.nb} · Somme : {fmtDisplay(status.somme)} · Moyenne : {status.moyenne === null ? '—' : fmtDisplay(status.moyenne)}
+            </span>
+          )}
+          <span className="taol-status-right">Ctrl+F recherche · Ctrl+C/V copie-colle</span>
+        </div>
+        {search && (
+          <div className="taol-search">
+            <input
+              ref={searchRef}
+              className="taol-search-input"
+              placeholder="Rechercher dans la feuille…"
+              value={search.q}
+              onChange={(e) => {
+                const q = e.target.value
+                setSearch({ q, matches: sheet ? searchCells(sheet, q) : [], idx: 0 })
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && search.matches.length) {
+                  e.preventDefault()
+                  const m = search.matches[search.idx % search.matches.length]
+                  setSel(m)
+                  setAnchor(m)
+                  setRange(null)
+                  setSearch((s) => (s ? { ...s, idx: s.idx + 1 } : s))
+                } else if (e.key === 'Escape') setSearch(null)
+              }}
+            />
+            <span className="taol-search-count">
+              {search.matches.length ? `${(search.idx % search.matches.length) + 1}/${search.matches.length}` : '0'}
+            </span>
+            <button type="button" className="db-btn" onClick={() => setSearch(null)}>
+              ×
+            </button>
+          </div>
+        )}
+        {pasteOpen && (
+          <div className="taol-modal-overlay" onClick={() => setPasteOpen(false)}>
+            <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">Coller des données externes (TSV / CSV copié depuis Excel, Sheets…)</p>
+              <textarea ref={pasteRef} className="taol-paste-area" placeholder="Ctrl+V ici…" rows={8} />
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setPasteOpen(false)}>
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="db-btn"
+                  onClick={() => {
+                    const t = pasteRef.current?.value ?? ''
+                    setPasteOpen(false)
+                    if (t.trim()) pasteText(t)
+                  }}
+                >
+                  Coller à {selKey}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   )
