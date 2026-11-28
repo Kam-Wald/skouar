@@ -681,3 +681,52 @@
   font-family: var(--font-mono);
   font-size: 10px;
 }
+
+.ra-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 10px 0 18px;
+}
+
+.ra-stat-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ra-stat-card strong {
+  font-size: 22px;
+}
+
+.ra-stat-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 0.9rem;
+}
+
+.settings-sep {
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.settings-field h4,
+.ra-view h4 {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+}

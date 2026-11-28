@@ -10,7 +10,9 @@ import JournalView from './JournalView'
 import Onboarding from './Onboarding'
 import PreventifView from './PreventifView'
 import ProfilView from './ProfilView'
+import RapportsView from './RapportsView'
 import RdvView from './RdvView'
+import SettingsPanel from './SettingsPanel'
 import TraitementsView from './TraitementsView'
 import UrgenceCard from './UrgenceCard'
 import { DEFAULT_RACINE_SETTINGS, emptyProfile, getProfile, listEvents, listRefs, TRACKERS, type EventType, type HealthEvent, type Profile, type RacineSettings, type RefEntity } from './store'
@@ -96,6 +98,13 @@ export default function RacineApp() {
     saveAppSettings('racine', { onboarded: s.onboarded, trackers: s.trackers }, true)
   }
 
+  const onSettings = (patch: Partial<RacineSettings>): void => {
+    persist({
+      onboarded: patch.onboarded ?? settings.onboarded,
+      trackers: { ...settings.trackers, ...(patch.trackers ?? {}) }
+    })
+  }
+
   if (!settings.onboarded) {
     return (
       <>
@@ -125,7 +134,15 @@ export default function RacineApp() {
   )
 
   return (
-    <AppShell appId="racine" appName="Racine" logo={app.logo!} sidebar={sidebar}>
+    <AppShell
+      appId="racine"
+      appName="Racine"
+      logo={app.logo!}
+      sidebar={sidebar}
+      settingsPanel={
+        <SettingsPanel events={events} refs={refs} profile={profile ?? emptyProfile()} settings={settings} onSettings={onSettings} onReload={reload} />
+      }
+    >
       {view === 'home' ? (
         <HomeView activeTrackers={activeTrackers} events={events} refs={refs} onUrgence={() => setUrgence(true)} onChanged={reload} />
       ) : view === 'traitements' ? (
@@ -142,6 +159,8 @@ export default function RacineApp() {
         <JournalView events={events} onChanged={reload} />
       ) : view === 'courbes' ? (
         <CourbesView events={events} refs={refs} onChanged={reload} />
+      ) : view === 'rapports' ? (
+        <RapportsView events={events} refs={refs} profile={profile ?? emptyProfile()} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
