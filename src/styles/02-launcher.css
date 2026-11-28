@@ -148,15 +148,19 @@
 
 .app-tile-grip {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 8px;
+  left: 10px;
   cursor: grab;
   color: var(--muted);
-  font-size: 0.8rem;
-  letter-spacing: -2px;
-  padding: 2px 4px;
-  border-radius: 6px;
+  font-size: 1.25rem;
+  line-height: 1;
+  letter-spacing: -3px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
   user-select: none;
+  touch-action: none;
 }
 
 .app-tile-grip:hover {
