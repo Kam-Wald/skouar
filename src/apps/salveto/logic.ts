@@ -330,3 +330,114 @@ export function cooccurrences(events: SalvetoEvent[]): Cooc[] {
 export function fmtPct(r: number): string {
   return `${Math.round(r * 100)} %`
 }
+
+/* ---------- Entités de référence (16.C) : traitements, constantes ---------- */
+
+export type RefKind = 'traitement' | 'constante'
+
+export interface RefItem {
+  id: string
+  kind: RefKind
+  label: string
+  unite?: string
+  seuil?: number
+  createdAt: string
+}
+
+export interface SalvetoRefs {
+  version: 1
+  items: RefItem[]
+}
+
+export const REF_KINDS: RefKind[] = ['traitement', 'constante']
+
+export function seedRefs(): SalvetoRefs {
+  return { version: 1, items: [] }
+}
+
+export function migrateRefs(raw: unknown): SalvetoRefs | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  if (r.version !== 1 || !Array.isArray(r.items)) return undefined
+  const items: RefItem[] = []
+  for (const it of r.items) {
+    if (!it || typeof it !== 'object') continue
+    const x = it as Record<string, unknown>
+    if (typeof x.id !== 'string' || !x.id) continue
+    if (typeof x.kind !== 'string' || !REF_KINDS.includes(x.kind as RefKind)) continue
+    if (typeof x.label !== 'string' || !x.label.trim()) continue
+    items.push({
+      ...(x as object),
+      kind: x.kind as RefKind,
+      label: x.label,
+      createdAt: typeof x.createdAt === 'string' ? x.createdAt : toLocalISO(new Date())
+    } as RefItem)
+  }
+  return { ...(r as object), version: 1, items }
+}
+
+export function upsertRef(refs: SalvetoRefs, item: RefItem): SalvetoRefs {
+  const i = refs.items.findIndex((x) => x.id === item.id)
+  const items = i >= 0 ? refs.items.map((x) => (x.id === item.id ? { ...x, ...item } : x)) : [...refs.items, item]
+  return { ...refs, items }
+}
+
+export function labelOfRef(refs: SalvetoRefs, id: string): string | undefined {
+  return refs.items.find((x) => x.id === id)?.label
+}
+
+/* ---------- Efficacité ressentie (5.A / 5.B) — observation passive uniquement ---------- */
+
+export const EFFET_SCORE: Record<Effet, number> = { marqué: 3, léger: 2, aucun: 0, négatif: -3 }
+
+export interface Bienfait {
+  refId: string
+  label: string
+  prises: number
+  effetCounts: Record<Effet, number>
+  score: number
+}
+
+export function emptyEffetCounts(): Record<Effet, number> {
+  return { aucun: 0, léger: 0, marqué: 0, négatif: 0 }
+}
+
+export function bienfaits(events: SalvetoEvent[], refs: SalvetoRefs): Bienfait[] {
+  const map = new Map<string, Bienfait>()
+  for (const e of eventsOfType(events, 'traitement')) {
+    const refId = e.refId ?? e.label ?? '?'
+    const label = e.label ?? labelOfRef(refs, refId) ?? refId
+    const cur = map.get(refId) ?? { refId, label, prises: 0, effetCounts: emptyEffetCounts(), score: 0 }
+    cur.prises += 1
+    if (e.effet && (EFFETS as readonly string[]).includes(e.effet)) {
+      const eff = e.effet as Effet
+      cur.effetCounts[eff] += 1
+      cur.score += EFFET_SCORE[eff]
+    }
+    map.set(refId, cur)
+  }
+  return [...map.values()].sort((a, b) => b.score - a.score || b.prises - a.prises || a.label.localeCompare(b.label))
+}
+
+export interface DerniereValeur {
+  refId: string
+  label: string
+  unite?: string
+  value?: number
+  date?: string
+}
+
+export function dernieresValeurs(events: SalvetoEvent[], refs: SalvetoRefs): DerniereValeur[] {
+  const last = new Map<string, SalvetoEvent>()
+  for (const e of eventsOfType(events, 'constante')) {
+    const id = e.refId ?? e.label ?? '?'
+    const cur = last.get(id)
+    if (!cur || e.date > cur.date) last.set(id, e)
+  }
+  return refs.items
+    .filter((r) => r.kind === 'constante')
+    .map((r) => {
+      const e = last.get(r.id)
+      return { refId: r.id, label: r.label, unite: r.unite, value: e?.value, date: e?.date }
+    })
+}
