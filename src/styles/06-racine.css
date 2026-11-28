@@ -417,3 +417,116 @@
 .ra-view input:focus-visible {
   border-color: var(--accent);
 }
+
+.ra-urgence-btn {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ra-urgence-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 20px;
+}
+
+.ra-urgence {
+  max-width: 640px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+
+.ra-urgence h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.ra-urgence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ra-urgence-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ra-urgence-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.ra-urgence-value {
+  font-size: 19px;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.ra-profile-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.ra-profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ra-profile-field textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.ra-profile-field textarea:focus-visible {
+  border-color: var(--accent);
+}
+
+.ra-cycle-list select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+
+.ra-cycle-list a {
+  color: var(--accent);
+}

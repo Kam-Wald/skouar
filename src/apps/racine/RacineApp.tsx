@@ -7,9 +7,11 @@ import CycleView from './CycleView'
 import HomeView from './HomeView'
 import Onboarding from './Onboarding'
 import PreventifView from './PreventifView'
+import ProfilView from './ProfilView'
 import RdvView from './RdvView'
 import TraitementsView from './TraitementsView'
-import { DEFAULT_RACINE_SETTINGS, listEvents, listRefs, TRACKERS, type EventType, type HealthEvent, type RacineSettings, type RefEntity } from './store'
+import UrgenceCard from './UrgenceCard'
+import { DEFAULT_RACINE_SETTINGS, emptyProfile, getProfile, listEvents, listRefs, TRACKERS, type EventType, type HealthEvent, type Profile, type RacineSettings, type RefEntity } from './store'
 
 const app = apps.find((a) => a.id === 'racine')!
 
@@ -40,21 +42,25 @@ export default function RacineApp() {
   const [toast, setToast] = useState('')
   const [events, setEvents] = useState<HealthEvent[]>([])
   const [refs, setRefs] = useState<RefEntity[]>([])
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [urgence, setUrgence] = useState(false)
   const [settings, setSettings] = useState<RacineSettings>(loadSettings)
 
   const reload = async (): Promise<void> => {
-    const [ev, rf] = await Promise.all([listEvents(), listRefs()])
+    const [ev, rf, p] = await Promise.all([listEvents(), listRefs(), getProfile()])
     setEvents(ev)
     setRefs(rf)
+    setProfile(p)
   }
 
   useEffect(() => {
     let alive = true
-    void Promise.all([listEvents(), listRefs()])
-      .then(([ev, rf]) => {
+    void Promise.all([listEvents(), listRefs(), getProfile()])
+      .then(([ev, rf, p]) => {
         if (alive) {
           setEvents(ev)
           setRefs(rf)
+          setProfile(p)
         }
       })
       .catch(() => {
@@ -119,7 +125,7 @@ export default function RacineApp() {
   return (
     <AppShell appId="racine" appName="Racine" logo={app.logo!} sidebar={sidebar}>
       {view === 'home' ? (
-        <HomeView activeTrackers={activeTrackers} events={events} refs={refs} onChanged={reload} />
+        <HomeView activeTrackers={activeTrackers} events={events} refs={refs} onUrgence={() => setUrgence(true)} onChanged={reload} />
       ) : view === 'traitements' ? (
         <TraitementsView events={events} refs={refs} onChanged={reload} />
       ) : view === 'cycle' ? (
@@ -128,12 +134,15 @@ export default function RacineApp() {
         <RdvView events={events} onChanged={reload} />
       ) : view === 'preventif' ? (
         <PreventifView refs={refs} onChanged={reload} />
+      ) : view === 'profil' ? (
+        <ProfilView profile={profile ?? emptyProfile()} events={events} onChanged={reload} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
           <p className="ra-muted">Cette vue arrive dans une prochaine sous-partie.</p>
         </section>
       )}
+      {urgence && profile && <UrgenceCard profile={profile} onClose={() => setUrgence(false)} />}
       {toast && (
         <div className="toast" role="status">
           {toast}
