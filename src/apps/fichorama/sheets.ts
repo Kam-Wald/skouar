@@ -122,3 +122,32 @@ export async function quotaWarning(): Promise<string | null> {
   }
   return null
 }
+
+export interface SheetFilter {
+  q: string
+  favOnly: boolean
+  minNote: number | null
+  maxNote: number | null
+}
+
+export function filterSheets(sheets: Sheet[], f: SheetFilter): Sheet[] {
+  let arr = searchSheets(sheets, f.q)
+  if (f.favOnly) arr = arr.filter((s) => s.fav)
+  const min = f.minNote
+  const max = f.maxNote
+  if (min !== null && isFinite(min)) arr = arr.filter((s) => s.note >= min)
+  if (max !== null && isFinite(max)) arr = arr.filter((s) => s.note <= max)
+  return arr
+}
+
+export function querySheets(sheets: Sheet[], f: SheetFilter, sort: SortKey): Sheet[] {
+  return sortSheets(filterSheets(sheets, f), sort)
+}
+
+export function avgNote(sheets: Sheet[]): number | null {
+  return sheets.length === 0 ? null : sheets.reduce((a, s) => a + s.note, 0) / sheets.length
+}
+
+export function fmtAvg(n: number): string {
+  return n.toFixed(1).replace('.', ',')
+}

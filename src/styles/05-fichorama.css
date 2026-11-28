@@ -313,3 +313,66 @@
   font-size: 12px;
   font-family: var(--font-mono);
 }
+
+.fi-home-search {
+  margin: 4px 0 12px;
+}
+
+.fi-home-search input {
+  width: 100%;
+  max-width: 460px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.fi-home-search input:focus-visible {
+  border-color: var(--accent);
+}
+
+.fi-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+}
+
+.fi-toolbar input,
+.fi-toolbar select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.fi-toolbar input:focus-visible,
+.fi-toolbar select:focus-visible {
+  border-color: var(--accent);
+}
+
+.fi-toolbar input[aria-label='Rechercher dans les fiches'] {
+  flex: 1;
+  min-width: 180px;
+}
+
+.fi-toolbar-check,
+.fi-toolbar-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-height: 44px;
+}
+
+.fi-toolbar-note input {
+  width: 64px;
+}
