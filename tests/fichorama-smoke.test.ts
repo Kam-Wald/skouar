@@ -29,7 +29,12 @@ describe('Fichorama (smoke jsdom)', () => {
     await React.act(async () => {
       root.render(React.createElement(MemoryRouter, null, React.createElement(FichoramaApp)))
     })
+    await React.act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
     expect(div.textContent).toContain('Fichorama')
+    expect(div.textContent).toContain('Films')
+    expect(div.querySelectorAll('.fi-card').length).toBe(9)
     root.unmount()
     div.remove()
   })
