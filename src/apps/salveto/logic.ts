@@ -122,6 +122,8 @@ export interface SalvetoEvent {
   declencheurs?: string[]
   refId?: string
   effet?: string
+  fin?: string
+  flux?: string
   notes?: string
   createdAt: string
   updatedAt: string
@@ -236,7 +238,7 @@ export function labelOfEvent(e: SalvetoEvent): string {
     case 'traitement':
       return `Prise ${e.label ?? ''} — effet ${e.effet ?? '?'}`
     case 'cycle':
-      return `Cycle ${e.label ?? ''}`
+      return `Règles ${fmtDay(dayOf(e.date))}${e.fin ? ` → ${fmtDay(dayOf(e.fin))}` : ''}${e.flux ? ` · flux ${e.flux}` : ''}${e.notes ? ` · ${e.notes}` : ''}`
     case 'rdv':
       return `RDV ${e.label ?? ''}`
     case 'ordonnance':
@@ -329,6 +331,126 @@ export function cooccurrences(events: SalvetoEvent[]): Cooc[] {
 
 export function fmtPct(r: number): string {
   return `${Math.round(r * 100)} %`
+}
+
+/* ---------- Jours (arithmétique locale, sans fuseau) ---------- */
+
+export function parseDay(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y || 1970, (m || 1) - 1, d || 1)
+}
+
+export function toDay(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+export function addDays(day: string, n: number): string {
+  const d = parseDay(day)
+  d.setDate(d.getDate() + n)
+  return toDay(d)
+}
+
+export function diffDays(a: string, b: string): number {
+  return Math.round((parseDay(b).getTime() - parseDay(a).getTime()) / 86400000)
+}
+
+export function fmtDay(day: string): string {
+  const [y, m, d] = day.split('-')
+  return `${d}/${m}/${y}`
+}
+
+/* ---------- Cycle menstruel (7) — calculs 100 % locaux, indicatifs ---------- */
+
+export const FLUX_SUGGESTIONS = ['léger', 'moyen', 'abondant', 'glaires cervicales', 'spotting', 'autre']
+
+export interface CycleInfo {
+  eventId: string
+  debut: string
+  fin?: string
+  dureeRegles: number
+  dureeCycle?: number
+  flux?: string
+  notes?: string
+}
+
+export function cyclesOf(events: SalvetoEvent[]): CycleInfo[] {
+  const evs = sortEventsDesc(eventsOfType(events, 'cycle')).reverse()
+  const out: CycleInfo[] = []
+  let prevDebut: string | undefined
+  for (const e of evs) {
+    const debut = dayOf(e.date)
+    const finRaw = e.fin ? dayOf(e.fin) : undefined
+    const fin = finRaw && diffDays(debut, finRaw) >= 0 ? finRaw : undefined
+    const dureeRegles = fin ? Math.max(1, diffDays(debut, fin) + 1) : 1
+    out.push({
+      eventId: e.id,
+      debut,
+      fin,
+      dureeRegles,
+      dureeCycle: prevDebut ? diffDays(prevDebut, debut) : undefined,
+      flux: e.flux,
+      notes: e.notes
+    })
+    prevDebut = debut
+  }
+  return out
+}
+
+export interface Prevision {
+  nbPeriodes: number
+  baseCycles: number
+  moyCycle?: number
+  moyRegles?: number
+  prochaineRegles?: string
+  ovulation?: string
+  fenetreDebut?: string
+  fenetreFin?: string
+}
+
+export function prevision(cycles: CycleInfo[]): Prevision {
+  const durees = cycles.map((c) => c.dureeCycle).filter((d): d is number => d != null && d >= 15 && d <= 60)
+  const regles = cycles.map((c) => c.dureeRegles)
+  const moyCycle = durees.length ? Math.round(durees.reduce((a, b) => a + b, 0) / durees.length) : undefined
+  const moyRegles = regles.length
+    ? Math.round((regles.reduce((a, b) => a + b, 0) / regles.length) * 10) / 10
+    : undefined
+  const dernier = cycles[cycles.length - 1]
+  let prochaineRegles: string | undefined
+  let ovulation: string | undefined
+  let fenetreDebut: string | undefined
+  let fenetreFin: string | undefined
+  if (dernier && moyCycle) {
+    prochaineRegles = addDays(dernier.debut, moyCycle)
+    ovulation = addDays(prochaineRegles, -14)
+    fenetreDebut = addDays(ovulation, -2)
+    fenetreFin = addDays(ovulation, 2)
+  }
+  return {
+    nbPeriodes: cycles.length,
+    baseCycles: durees.length,
+    moyCycle,
+    moyRegles,
+    prochaineRegles,
+    ovulation,
+    fenetreDebut,
+    fenetreFin
+  }
+}
+
+export function phaseOfDay(cycles: CycleInfo[], day: string): string {
+  if (cycles.length === 0) return ''
+  for (const c of cycles) {
+    if (day >= c.debut && (c.fin ? day <= c.fin : day === c.debut)) return 'règles'
+  }
+  const p = prevision(cycles)
+  if (p.fenetreDebut && p.fenetreFin && day >= p.fenetreDebut && day <= p.fenetreFin) return 'ovulatoire (indicatif)'
+  if (p.prochaineRegles && day < p.prochaineRegles) {
+    const dernier = cycles[cycles.length - 1]
+    const ovul = p.ovulation ?? ''
+    if (day > dernier.debut && ovul && day < ovul) return 'folliculaire'
+    if (ovul && day > ovul) return 'lutéale'
+  }
+  return ''
 }
 
 /* ---------- Entités de référence (16.C) : traitements, constantes ---------- */

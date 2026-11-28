@@ -4,12 +4,14 @@ import BodyMap from './BodyMap'
 import {
   DECLENCHEUR_SUGGESTIONS,
   EFFETS,
+  FLUX_SUGGESTIONS,
   HABITUDE_SUGGESTIONS,
   MORAL_LABELS,
   clampInt,
   clampNum,
   makeEvent,
   toLocalISO,
+  todayDay,
   type Effet,
   type RefItem,
   type SalvetoEvent,
@@ -39,6 +41,9 @@ export default function QuickSaisie({ suivi, refs, onSave, onUpsertRef, onClose 
   const [newLabel, setNewLabel] = useState('')
   const [newUnite, setNewUnite] = useState('')
   const [newSeuil, setNewSeuil] = useState('')
+  const [debut, setDebut] = useState(todayDay())
+  const [fin, setFin] = useState('')
+  const [flux, setFlux] = useState('')
 
   const save = (patch: Partial<SalvetoEvent>): void => {
     onSave(makeEvent(suivi, patch))
@@ -496,6 +501,63 @@ export default function QuickSaisie({ suivi, refs, onSave, onUpsertRef, onClose 
             </div>
           </>
         )}
+        <button type="button" className="sa-panel-close" onClick={onClose}>
+          Annuler
+        </button>
+      </div>
+    )
+  }
+
+  if (suivi === 'cycle') {
+    return (
+      <div className="sa-panel" data-panel="cycle">
+        <p className="sa-panel-title">Enregistrer une période</p>
+        <div className="sa-panel-row">
+          <label className="sa-field">
+            Premier jour
+            <input className="db-input" type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
+          </label>
+          <label className="sa-field">
+            Dernier jour (facultatif)
+            <input className="db-input" type="date" value={fin} onChange={(e) => setFin(e.target.value)} />
+          </label>
+        </div>
+        <input
+          className="db-input"
+          type="text"
+          list="sa-flux"
+          placeholder="Flux observé (léger, abondant, glaires…)"
+          value={flux}
+          onChange={(e) => setFlux(e.target.value)}
+        />
+        <datalist id="sa-flux">
+          {FLUX_SUGGESTIONS.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+        <textarea
+          className="db-input sa-note-input"
+          rows={2}
+          placeholder="Notes sur ce cycle (facultatif)"
+          value={txt}
+          onChange={(e) => setTxt(e.target.value)}
+        />
+        <button
+          type="button"
+          className="db-btn sa-panel-save"
+          disabled={!debut}
+          onClick={() =>
+            save({
+              label: 'règles',
+              date: `${debut}T08:00:00`,
+              fin: fin ? `${fin}T22:00:00` : undefined,
+              flux: flux.trim() || undefined,
+              notes: txt.trim() || undefined
+            })
+          }
+        >
+          Enregistrer la période
+        </button>
         <button type="button" className="sa-panel-close" onClick={onClose}>
           Annuler
         </button>

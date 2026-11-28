@@ -6,14 +6,18 @@ import {
   ALL_SUIVIS,
   bienfaits,
   cooccurrences,
+  cyclesOf,
   dayOf,
   dernieresValeurs,
   eventsOfType,
   eventsOnDay,
+  fmtDay,
   fmtPct,
   isSuiviActive,
   labelOfEvent,
   makeEvent,
+  phaseOfDay,
+  prevision,
   seedConfig,
   seedRefs,
   sortEventsDesc,
@@ -30,11 +34,13 @@ import { loadConfig, loadEvents, loadRefs, saveConfig, saveEvent, saveRefs } fro
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-const NAV: { label: string; icon: string; view?: 'accueil' | 'traitements'; soon?: boolean }[] = [
+type View = 'accueil' | 'traitements' | 'cycle'
+
+const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
   { label: 'Journal', icon: '📖', soon: true },
   { label: 'Courbes', icon: '📈', soon: true },
-  { label: 'Cycle', icon: '🌸', soon: true },
+  { label: 'Cycle', icon: '🌸', view: 'cycle' },
   { label: 'RDV', icon: '🗓️', soon: true },
   { label: 'Ordonnances', icon: '📄', soon: true },
   { label: 'Traitements', icon: '💊', view: 'traitements' },
@@ -54,14 +60,15 @@ const QUICK_SUIVIS: SuiviId[] = [
   'habitude',
   'note',
   'traitement',
-  'constante'
+  'constante',
+  'cycle'
 ]
 
 export default function SalvetoApp() {
   const [config, setConfig] = useState<SalvetoConfig | null>(null)
   const [events, setEvents] = useState<SalvetoEvent[]>([])
   const [refs, setRefs] = useState<SalvetoRefs>(seedRefs())
-  const [view, setView] = useState<'accueil' | 'traitements'>('accueil')
+  const [view, setView] = useState<View>('accueil')
   const [checked, setChecked] = useState<Set<SuiviId>>(() => new Set(ALL_SUIVIS.map((s) => s.id)))
   const [panel, setPanel] = useState<SuiviId | null>(null)
   const coocs = useMemo(() => cooccurrences(events), [events])
@@ -145,6 +152,9 @@ export default function SalvetoApp() {
     const k = e.refId ?? e.label ?? '?'
     prisesParRef.set(k, (prisesParRef.get(k) ?? 0) + 1)
   }
+  const cycles = cyclesOf(events)
+  const prev = prevision(cycles)
+  const phaseAuj = isSuiviActive(config, 'cycle') ? phaseOfDay(cycles, todayDay()) : ''
 
   const onUpsertRef = (r: RefItem): void => {
     setRefs((prev) => {
@@ -176,7 +186,7 @@ export default function SalvetoApp() {
                 type="button"
                 className={`sa-side-row${view === n.view ? ' active' : ''}`}
                 data-nav={n.view}
-                onClick={() => setView(n.view!)}
+                onClick={() => setView(n.view as View)}
               >
                 <span aria-hidden>{n.icon}</span> {n.label}
               </button>
@@ -190,7 +200,67 @@ export default function SalvetoApp() {
       }
     >
       <div className="salveto-main">
-        {view === 'traitements' ? (
+        {view === 'cycle' ? (
+          <>
+            <h1 className="sa-h1">Cycle menstruel</h1>
+            {cycles.length === 0 ? (
+              <p className="sa-empty">Aucune période enregistrée — saisis-en une depuis l’accueil (« + Cycle »).</p>
+            ) : (
+              <>
+                <section>
+                  <h2 className="sa-h2">Prévision (indicative, calcul 100 % local)</h2>
+                  {prev.moyCycle && prev.prochaineRegles ? (
+                    <>
+                      <p>
+                        Prochaine période estimée : <strong>{fmtDay(prev.prochaineRegles)}</strong> (moyenne de{' '}
+                        {prev.baseCycles} cycle{prev.baseCycles > 1 ? 's' : ''} : {prev.moyCycle} j)
+                      </p>
+                      <p>
+                        Fenêtre ovulatoire indicative :{' '}
+                        <strong>
+                          {fmtDay(prev.fenetreDebut!)} → {fmtDay(prev.fenetreFin!)}
+                        </strong>{' '}
+                        (ovulation estimée le {fmtDay(prev.ovulation!)})
+                      </p>
+                    </>
+                  ) : (
+                    <p>Enregistre au moins 2 cycles pour obtenir une prévision (moyenne des durées observées).</p>
+                  )}
+                  <p className="sa-cooc-note">
+                    Prévisions purement indicatives — aucun calcul médical, aucune donnée envoyée hors de cet
+                    appareil.
+                  </p>
+                  <p className="sa-muted">
+                    Moyennes observées : cycle {prev.moyCycle ?? '—'} j · règles {prev.moyRegles ?? '—'} j ·{' '}
+                    {cycles.length} période{cycles.length > 1 ? 's' : ''} enregistrée{cycles.length > 1 ? 's' : ''}
+                  </p>
+                </section>
+                <section>
+                  <h2 className="sa-h2">Historique par cycle</h2>
+                  <ul className="sa-cooc-list">
+                    {[...cycles].reverse().map((c) => (
+                      <li key={c.eventId} className="sa-cycle-row">
+                        Du <strong>{fmtDay(c.debut)}</strong>
+                        {c.fin ? (
+                          <>
+                            {' '}
+                            au <strong>{fmtDay(c.fin)}</strong>
+                          </>
+                        ) : (
+                          ''
+                        )}{' '}
+                        — {c.dureeRegles} j de règles
+                        {c.dureeCycle ? `, cycle de ${c.dureeCycle} j` : ''}
+                        {c.flux ? ` · flux ${c.flux}` : ''}
+                        {c.notes ? ` · ${c.notes}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </>
+            )}
+          </>
+        ) : view === 'traitements' ? (
           <>
             <h1 className="sa-h1">Traitements & activités suivis</h1>
             <section className="sa-bien">
@@ -281,6 +351,7 @@ export default function SalvetoApp() {
               <li key={e.id} className="sa-day-row" data-event={e.id} data-type={e.type}>
                 <span className="sa-day-time">{timeOf(e.date)}</span>
                 <span>{labelOfEvent(e)}</span>
+                {phaseAuj && <span className="sa-day-phase">{phaseAuj}</span>}
               </li>
             ))}
           </ul>
