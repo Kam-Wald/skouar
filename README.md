@@ -14,7 +14,7 @@ Tes données restent sur ton appareil (IndexedDB + localStorage).
 | --- | --- | --- |
 | Karneto 📓 | · notes & bdd | en reconstruction |
 | Skrid ✍️ | · écriture | en reconstruction |
-| Ler 📕 | · pdf | en reconstruction |
+| Marge 📕 | · pdf | en construction (CDC : `docs/cdc-marge.md`) |
 | Skeud 🖼️ | · photos | en reconstruction |
 | Kod 💻 | · éditeur de code | en reconstruction |
 | Cockpit 🎛️ | · productivité & focus | en reconstruction |

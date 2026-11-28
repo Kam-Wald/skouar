@@ -71,7 +71,7 @@ export function deleteDatabaseSafe(name: string, timeoutMs = 5000): Promise<bool
 export const APP_DB_MAP: Record<string, string> = {
   karneto: 'skouar',
   skrid: 'skouar-skrid',
-  ler: 'skouar-ler',
+  marge: 'skouar-marge',
   skeud: 'skouar-skeud',
   kod: 'skouar-kod',
   cockpit: 'skouar-cockpit',

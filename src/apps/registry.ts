@@ -30,12 +30,14 @@ export const apps: AppMeta[] = [
     logo: `${import.meta.env.BASE_URL}app-icons/skrid.svg`
   },
   {
-    id: 'ler',
-    name: 'Ler',
-    description: 'Visionneuse et annotatrice de PDF (recherche, surlignage, texte, signature, fusion/extraction de pages).',
+    id: 'marge',
+    name: 'Marge',
+    description:
+      'Visionneuse et annotatrice de PDF : lecture, recherche, surlignage, signature, fusion et gestion des pages.',
     tag: 'pdf',
     icon: '📕',
-    logo: `${import.meta.env.BASE_URL}app-icons/ler.svg`
+    logo: `${import.meta.env.BASE_URL}app-icons/marge.svg`,
+    component: lazy(() => import('./marge/MargeApp'))
   },
   {
     id: 'skeud',
