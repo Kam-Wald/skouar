@@ -81,3 +81,24 @@ describe('Fichorama — modèle (S2)', () => {
     expect(f.values).toEqual(before)
   })
 })
+
+describe('Fichorama — saisie (S3)', () => {
+  it('validateDraft : titre requis + champs obligatoires', async () => {
+    const { validateDraft, seedData } = await import('../src/apps/fichorama/logic')
+    const cat = { ...seedData().categories[0], fields: [{ id: 'realisateur', label: 'Réalisateur', type: 'text' as const, required: true }] }
+    expect(validateDraft(cat, { title: '', values: { realisateur: 'X' } })).toBe('Titre requis')
+    expect(validateDraft(cat, { title: 'Film', values: {} })).toBe('Champ « Réalisateur » obligatoire')
+    expect(validateDraft(cat, { title: 'Film', values: { realisateur: 'X' } })).toBeNull()
+  })
+
+  it('fmtFieldValue / fmtDateIso', async () => {
+    const { fmtFieldValue, fmtDateIso } = await import('../src/apps/fichorama/logic')
+    expect(fmtFieldValue(undefined)).toBe('—')
+    expect(fmtFieldValue('abc')).toBe('abc')
+    expect(fmtFieldValue(2001)).toBe('2001')
+    expect(fmtFieldValue(true)).toBe('Oui')
+    expect(fmtFieldValue(['a', 'b'])).toBe('a, b')
+    expect(fmtFieldValue('2026-01-05')).toBe('05/01/2026')
+    expect(fmtDateIso('2026-12-31T23:00:00.000Z')).toBe('31/12/2026')
+  })
+})
