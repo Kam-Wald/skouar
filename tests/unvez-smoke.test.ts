@@ -29,6 +29,9 @@ async function renderApp() {
   await React.act(async () => {
     root.render(React.createElement(MemoryRouter, { initialEntries: ['/app/unvez'] }, React.createElement(UnvezApp)))
   })
+  await React.act(async () => {
+    await new Promise((r) => setTimeout(r, 30))
+  })
   return { React, root, div }
 }
 
@@ -51,7 +54,7 @@ describe('Unvez — squelette (smoke jsdom)', () => {
       expect(text).toContain(needle)
     }
     expect(div.querySelector('.blocs-app')).toBeTruthy()
-    expect(div.querySelector('.unvez-view')?.textContent).toContain('Conversion')
+    expect(div.querySelector('.unvez-conv')).toBeTruthy()
     await React.act(async () => {
       btnByText(div, 'Calculatrice').click()
     })
