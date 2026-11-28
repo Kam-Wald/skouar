@@ -58,6 +58,15 @@ export const apps: AppMeta[] = [
     component: lazy(() => import('./taol/TaolApp'))
   },
   {
+    id: 'fichorama',
+    name: 'Fichorama',
+    description: 'Fiches de notation personnalisables (films, livres, restos…) : note /10, champs libres, image, historique de re-notes.',
+    tag: 'fiches & notation',
+    icon: '🗂️',
+    logo: `${import.meta.env.BASE_URL}app-icons/fichorama.svg`,
+    component: lazy(() => import('./fichorama/FichoramaApp'))
+  },
+  {
     id: 'tres',
     name: 'Tres',
     description: 'Dessin & présentations : formes, flèches, diapos, export SVG/PNG.',

@@ -12,6 +12,7 @@ import './styles/05-kod-cockpit.css'
 import './styles/06-skeud-settings.css'
 import './styles/07-unvez.css'
 import './styles/08-taol.css'
+import './styles/09-fichorama.css'
 
 applyTheme(getTheme(), getAccent())
 
