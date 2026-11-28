@@ -30,7 +30,7 @@ describe('Launcher (smoke jsdom)', () => {
       root.render(React.createElement(MemoryRouter, null, React.createElement(LauncherHome)))
     })
     const html = div.innerHTML
-    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Karneto', 'Skrid', 'Ler', 'Kod', 'Cockpit', 'Skeud', 'Fichorama', 'Racine', 'Bientôt', 'launcher-search', 'Réglages']) {
+    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Karneto', 'Skrid', 'Marge', 'Kod', 'Cockpit', 'Skeud', 'Fichorama', 'Racine', 'Bientôt', 'launcher-search', 'Réglages']) {
       expect(html).toContain(needle)
     }
     const tiles = div.querySelectorAll('.app-tile').length
@@ -38,7 +38,7 @@ describe('Launcher (smoke jsdom)', () => {
     const soon = div.querySelectorAll('.app-tile.soon').length
     expect(soon).toBe(4)
     const wip = div.querySelectorAll('.app-tile.wip').length
-    expect(wip).toBe(7)
+    expect(wip).toBe(6)
     expect(div.textContent).toContain('En chantier')
     const unvezTile = div.querySelector('.app-tile[data-app-id="unvez"]') as HTMLElement
     expect(unvezTile.classList.contains('wip')).toBe(false)
@@ -51,6 +51,10 @@ describe('Launcher (smoke jsdom)', () => {
     expect(racineTile.classList.contains('wip')).toBe(false)
     expect(racineTile.classList.contains('soon')).toBe(false)
     expect(racineTile.getAttribute('href')).toBe('/app/racine')
+    const margeTile = div.querySelector('.app-tile[data-app-id="marge"]') as HTMLAnchorElement
+    expect(margeTile.classList.contains('wip')).toBe(false)
+    expect(margeTile.classList.contains('soon')).toBe(false)
+    expect(margeTile.getAttribute('href')).toBe('/app/marge')
     const text = div.textContent ?? ''
     for (const tag of ['notes & bdd', 'écriture', 'pdf', 'photos', 'éditeur de code', 'productivité & focus', 'tableur', 'dessin & vectoriel', 'fichiers & zip', 'audio', 'budget', 'unités & calcul', 'fiches & notation', 'santé & humeur']) {
       expect(text).toContain(tag)

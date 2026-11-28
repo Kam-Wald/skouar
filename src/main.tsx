@@ -10,6 +10,7 @@ import './styles/03-shell.css'
 import './styles/04-unvez.css'
 import './styles/05-fichorama.css'
 import './styles/06-racine.css'
+import './styles/07-marge.css'
 
 applyTheme(getTheme(), getAccent())
 
