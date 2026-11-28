@@ -28,11 +28,11 @@ if (typeof Blob !== 'undefined' && !(Blob.prototype as unknown as { stream?: unk
     })
   }
 }
-import { APP_DB_MAP, createAppDb, deleteDatabaseSafe } from '../src/shared/db'
+import { APP_DB_MAP, createAppDb, deleteDatabaseSafe, kvOf } from '../src/shared/db'
 import { apps } from '../src/apps/registry'
 import { snapshotBeforeImport, exportBackup, importBackup } from '../src/shared/backup'
 
-const APPS_WITH_DB = ['blocs', 'skrid', 'ler', 'skeud', 'kod', 'cockpit', 'taol', 'fichorama']
+const APPS_WITH_DB = ['blocs', 'skrid', 'ler', 'skeud', 'kod', 'cockpit', 'taol', 'fichorama', 'salveto']
 
 describe('sécurité des données (non-régression)', () => {
   it('APP_DB_MAP : le nommage réel de la base de Karneto est « skouar » et chaque app à base est couverte', () => {
@@ -50,6 +50,20 @@ describe('sécurité des données (non-régression)', () => {
     expect(ok).toBe(true)
     const dbs = await indexedDB.databases()
     expect(dbs.map((d) => d.name)).not.toContain('skouar-test-safe')
+  })
+
+  it('kvOf persiste réellement quel que soit le keyPath de la table kv (« key » ou « id »)', async () => {
+    for (const spec of ['key', 'id']) {
+      const name = `skouar-test-kv-${spec}`
+      const db = createAppDb(name, [{ version: 1, stores: { kv: spec } }])
+      const kv = kvOf(db)
+      await kv.saveKV('config', { a: 1 })
+      const back = await kv.loadKV<{ a: number }>('config')
+      expect(back, `keyPath ${spec}`).toEqual({ a: 1 })
+      const all = await db.table('kv').toArray()
+      expect(all.length, `keyPath ${spec}`).toBe(1)
+      await deleteDatabaseSafe(name)
+    }
   })
 
   it('snapshotBeforeImport enregistre un snapshot restaurable en localStorage', async () => {

@@ -13,6 +13,7 @@ import './styles/06-skeud-settings.css'
 import './styles/07-unvez.css'
 import './styles/08-taol.css'
 import './styles/09-fichorama.css'
+import './styles/10-salveto.css'
 
 applyTheme(getTheme(), getAccent())
 

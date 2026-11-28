@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import AppTile from '../shared/AppTile'
 import { launcherBgCss, loadLauncherBg, type LauncherBg } from '../shared/launcherBg'
-import { apps } from '../apps/registry'
+import { apps, type AppMeta } from '../apps/registry'
 import ThemeButton from '../ThemeButton'
 import SettingsButton from '../Settings'
+
+function isCoarsePointer(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+}
+
+function isHiddenOnMobile(a: AppMeta): boolean {
+  return !!a.desktopOnly && isCoarsePointer() && localStorage.getItem(`skouar:${a.id}:desktopOnly`) !== '0'
+}
 
 export default function LauncherHome() {
   const [q, setQ] = useState('')
@@ -30,9 +38,10 @@ export default function LauncherHome() {
     return () => window.removeEventListener('keydown', onKey)
   }, [q])
   const query = q.trim().toLowerCase()
+  const base = apps.filter((a) => !isHiddenOnMobile(a))
   const visible = query
-    ? apps.filter((a) => `${a.name} ${a.description} ${a.tag}`.toLowerCase().includes(query))
-    : apps
+    ? base.filter((a) => `${a.name} ${a.description} ${a.tag}`.toLowerCase().includes(query))
+    : base
 
   return (
     <div className="launcher" style={bg ? { background: launcherBgCss(bg) } : undefined}>
@@ -74,7 +83,7 @@ export default function LauncherHome() {
       )}
       <main className="launcher-grid" id="launcher-main">
         {visible.map((app) => (
-          <AppTile key={app.id} app={app} idx={String(apps.indexOf(app) + 1).padStart(2, '0')} />
+          <AppTile key={app.id} app={app} idx={String(base.indexOf(app) + 1).padStart(2, '0')} />
         ))}
         {visible.length === 0 && <p className="launcher-subtitle">Aucune app ne correspond à « {q} ».</p>}
       </main>
