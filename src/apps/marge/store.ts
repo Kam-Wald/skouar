@@ -103,6 +103,14 @@ export async function listPageNotes(docId: string): Promise<MargePageNote[]> {
   return pageNotesT.where('docId').equals(docId).toArray()
 }
 
+export async function putPageNote(n: MargePageNote): Promise<void> {
+  await pageNotesT.put(n)
+}
+
+export async function deletePageNote(id: string): Promise<void> {
+  await pageNotesT.delete(id)
+}
+
 export async function restoreDoc(doc: MargeDoc, annots: MargeAnnot[], notes: MargePageNote[]): Promise<void> {
   await docsT.put(await toRow(doc))
   await annotsT.bulkPut(annots)

@@ -2,9 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadDoc } from './pdf'
 import { clampPage, clampScale, fitWidthScale } from './logic'
-import { annotsMatching, cacheFromItems, findMatches, type SearchMatch, type TItem, type TextCache } from './search'
-import { COLORS, TOOLS, type Tool } from './annot'
-import { listAnnots, listSignatures, updateDoc, type MargeAnnot, type MargeDoc, type MargeSignature } from './store'
+import { annotsMatching, cacheFromItems, findMatches, notesMatching, type SearchMatch, type TItem, type TextCache } from './search'
+import { COLORS, TOOLS, type HistAction, type Tool } from './annot'
+import {
+  deleteAnnot,
+  deletePageNote,
+  listAnnots,
+  listPageNotes,
+  listSignatures,
+  putAnnot,
+  putPageNote,
+  uid,
+  updateDoc,
+  type MargeAnnot,
+  type MargeDoc,
+  type MargePageNote,
+  type MargeSignature
+} from './store'
 
 export const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
@@ -36,6 +50,11 @@ export function useDocViewer(doc: MargeDoc | null) {
   const [textSize, setTextSize] = useState(16)
   const [signatures, setSignatures] = useState<MargeSignature[]>([])
   const [hint, setHint] = useState('')
+  const [pageNotes, setPageNotes] = useState<MargePageNote[]>([])
+  const histRef = useRef<HistAction[]>([])
+  const hIdxRef = useRef(0)
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
 
   useEffect(() => {
     void listSignatures().then(setSignatures)
@@ -55,6 +74,82 @@ export function useDocViewer(doc: MargeDoc | null) {
     if (doc) setAnnots(await listAnnots(doc.id))
   }, [doc?.id])
 
+  const reloadPageNotes = useCallback(async () => {
+    if (doc) setPageNotes(await listPageNotes(doc.id))
+  }, [doc?.id])
+
+  const syncHist = (): void => {
+    setCanUndo(hIdxRef.current > 0)
+    setCanRedo(hIdxRef.current < histRef.current.length)
+  }
+
+  const pushHist = useCallback((a: HistAction): void => {
+    if (histRef.current.length >= 100) {
+      histRef.current.shift()
+      hIdxRef.current = Math.max(0, hIdxRef.current - 1)
+    }
+    histRef.current = histRef.current.slice(0, hIdxRef.current).concat([a])
+    hIdxRef.current = histRef.current.length
+    syncHist()
+  }, [])
+
+  const undo = useCallback(async () => {
+    if (hIdxRef.current <= 0) return
+    hIdxRef.current -= 1
+    const a = histRef.current[hIdxRef.current]
+    if (a.kind === 'add' && a.after) await deleteAnnot(a.after.id)
+    else if (a.before) await putAnnot(a.before)
+    await reloadAnnots()
+    syncHist()
+  }, [reloadAnnots])
+
+  const redo = useCallback(async () => {
+    if (hIdxRef.current >= histRef.current.length) return
+    const a = histRef.current[hIdxRef.current]
+    hIdxRef.current += 1
+    if (a.kind === 'delete' && a.before) await deleteAnnot(a.before.id)
+    else if (a.after) await putAnnot(a.after)
+    await reloadAnnots()
+    syncHist()
+  }, [reloadAnnots])
+
+  const removeAnnot = useCallback(
+    async (id: string) => {
+      const before = annots.find((a) => a.id === id)
+      await deleteAnnot(id)
+      if (before) pushHist({ kind: 'delete', before })
+      await reloadAnnots()
+    },
+    [annots, pushHist, reloadAnnots]
+  )
+
+  const savePageNote = useCallback(
+    async (page: number, text: string) => {
+      if (!doc) return
+      const t = text.trim()
+      const ex = pageNotes.find((n) => n.page === page)
+      if (!t) {
+        if (ex) {
+          await deletePageNote(ex.id)
+          await reloadPageNotes()
+        }
+        return
+      }
+      if (ex) await putPageNote({ ...ex, text: t, at: Date.now() })
+      else await putPageNote({ id: uid(), docId: doc.id, page, text: t, at: Date.now() })
+      await reloadPageNotes()
+    },
+    [doc?.id, pageNotes, reloadPageNotes]
+  )
+
+  const removePageNote = useCallback(
+    async (id: string) => {
+      await deletePageNote(id)
+      await reloadPageNotes()
+    },
+    [reloadPageNotes]
+  )
+
   useEffect(() => {
     if (!hint) return
     const t = setTimeout(() => setHint(''), 3500)
@@ -68,8 +163,13 @@ export function useDocViewer(doc: MargeDoc | null) {
       setNumPages(0)
       setOutline([])
       setAnnots([])
+      setPageNotes([])
       setMatches([])
       setSearchOpen(false)
+      histRef.current = []
+      hIdxRef.current = 0
+      setCanUndo(false)
+      setCanRedo(false)
       return
     }
     void doc.data.arrayBuffer().then(async (buf) => {
@@ -86,6 +186,10 @@ export function useDocViewer(doc: MargeDoc | null) {
       setOutline([])
       textCacheRef.current.clear()
       setAnnots(await listAnnots(doc.id))
+      setPageNotes(await listPageNotes(doc.id))
+      histRef.current = []
+      hIdxRef.current = 0
+      syncHist()
       try {
         const ol = await d.getOutline()
         if (ol) {
@@ -197,12 +301,13 @@ export function useDocViewer(doc: MargeDoc | null) {
     }
     if (searchFilter !== 'doc') {
       for (const a of annotsMatching(annots, q)) out.push({ page: a.page, annotId: a.id })
+      for (const n of notesMatching(pageNotes, q)) out.push({ page: n.page, annotId: n.id })
     }
     out.sort((a, b) => a.page - b.page)
     setMatches(out)
     setMIdx(0)
     if (out.length) gotoPage(out[0].page)
-  }, [searchQ, searchFilter, annots, gotoPage])
+  }, [searchQ, searchFilter, annots, pageNotes, gotoPage])
 
   useEffect(() => {
     if (!searchOpen || !doc) return
@@ -239,6 +344,17 @@ export function useDocViewer(doc: MargeDoc | null) {
         return
       }
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        if (e.shiftKey) void redo()
+        else void undo()
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        void redo()
+        return
+      }
       if (e.key === 'Escape') {
         if (searchOpen) {
           e.preventDefault()
@@ -294,7 +410,7 @@ export function useDocViewer(doc: MargeDoc | null) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [doc, page, numPages, present, searchOpen, gotoPage, zoomStep, stepMatch, closeSearch])
+  }, [doc, page, numPages, present, searchOpen, gotoPage, zoomStep, stepMatch, closeSearch, undo, redo])
 
   return {
     docRef,
@@ -339,6 +455,16 @@ export function useDocViewer(doc: MargeDoc | null) {
     signatures,
     activeSign,
     reloadAnnots,
+    pageNotes,
+    reloadPageNotes,
+    savePageNote,
+    removePageNote,
+    pushHist,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    removeAnnot,
     hint,
     setHint
   }

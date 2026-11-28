@@ -634,3 +634,14 @@
   position: absolute;
   pointer-events: none;
 }
+
+.marge-pagenote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marge-pn-ta {
+  min-height: 72px;
+  resize: vertical;
+}

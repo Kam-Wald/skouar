@@ -1,6 +1,6 @@
 import DocThumb from './Thumb'
+import { useEffect, useState } from 'react'
 import { COLORS, iconOf, STAMPS, TEXT_SIZES, TOOLS } from './annot'
-import { deleteAnnot } from './store'
 import type { MargeDoc } from './store'
 import { ZOOMS, type DocViewer } from './viewer'
 
@@ -61,6 +61,14 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
             ))}
           </select>
         )}
+        <div className="marge-viewopts">
+          <button className="db-btn" title="Annuler la dernière action (Ctrl+Z)" disabled={!v.canUndo} onClick={() => void v.undo()}>
+            ↶ Annuler
+          </button>
+          <button className="db-btn" title="Rétablir (Ctrl+Y / Ctrl+Maj+Z)" disabled={!v.canRedo} onClick={() => void v.redo()}>
+            ↷ Rétablir
+          </button>
+        </div>
         <div className="marge-side-label">Zoom / page</div>
         <div className="marge-viewopts">
           <select
@@ -131,6 +139,8 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
             🔍 rechercher
           </button>
         </div>
+        <div className="marge-side-label">Note de page {v.page}</div>
+        <PageNotePanel v={v} />
         {v.outline.length > 0 && (
           <>
             <div className="marge-side-label">Sommaire</div>
@@ -144,30 +154,52 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
             </div>
           </>
         )}
-        <div className="marge-side-label">Annotations ({v.annots.length})</div>
+        <div className="marge-side-label">Annotations ({v.annots.length + v.pageNotes.length})</div>
         <div className="marge-annots">
-          {[...v.annots]
-            .sort((a, b) => a.page - b.page || a.at - b.at)
-            .map((a) => (
-              <div key={a.id} className="marge-annot-row" onClick={() => v.gotoPage(a.page)}>
-                <span className="marge-dot" style={{ background: a.color }} />
-                <span className="marge-annot-txt">
-                  {iconOf(a.type)} p.{a.page}
-                  {a.text ? ` — ${a.text.slice(0, 40)}` : ''}
-                </span>
-                <button
-                  className="marge-annot-del"
-                  title="Supprimer l'annotation"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void deleteAnnot(a.id).then(() => v.reloadAnnots())
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          {v.annots.length === 0 && <p className="marge-empty">Aucune annotation — choisis un outil ci-dessus.</p>}
+          {[
+            ...v.annots.map((a) => ({ kind: 'a' as const, at: a.at, page: a.page, a })),
+            ...v.pageNotes.map((n) => ({ kind: 'n' as const, at: n.at, page: n.page, n }))
+          ]
+            .sort((x, y) => x.page - y.page || x.at - y.at)
+            .map((r) =>
+              r.kind === 'a' ? (
+                <div key={r.a.id} className="marge-annot-row" onClick={() => v.gotoPage(r.page)}>
+                  <span className="marge-dot" style={{ background: r.a.color }} />
+                  <span className="marge-annot-txt">
+                    {iconOf(r.a.type)} p.{r.page}
+                    {r.a.text ? ` — ${r.a.text.slice(0, 40)}` : ''}
+                  </span>
+                  <button
+                    className="marge-annot-del"
+                    title="Supprimer l'annotation (Ctrl+Z pour annuler)"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void v.removeAnnot(r.a.id)
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <div key={r.n.id} className="marge-annot-row" onClick={() => v.gotoPage(r.page)}>
+                  <span className="marge-dot" style={{ background: '#9aa5b1' }} />
+                  <span className="marge-annot-txt">
+                    📝 p.{r.page} — note de page{r.n.text ? ` : ${r.n.text.slice(0, 40)}` : ''}
+                  </span>
+                  <button
+                    className="marge-annot-del"
+                    title="Supprimer la note de page"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void v.removePageNote(r.n.id)
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            )}
+          {v.annots.length + v.pageNotes.length === 0 && <p className="marge-empty">Aucune annotation — choisis un outil ci-dessus.</p>}
         </div>
         <div className="marge-side-label">Pages</div>
         <div className="marge-thumbs">
@@ -185,5 +217,26 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
         </div>
       </div>
     </>
+  )
+}
+
+function PageNotePanel({ v }: { v: DocViewer }) {
+  const note = v.pageNotes.find((n) => n.page === v.page)
+  const [text, setText] = useState('')
+  useEffect(() => {
+    setText(note?.text ?? '')
+  }, [note?.id, note?.text, v.page])
+  return (
+    <div className="marge-pagenote">
+      <textarea
+        className="db-input marge-pn-ta"
+        placeholder="Ce que recèle cette page…"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button className="db-btn" onClick={() => void v.savePageNote(v.page, text)}>
+        Enregistrer la note
+      </button>
+    </div>
   )
 }

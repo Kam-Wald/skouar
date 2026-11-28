@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type RefObject, type WheelEvent, type Mous
 import type { PageViewport } from 'pdfjs-dist'
 import { matchRect, renderTextLayer } from './pdf'
 import SearchBar from './SearchBar'
-import { mergeRectsByLine, normRect, STAMPS, TEXT_SIZES, type Tool } from './annot'
+import { hitAnnotPdf, mergeRectsByLine, normRect, shiftAnnot, STAMPS, TEXT_SIZES, type Tool } from './annot'
 import { useDismiss } from '../../shared/useDismiss'
-import { deleteAnnot, putAnnot, uid, type MargeAnnot } from './store'
+import { putAnnot, uid, type MargeAnnot } from './store'
 import type { MargeDoc } from './store'
 import type { DocViewer } from './viewer'
 
@@ -37,10 +37,13 @@ export default function DocPages({ doc, v, mainRef }: Props) {
   const renderedRef = useRef(new Map<number, string>())
   const presentRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef<{ p: number; type: Tool; x0: number; y0: number; x: number; y: number; pts: [number, number][] } | null>(null)
+  const dragRef = useRef<{ id: string; page: number; startPdf: [number, number]; orig: MargeAnnot; moved: boolean } | null>(null)
+  const draggedId = useRef<string | null>(null)
+  const [dragMove, setDragMove] = useState<{ id: string; dx: number; dy: number } | null>(null)
   const [editPop, setEditPop] = useState<EditPop | null>(null)
   useDismiss('margeannot', !!editPop, () => setEditPop(null))
 
-  const redraw = (p: number, temp?: Temp) => {
+  const redraw = (p: number, temp?: Temp, move?: { id: string; dx: number; dy: number }) => {
     const ov = overlayRefs.current.get(p)
     const vp = viewportsRef.current.get(p)
     if (!ov || !vp) return
@@ -62,8 +65,9 @@ export default function DocPages({ doc, v, mainRef }: Props) {
       })
       ctx.globalAlpha = 1
     }
-    for (const a of v.annots) {
-      if (a.page !== p) continue
+    for (const a0 of v.annots) {
+      if (a0.page !== p) continue
+      const a = move && a0.id === move.id ? shiftAnnot(a0, move.dx, move.dy) : a0
       if (a.type === 'hl') {
         const rects = a.rects ?? (a.x !== undefined && a.w !== undefined ? [[a.x, a.y ?? 0, a.w, a.h ?? 0]] : [])
         ctx.globalAlpha = 0.4
@@ -255,8 +259,16 @@ export default function DocPages({ doc, v, mainRef }: Props) {
     return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) }
   }
 
+  const pdfPos = (e: { clientX: number; clientY: number }, p: number) => {
+    const vp = viewportsRef.current.get(p)
+    if (!vp) return null
+    const { x, y } = evtPos(e, p)
+    return { vp, pdf: vp.convertToPdfPoint(x, y) as [number, number] }
+  }
+
   const mk = async (a: MargeAnnot) => {
     await putAnnot(a)
+    v.pushHist({ kind: 'add', after: a })
     await v.reloadAnnots()
     redraw(a.page)
   }
@@ -330,7 +342,52 @@ export default function DocPages({ doc, v, mainRef }: Props) {
     }
   }
 
-  const onPageMouseUp = (p: number) => {
+  const onPageDown = (e: ReactMouseEvent, p: number) => {
+    if (v.tool !== 'select') return
+    const r = pdfPos(e, p)
+    if (!r) return
+    const [px, py] = r.pdf
+    const tol = 6 / r.vp.scale
+    const hit = [...v.annots]
+      .reverse()
+      .find((a) => a.page === p && (a.type === 'hl' || a.type === 'ink' || a.type === 'arrow' || a.type === 'circle') && hitAnnotPdf(a, px, py, tol))
+    if (!hit) return
+    e.preventDefault()
+    dragRef.current = { id: hit.id, page: p, startPdf: [px, py], orig: hit, moved: false }
+  }
+
+  const onPageMove = (e: ReactMouseEvent, p: number) => {
+    const d = dragRef.current
+    if (!d || d.page !== p) return
+    const r = pdfPos(e, p)
+    if (!r) return
+    const dx = r.pdf[0] - d.startPdf[0]
+    const dy = r.pdf[1] - d.startPdf[1]
+    if (!d.moved && Math.hypot(dx * r.vp.scale, dy * r.vp.scale) < 4) return
+    d.moved = true
+    setDragMove({ id: d.id, dx, dy })
+    redraw(p, undefined, { id: d.id, dx, dy })
+  }
+
+  const onPageMouseUp = (e: ReactMouseEvent, p: number) => {
+    const d = dragRef.current
+    if (d) {
+      dragRef.current = null
+      const r = pdfPos(e, p)
+      if (d.moved && r) {
+        const dx = r.pdf[0] - d.startPdf[0]
+        const dy = r.pdf[1] - d.startPdf[1]
+        const after = shiftAnnot(d.orig, dx, dy)
+        draggedId.current = after.id
+        void putAnnot(after).then(async () => {
+          v.pushHist({ kind: 'move', before: d.orig, after })
+          await v.reloadAnnots()
+          redraw(p)
+        })
+      }
+      setDragMove(null)
+      return
+    }
     if (v.tool !== 'select') return
     const sel = window.getSelection()
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
@@ -359,8 +416,9 @@ export default function DocPages({ doc, v, mainRef }: Props) {
 
   const saveEdit = async () => {
     if (!editPop) return
-    await mk({
-      id: editPop.id ?? uid(),
+    const before = editPop.id ? v.annots.find((a) => a.id === editPop.id) : undefined
+    const a: MargeAnnot = {
+      id: before?.id ?? uid(),
       docId: doc.id,
       page: editPop.page,
       type: editPop.kind,
@@ -370,14 +428,35 @@ export default function DocPages({ doc, v, mainRef }: Props) {
       text: editPop.text.trim() || (editPop.kind === 'note' ? '…' : ''),
       size: editPop.kind === 'text' ? editPop.size : undefined,
       at: Date.now()
-    })
+    }
+    await putAnnot(a)
+    v.pushHist(before ? { kind: 'edit', before, after: a } : { kind: 'add', after: a })
+    await v.reloadAnnots()
+    redraw(editPop.page)
     setEditPop(null)
   }
 
   const removeAnnot = async (id: string, pageN: number) => {
-    await deleteAnnot(id)
-    await v.reloadAnnots()
+    await v.removeAnnot(id)
     redraw(pageN)
+  }
+
+  const onDomDown = (e: ReactMouseEvent, a: MargeAnnot, p: number) => {
+    e.stopPropagation()
+    if (v.tool !== 'select') return
+    const r = pdfPos(e, p)
+    if (!r) return
+    e.preventDefault()
+    dragRef.current = { id: a.id, page: p, startPdf: r.pdf, orig: a, moved: false }
+  }
+
+  const domClick = (e: ReactMouseEvent, id: string, fn: () => void) => {
+    e.stopPropagation()
+    if (draggedId.current === id) {
+      draggedId.current = null
+      return
+    }
+    fn()
   }
 
   return (
@@ -390,7 +469,9 @@ export default function DocPages({ doc, v, mainRef }: Props) {
           key={p}
           className="marge-page"
           data-page={p}
-          onMouseUp={() => onPageMouseUp(p)}
+          onMouseDown={(e) => onPageDown(e, p)}
+          onMouseMove={(e) => onPageMove(e, p)}
+          onMouseUp={(e) => onPageMouseUp(e, p)}
           ref={(el) => {
             if (el) pageRefs.current.set(p, el)
             else pageRefs.current.delete(p)
@@ -426,7 +507,8 @@ export default function DocPages({ doc, v, mainRef }: Props) {
             .map((a) => {
               const vp = viewportsRef.current.get(p)
               if (!vp) return null
-              const [x, y] = vp.convertToViewportPoint(a.x ?? 0, a.y ?? 0)
+              const mv = dragMove && dragMove.id === a.id ? dragMove : null
+              const [x, y] = vp.convertToViewportPoint((a.x ?? 0) + (mv?.dx ?? 0), (a.y ?? 0) + (mv?.dy ?? 0))
               if (a.type === 'sign') {
                 return (
                   <img
@@ -434,8 +516,9 @@ export default function DocPages({ doc, v, mainRef }: Props) {
                     src={a.dataUrl}
                     alt="signature"
                     className="marge-asign"
-                    style={{ left: x, top: y - (a.h ?? 64) * vp.scale, width: (a.w ?? 160) * vp.scale }}
+                    style={{ left: x, top: y - (a.h ?? 64) * vp.scale, width: (a.w ?? 160) * vp.scale, pointerEvents: v.tool === 'select' ? 'auto' : 'none' }}
                     draggable={false}
+                    onMouseDown={(e) => onDomDown(e, a, p)}
                   />
                 )
               }
@@ -445,12 +528,9 @@ export default function DocPages({ doc, v, mainRef }: Props) {
                     key={a.id}
                     className="marge-astamp"
                     style={{ left: x, top: y - 20 * vp.scale, fontSize: 22 * vp.scale }}
-                    title="Cliquer pour supprimer"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void removeAnnot(a.id, p)
-                    }}
+                    title="Cliquer pour supprimer (glisser pour déplacer en mode sélection)"
+                    onMouseDown={(e) => onDomDown(e, a, p)}
+                    onClick={(e) => domClick(e, a.id, () => void removeAnnot(a.id, p))}
                   >
                     {a.text}
                   </button>
@@ -467,11 +547,12 @@ export default function DocPages({ doc, v, mainRef }: Props) {
                       : { left: x, top: y - (a.size ?? 16) * vp.scale, fontSize: (a.size ?? 16) * vp.scale, color: a.color }
                   }
                   title={a.text}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setEditPop({ cx: e.clientX, cy: e.clientY, page: p, pdfX: a.x ?? 0, pdfY: a.y ?? 0, id: a.id, kind: isNote ? 'note' : 'text', text: a.text ?? '', size: a.size ?? 16 })
-                  }}
+                  onMouseDown={(e) => onDomDown(e, a, p)}
+                  onClick={(e) =>
+                    domClick(e, a.id, () =>
+                      setEditPop({ cx: e.clientX, cy: e.clientY, page: p, pdfX: a.x ?? 0, pdfY: a.y ?? 0, id: a.id, kind: isNote ? 'note' : 'text', text: a.text ?? '', size: a.size ?? 16 })
+                    )
+                  }
                 >
                   {isNote ? '📝' : <span>{a.text}</span>}
                 </button>
