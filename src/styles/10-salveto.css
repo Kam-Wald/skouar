@@ -477,3 +477,80 @@ button.sa-side-row:hover {
 .sa-cycle-row {
   padding: 2px 0;
 }
+
+/* ---------- Salveto : bandeau passif + vues médicales (S6) ---------- */
+
+.sa-bandeau {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 12px 0 4px;
+  max-width: 640px;
+}
+
+.sa-bandeau-title {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.sa-bandeau-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.88rem;
+}
+
+.sa-med-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.sa-cr {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  max-width: 560px;
+}
+
+.sa-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sa-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  font-style: normal;
+  color: var(--muted);
+}
+
+.sa-badge-renouveler,
+.sa-badge-proche {
+  border-color: #e5484d88;
+  color: #e5484d;
+}
+
+.sa-badge-retard {
+  border-color: #e5484d;
+  background: #e5484d22;
+  color: #e5484d;
+  font-weight: 700;
+}
+
+.sa-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
