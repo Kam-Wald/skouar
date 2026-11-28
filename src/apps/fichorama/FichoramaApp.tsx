@@ -4,6 +4,7 @@ import { notify } from '../../shared/notify'
 import { uid } from '../../shared/db'
 import { apps } from '../registry'
 import CategoryModal, { DeleteCategoryModal, type CategoryDraft } from './CategoryModal'
+import SettingsPanel from './SettingsPanel'
 import SheetModal from './SheetModal'
 import SheetView, { SheetCard } from './SheetView'
 import { countSheetsOf, deleteCategory, saveCategory } from './categories'
@@ -209,7 +210,13 @@ export default function FichoramaApp() {
   const homeResults = homeQ.trim() ? searchSheets(sheets, homeQ) : null
 
   return (
-    <AppShell appId="fichorama" appName="Fichorama" logo={app.logo!} sidebar={sidebar}>
+    <AppShell
+      appId="fichorama"
+      appName="Fichorama"
+      logo={app.logo!}
+      sidebar={sidebar}
+      settingsPanel={<SettingsPanel categories={categories} sheets={sheets} onReload={reload} />}
+    >
       {view.kind === 'sheet' && sheet && sheetCat ? (
         <SheetView
           sheet={sheet}
