@@ -22,7 +22,13 @@ vi.mock('../src/apps/marge/pdf', () => ({
       getViewport: ({ scale, rotation = 0 }: { scale: number; rotation?: number }) => {
         const w = 100 * scale
         const h = 140 * scale
-        return rotation % 180 !== 0 ? { width: h, height: w, scale, rotation, transform: [scale, 0, 0, -scale, 0, h] } : { width: w, height: h, scale, rotation, transform: [scale, 0, 0, -scale, 0, h] }
+        const vp = rotation % 180 !== 0 ? { width: h, height: w, scale, rotation } : { width: w, height: h, scale, rotation }
+        return {
+          ...vp,
+          transform: [scale, 0, 0, -scale, 0, h],
+          convertToPdfPoint: (x: number, y: number) => [x, h - y] as [number, number],
+          convertToViewportPoint: (x: number, y: number) => [x, h - y] as [number, number]
+        }
       },
       render: () => ({ promise: Promise.resolve() }),
       streamTextContent: () => ({}),
