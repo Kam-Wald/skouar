@@ -12,12 +12,13 @@ interface Props {
   allTriggers: string[]
   coOcc: CoOcc[]
   traitementRefs: RefEntity[]
+  constanteRefs: RefEntity[]
   onSave: (payload: Record<string, unknown>, note: string) => void
   onSaveCrise: (ev: HealthEvent, payload: Record<string, unknown>, note: string) => void
   onClose: () => void
 }
 
-export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, traitementRefs, onSave, onSaveCrise, onClose }: Props): JSX.Element {
+export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, traitementRefs, constanteRefs, onSave, onSaveCrise, onClose }: Props): JSX.Element {
   const [note, setNote] = useState('')
   const [poids, setPoids] = useState('')
   const [coucher, setCoucher] = useState('')
@@ -28,6 +29,8 @@ export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, trait
   const [noteLibre, setNoteLibre] = useState('')
   const [newTrig, setNewTrig] = useState('')
   const [traitId, setTraitId] = useState('')
+  const [constId, setConstId] = useState('')
+  const [constVal, setConstVal] = useState('')
 
   const label = TRACKER_LABELS[type]
   const submit = async (payload: Record<string, unknown>): Promise<void> => {
@@ -218,6 +221,39 @@ export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, trait
                 ))}
               </div>
             </>
+          )}
+        </>
+      )}
+      {type === 'constante' && (
+        <>
+          {constanteRefs.length === 0 ? (
+            <p className="ra-muted">Crée d’abord une constante dans ⚙️ → onglet Racine (paramètres).</p>
+          ) : (
+            <div className="ra-form-row">
+              <select aria-label="Constante concernée" value={constId} onChange={(e) => setConstId(e.target.value)}>
+                <option value="">— choisir —</option>
+                {constanteRefs.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}{r.unit ? ` (${r.unit})` : ''}
+                  </option>
+                ))}
+              </select>
+              <input aria-label="Valeur de la constante" placeholder="ex. 72,5 ou 12/8" value={constVal} onChange={(e) => setConstVal(e.target.value)} />
+              <button
+                type="button"
+                className="db-btn primary"
+                aria-label="Enregistrer la constante"
+                onClick={() => {
+                  const r = constanteRefs.find((x) => x.id === constId)
+                  if (!r) return
+                  const raw = constVal.trim().replace(',', '.')
+                  const valeur = raw !== '' && isFinite(Number(raw)) ? Number(raw) : constVal.trim()
+                  void submit({ refId: r.id, name: r.name, valeur, unit: r.unit })
+                }}
+              >
+                Enregistrer
+              </button>
+            </div>
           )}
         </>
       )}

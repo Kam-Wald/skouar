@@ -32,6 +32,13 @@ export function validatePayload(type: EventType, p: Record<string, unknown>): st
     case 'traitement':
       if (!String(p.refId ?? '').trim()) return 'Traitement requis'
       return isEffet(p.effet) ? null : 'Effet requis (aucun / léger / marqué / négatif)'
+    case 'constante': {
+      if (!String(p.refId ?? '').trim()) return 'Constante requise'
+      const v = p.valeur
+      if (typeof v === 'number' && isFinite(v)) return null
+      if (typeof v === 'string' && v.trim()) return null
+      return 'Valeur requise'
+    }
     default:
       return null
   }

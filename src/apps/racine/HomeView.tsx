@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { notify } from '../../shared/notify'
 import { allCrisisTriggers, crisisCoOccurrences } from './crise'
-import { addEvent, ensureRef, fmtTime, summarize, todayEvents, validatePayload } from './events'
+import { addEvent, ensureRef, fmtDay, fmtTime, summarize, todayEvents, validatePayload } from './events'
+import { constanteLastValue } from './mesures'
 import QuickEntry from './QuickEntry'
 import { makeEvent, saveEvent, TRACKER_LABELS, type EventType, type HealthEvent, type RefEntity } from './store'
 
@@ -14,6 +15,7 @@ const QUICK: [EventType, string][] = [
   ['symptome', '+ Symptôme'],
   ['habitude', '+ Habitude'],
   ['traitement', '+ Efficacité'],
+  ['constante', '+ Constante'],
   ['note', '+ Note']
 ]
 
@@ -95,6 +97,7 @@ export default function HomeView({ activeTrackers, events, refs, onChanged }: Pr
           allTriggers={allCrisisTriggers(events)}
           coOcc={crisisCoOccurrences(events)}
           traitementRefs={refs.filter((r) => r.kind === 'traitement')}
+          constanteRefs={refs.filter((r) => r.kind === 'constante')}
           onSave={(p, n) => void onSave(p, n)}
           onSaveCrise={(ev, p, n) => void onSaveCrise(ev, p, n)}
           onClose={() => {
@@ -102,6 +105,32 @@ export default function HomeView({ activeTrackers, events, refs, onChanged }: Pr
             setCrise(null)
           }}
         />
+      )}
+      {refs.some((r) => r.kind === 'constante') && (
+        <div className="ra-constantes">
+          <h3>Constantes</h3>
+          <ul className="ra-today">
+            {refs
+              .filter((r) => r.kind === 'constante')
+              .map((r) => {
+                const last = constanteLastValue(events, r.id)
+                return (
+                  <li key={r.id}>
+                    <strong>{r.name}</strong>
+                    {last ? (
+                      <span>
+                        {' '}
+                        : {String(last.payload.valeur)}
+                        {last.payload.unit ? ` ${last.payload.unit}` : ''} <small>({fmtDay(last.date)})</small>
+                      </span>
+                    ) : (
+                      <span className="ra-muted"> — aucune valeur</span>
+                    )}
+                  </li>
+                )
+              })}
+          </ul>
+        </div>
       )}
       <h3>Aujourd’hui</h3>
       <ul className="ra-today">
