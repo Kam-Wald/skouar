@@ -11,7 +11,7 @@
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .marge-side-label {
@@ -19,6 +19,7 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
+  margin-bottom: 4px;
 }
 
 .marge-empty {
@@ -27,9 +28,98 @@
   margin: 0;
 }
 
+.marge-side-actions {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}
+
 .marge-side-btn {
   width: 100%;
   text-align: left;
+}
+
+.marge-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.marge-folder:hover {
+  background: var(--panel-2);
+}
+
+.marge-folder.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.marge-folder-ic {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  flex: none;
+}
+
+.marge-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marge-folder-count {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.marge-folder-del {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+}
+
+.marge-folder-del:hover {
+  color: #ff6b6b;
+}
+
+.marge-folder-pop {
+  position: fixed;
+  left: calc(var(--side-w, 240px) + 12px);
+  top: 90px;
+  z-index: 40;
+  width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.marge-folder-pop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .marge-placeholder {
@@ -68,6 +158,11 @@
 .marge-lib-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.marge-lib-search {
+  min-width: 180px;
 }
 
 .marge-lib-hint {
@@ -109,7 +204,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  cursor: pointer;
+  cursor: grab;
   transition: border-color 0.15s, transform 0.15s;
 }
 
@@ -162,11 +257,32 @@
   font-family: var(--font-mono);
 }
 
-.marge-card-del {
+.marge-progress {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-2);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.marge-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.marge-card-tools {
   position: absolute;
   top: 6px;
   right: 6px;
   z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+
+.marge-card-tools button {
   width: 26px;
   height: 26px;
   border-radius: 8px;
@@ -174,11 +290,16 @@
   background: var(--panel-2);
   color: var(--muted);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1;
 }
 
+.marge-card-tools button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 .marge-card-del:hover {
-  color: #ff6b6b;
-  border-color: #ff6b6b;
+  color: #ff6b6b !important;
+  border-color: #ff6b6b !important;
 }

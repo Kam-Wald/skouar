@@ -1,4 +1,5 @@
 import { createAppDb, uid } from '../../shared/db'
+import { duplicateTitle } from './logic'
 export { uid }
 
 export interface MargeDoc {
@@ -9,7 +10,7 @@ export interface MargeDoc {
   updatedAt: number
   lastPage?: number
   rotation?: number
-  folderId?: string | null
+  folderId?: string
 }
 
 export type MargeAnnotType = 'hl' | 'ink' | 'note' | 'text' | 'sign' | 'arrow' | 'circle' | 'stamp'
@@ -112,4 +113,38 @@ export async function deleteDoc(id: string): Promise<void> {
   await annotsT.where('docId').equals(id).delete()
   await pageNotesT.where('docId').equals(id).delete()
   await docsT.delete(id)
+}
+
+export async function listFolders(): Promise<MargeFolder[]> {
+  const all = await foldersT.toArray()
+  return all.sort((a, b) => a.at - b.at)
+}
+
+export async function addFolder(f: MargeFolder): Promise<void> {
+  await foldersT.put(f)
+}
+
+export async function deleteFolderCascade(id: string): Promise<void> {
+  await docsT.where('folderId').equals(id).modify({ folderId: undefined })
+  await foldersT.delete(id)
+}
+
+export async function setDocFolder(docId: string, folderId: string | null): Promise<void> {
+  await docsT
+    .where('id')
+    .equals(docId)
+    .modify({ folderId: folderId ?? undefined, updatedAt: Date.now() })
+}
+
+export async function duplicateDoc(d: MargeDoc): Promise<MargeDoc> {
+  const copy: MargeDoc = {
+    ...d,
+    id: uid(),
+    title: duplicateTitle(d.title),
+    updatedAt: Date.now(),
+    lastPage: undefined,
+    folderId: d.folderId
+  }
+  await addDoc(copy)
+  return copy
 }
