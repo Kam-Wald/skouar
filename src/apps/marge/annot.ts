@@ -3,6 +3,12 @@ export const COLORS = ['#ffd54a', '#7ee081', '#7ec8ff', '#ff9ecb', '#ff8a5c']
 export const STAMPS = ['✅ Lu', '⏳ À faire', '❌ Refusé', '⭐ Important']
 export const TEXT_SIZES = [12, 16, 22]
 
+export const SIGN_SIZES = [
+  { label: 'S', w: 96, h: 38 },
+  { label: 'M', w: 160, h: 64 },
+  { label: 'L', w: 240, h: 96 }
+]
+
 export type Tool = 'select' | 'hl' | 'ink' | 'arrow' | 'circle' | 'text' | 'stamp' | 'note' | 'sign'
 
 export const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [

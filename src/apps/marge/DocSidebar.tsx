@@ -1,6 +1,6 @@
 import DocThumb from './Thumb'
-import { useEffect, useState } from 'react'
-import { COLORS, iconOf, STAMPS, TEXT_SIZES, TOOLS } from './annot'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { COLORS, iconOf, SIGN_SIZES, STAMPS, TEXT_SIZES, TOOLS } from './annot'
 import type { MargeDoc } from './store'
 import { ZOOMS, type DocViewer } from './viewer'
 
@@ -57,6 +57,20 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
             {TEXT_SIZES.map((s) => (
               <option key={s} value={s}>
                 {s}px
+              </option>
+            ))}
+          </select>
+        )}
+        {v.tool === 'sign' && (
+          <select
+            className="db-input marge-signsize-sel"
+            value={String(v.signSize)}
+            onChange={(e) => v.setSignSize(Number(e.target.value))}
+            title="Taille de la signature posée"
+          >
+            {SIGN_SIZES.map((s, i) => (
+              <option key={s.label} value={i}>
+                {s.label} ({s.w}×{s.h})
               </option>
             ))}
           </select>
@@ -141,6 +155,32 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
         </div>
         <div className="marge-side-label">Note de page {v.page}</div>
         <PageNotePanel v={v} />
+        <div className="marge-side-label">Signatures ({v.signatures.length})</div>
+        <div className="marge-signs">
+          {v.signatures.map((s) => (
+            <div
+              key={s.id}
+              className={`marge-sign-row${v.activeSign()?.id === s.id ? ' on' : ''}`}
+              onClick={() => v.setActiveSign(s.id)}
+              title="Définir comme signature active"
+            >
+              <img src={s.dataUrl} alt={s.name} className="marge-sign-thumb" draggable={false} />
+              <span className="marge-annot-txt">{s.name}</span>
+              <button
+                className="marge-annot-del"
+                title="Supprimer la signature"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void v.removeSignature(s.id)
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {v.signatures.length === 0 && <p className="marge-empty">Aucune signature — dessine-la ci-dessous.</p>}
+        </div>
+        <SignPad v={v} />
         {v.outline.length > 0 && (
           <>
             <div className="marge-side-label">Sommaire</div>
@@ -217,6 +257,90 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
         </div>
       </div>
     </>
+  )
+}
+
+function SignPad({ v }: { v: DocViewer }) {
+  const cvRef = useRef<HTMLCanvasElement>(null)
+  const drawing = useRef(false)
+  const [name, setName] = useState('')
+  const [dirty, setDirty] = useState(false)
+
+  const ctx = (): CanvasRenderingContext2D | null => cvRef.current?.getContext('2d') ?? null
+
+  const pos = (e: ReactMouseEvent): { x: number; y: number } => {
+    const r = cvRef.current?.getBoundingClientRect()
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) }
+  }
+
+  const onDown = (e: ReactMouseEvent): void => {
+    const c = ctx()
+    if (!c) return
+    e.preventDefault()
+    drawing.current = true
+    const { x, y } = pos(e)
+    c.strokeStyle = '#1a1d23'
+    c.lineWidth = 2.5
+    c.lineCap = 'round'
+    c.lineJoin = 'round'
+    c.beginPath()
+    c.moveTo(x, y)
+  }
+
+  const onMove = (e: ReactMouseEvent): void => {
+    if (!drawing.current) return
+    const c = ctx()
+    if (!c) return
+    const { x, y } = pos(e)
+    c.lineTo(x, y)
+    c.stroke()
+    setDirty(true)
+  }
+
+  const onUp = (): void => {
+    drawing.current = false
+  }
+
+  const clear = (): void => {
+    const c = ctx()
+    const cv = cvRef.current
+    if (c && cv) {
+      c.clearRect(0, 0, cv.width, cv.height)
+      setDirty(false)
+    }
+  }
+
+  const save = (): void => {
+    const cv = cvRef.current
+    if (!cv || !dirty || !name.trim()) return
+    void v.addSignature(name.trim(), cv.toDataURL('image/png')).then(() => {
+      setName('')
+      clear()
+    })
+  }
+
+  return (
+    <div className="marge-signpad">
+      <canvas
+        ref={cvRef}
+        className="marge-signpad-cv"
+        width={300}
+        height={120}
+        onMouseDown={onDown}
+        onMouseMove={onMove}
+        onMouseUp={onUp}
+        onMouseLeave={onUp}
+      />
+      <input className="db-input" placeholder="Nom de la signature (« Camille »…)" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="marge-signpad-row">
+        <button className="db-btn" onClick={clear}>
+          Effacer
+        </button>
+        <button className="db-btn" disabled={!dirty || !name.trim()} onClick={save}>
+          Enregistrer
+        </button>
+      </div>
+    </div>
   )
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hitAnnotPdf, mergeRectsByLine, normRect, shiftAnnot, TOOLS, COLORS, STAMPS } from '../src/apps/marge/annot'
+import { hitAnnotPdf, mergeRectsByLine, normRect, shiftAnnot, TOOLS, COLORS, STAMPS, SIGN_SIZES } from '../src/apps/marge/annot'
 import type { MargeAnnot } from '../src/apps/marge/store'
 
 describe('marge — annot (logique pure)', () => {
@@ -25,6 +25,12 @@ describe('marge — annot (logique pure)', () => {
     expect(new Set(TOOLS.map((t) => t.key)).size).toBe(9)
     expect(COLORS.length).toBe(5)
     expect(STAMPS.length).toBe(4)
+    expect(SIGN_SIZES.length).toBe(3)
+    expect(SIGN_SIZES.map((s) => s.label)).toEqual(['S', 'M', 'L'])
+    for (const s of SIGN_SIZES) {
+      expect(s.w).toBeGreaterThan(0)
+      expect(s.h).toBeGreaterThan(0)
+    }
   })
 
   it('shiftAnnot : décale x/y/x2/y2, rects et points, conserve le reste, ne mute pas l’original', () => {

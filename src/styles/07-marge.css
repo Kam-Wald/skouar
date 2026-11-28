@@ -645,3 +645,61 @@
   min-height: 72px;
   resize: vertical;
 }
+
+.marge-signs {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.marge-sign-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.marge-sign-row:hover {
+  background: var(--panel-2);
+}
+
+.marge-sign-row.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.marge-sign-thumb {
+  width: 52px;
+  height: 22px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+  flex: none;
+}
+
+.marge-signpad {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.marge-signpad-cv {
+  width: 100%;
+  max-width: 300px;
+  height: 120px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.marge-signpad-row {
+  display: flex;
+  gap: 6px;
+}
