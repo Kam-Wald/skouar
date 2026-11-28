@@ -277,3 +277,26 @@ export function deleteCategory(data: FichoramaData, id: string, moveToId: string
   }
   data.categories = data.categories.filter((c) => c.id !== id)
 }
+
+// ---------- Export / import JSON (S7) ----------
+
+export function exportJson(data: FichoramaData): string {
+  return JSON.stringify(data, null, 2)
+}
+
+export function parseImport(text: string): FichoramaData | null {
+  try {
+    const v: unknown = JSON.parse(text)
+    return validateData(v) ? v : null
+  } catch {
+    return null
+  }
+}
+
+export function mergeData(cur: FichoramaData, inc: FichoramaData): FichoramaData {
+  const categories = [...cur.categories]
+  for (const c of inc.categories) if (!categories.some((x) => x.id === c.id)) categories.push(c)
+  const fiches = [...cur.fiches]
+  for (const f of inc.fiches) if (!fiches.some((x) => x.id === f.id)) fiches.push(f)
+  return { version: 1, categories, fiches }
+}

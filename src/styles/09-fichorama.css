@@ -675,3 +675,11 @@
   font-size: 0.82rem;
   color: var(--muted);
 }
+
+/* ---------- Fichorama : export/import (S7) ---------- */
+
+.fi-side-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}

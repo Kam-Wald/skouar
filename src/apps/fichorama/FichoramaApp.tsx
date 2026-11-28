@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
+import { snapshotBeforeImport } from '../../shared/backup'
 import { notify } from '../../shared/notify'
 import FieldsEditor from './FieldsEditor'
 import {
@@ -11,13 +12,16 @@ import {
   categoryOf,
   clampNote,
   deleteCategory,
+  exportJson,
   fileToDataUrl,
   filterFiches,
   fmtDateIso,
   fmtFieldValue,
   fmtNote,
   globalStats,
+  mergeData,
   noteOf,
+  parseImport,
   searchFiches,
   sortFiches,
   validateDraft,
@@ -128,6 +132,7 @@ export default function FichoramaApp(): JSX.Element {
   const [setDraft, setSetDraft] = useState<Category | null>(null)
   const [delConfirm, setDelConfirm] = useState(false)
   const [delTarget, setDelTarget] = useState('')
+  const [importText, setImportText] = useState<string | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
   const [renote, setRenote] = useState<string | null>(null)
   const [renoteVal, setRenoteVal] = useState(5)
@@ -230,6 +235,50 @@ export default function FichoramaApp(): JSX.Element {
     notify('Fiche supprimée')
   }
 
+  const doExport = (): void => {
+    if (!data) return
+    const blob = new Blob([exportJson(data)], { type: 'application/json;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `fichorama-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    notify('Export JSON téléchargé (catégories + fiches + images encodées)')
+  }
+
+  const onImportFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setImportText(String(reader.result ?? ''))
+    reader.onerror = () => notify('Lecture du fichier impossible')
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const applyImport = async (mode: 'merge' | 'replace'): Promise<void> => {
+    if (importText === null || !data) return
+    const inc = parseImport(importText)
+    if (!inc) {
+      notify('Fichier JSON invalide : structure Fichorama non reconnue')
+      setImportText(null)
+      return
+    }
+    const how = await snapshotBeforeImport()
+    mutate((d) => {
+      if (mode === 'merge') {
+        const m = mergeData(d, inc)
+        d.categories = m.categories
+        d.fiches = m.fiches
+      } else {
+        d.categories = inc.categories
+        d.fiches = inc.fiches
+      }
+    })
+    setImportText(null)
+    notify(`${mode === 'merge' ? 'Import fusionné' : 'Données remplacées'} — snapshot de sécurité ${how === 'localStorage' ? 'enregistré' : 'téléchargé (ZIP)'}`)
+  }
+
   const openSettings = (id: string): void => {
     if (!data) return
     const c = categoryOf(data, id)
@@ -311,6 +360,14 @@ export default function FichoramaApp(): JSX.Element {
           <button type="button" className="db-btn" onClick={() => setNewCat(true)}>
             + Nouvelle catégorie
           </button>
+          <div className="fi-side-sep" />
+          <button type="button" className="db-btn" onClick={doExport}>
+            ⬇ Exporter JSON
+          </button>
+          <label className="db-btn fi-file-btn">
+            ⬆ Importer JSON…
+            <input type="file" accept="application/json,.json" hidden onChange={onImportFile} />
+          </label>
         </div>
       }
     >
@@ -666,6 +723,28 @@ export default function FichoramaApp(): JSX.Element {
               </button>
               <button type="button" className="db-btn" onClick={saveSettings}>
                 Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {importText !== null && (
+        <div className="fi-overlay" onClick={() => setImportText(null)}>
+          <div className="fi-modal" onClick={(e) => e.stopPropagation()}>
+            <p className="fi-modal-title">Importer un fichier JSON</p>
+            <p className="fi-detail-meta">
+              Un snapshot de sécurité de toutes les données Skouar est pris avant toute modification. « Fusionner » conserve vos fiches/catégories
+              existantes et ajoute celles inconnues ; « Remplacer » écrase tout.
+            </p>
+            <div className="fi-modal-actions">
+              <button type="button" className="db-btn" onClick={() => setImportText(null)}>
+                Annuler
+              </button>
+              <button type="button" className="db-btn" onClick={() => void applyImport('merge')}>
+                Fusionner
+              </button>
+              <button type="button" className="db-btn fi-danger-btn" onClick={() => void applyImport('replace')}>
+                Remplacer tout
               </button>
             </div>
           </div>
