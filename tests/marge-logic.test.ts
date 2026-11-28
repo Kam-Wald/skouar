@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { relTime, safeName, parseRanges } from '../src/apps/marge/logic'
+import { relTime, safeName, parseRanges, filterDocs, sortDocs, progressOf, duplicateTitle } from '../src/apps/marge/logic'
 
 describe('marge — logic (fonctions pures)', () => {
   it('relTime : à l’instant, minutes, heures, puis date fr-FR', () => {
@@ -29,5 +29,38 @@ describe('marge — logic (fonctions pures)', () => {
     expect(parseRanges('', 10)).toEqual([])
     expect(parseRanges('3-1', 10)).toEqual([3])
     expect(parseRanges('2,2,4-4', 10)).toEqual([2, 4])
+  })
+
+  it('filterDocs : recherche insensible à la casse sur le titre, vide = tout', () => {
+    const docs = [{ title: 'Rapport 2026' }, { title: 'notes Perso' }, { title: 'contrat.pdf' }]
+    expect(filterDocs(docs, '')).toHaveLength(3)
+    expect(filterDocs(docs, '  ')).toHaveLength(3)
+    expect(filterDocs(docs, 'RAPPORT')).toEqual([{ title: 'Rapport 2026' }])
+    expect(filterDocs(docs, 'perso').map((d) => d.title)).toEqual(['notes Perso'])
+    expect(filterDocs(docs, 'zzz')).toHaveLength(0)
+  })
+
+  it('sortDocs : date (défaut), titre A–Z (fr), pages décroissant — sans muter l’entrée', () => {
+    const docs = [
+      { title: 'béta', updatedAt: 100, pages: 3 },
+      { title: 'Alpha', updatedAt: 300, pages: 10 },
+      { title: 'charlie', updatedAt: 200, pages: 7 }
+    ]
+    const byDate = sortDocs(docs, 'date').map((d) => d.title)
+    expect(byDate).toEqual(['Alpha', 'charlie', 'béta'])
+    expect(sortDocs(docs, 'titre').map((d) => d.title)).toEqual(['Alpha', 'béta', 'charlie'])
+    expect(sortDocs(docs, 'pages').map((d) => d.pages)).toEqual([10, 7, 3])
+    expect(docs[0].title).toBe('béta')
+  })
+
+  it('progressOf : 0 sans lastPage, ratio lastPage/pages borné entre 0 et 1', () => {
+    expect(progressOf({ pages: 10 })).toBe(0)
+    expect(progressOf({ pages: 10, lastPage: 5 })).toBe(0.5)
+    expect(progressOf({ pages: 10, lastPage: 99 })).toBe(1)
+    expect(progressOf({ pages: 0, lastPage: 3 })).toBe(0)
+  })
+
+  it('duplicateTitle : « Copie de X »', () => {
+    expect(duplicateTitle('rapport')).toBe('Copie de rapport')
   })
 })

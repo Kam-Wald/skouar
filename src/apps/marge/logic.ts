@@ -28,6 +28,31 @@ export function ab(u: Uint8Array): ArrayBuffer {
   return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer
 }
 
+export type SortMode = 'date' | 'titre' | 'pages'
+
+export function filterDocs<T extends { title: string }>(docs: T[], q: string): T[] {
+  const n = q.trim().toLowerCase()
+  if (!n) return docs
+  return docs.filter((d) => d.title.toLowerCase().includes(n))
+}
+
+export function sortDocs<T extends { title: string; updatedAt: number; pages: number }>(docs: T[], mode: SortMode): T[] {
+  const c = [...docs]
+  if (mode === 'titre') c.sort((a, b) => a.title.localeCompare(b.title, 'fr'))
+  else if (mode === 'pages') c.sort((a, b) => b.pages - a.pages)
+  else c.sort((a, b) => b.updatedAt - a.updatedAt)
+  return c
+}
+
+export function progressOf(d: { pages: number; lastPage?: number }): number {
+  if (!d.lastPage || d.pages <= 0) return 0
+  return Math.min(1, Math.max(0, d.lastPage / d.pages))
+}
+
+export function duplicateTitle(t: string): string {
+  return `Copie de ${t}`
+}
+
 export function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

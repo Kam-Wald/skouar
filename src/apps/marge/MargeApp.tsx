@@ -1,34 +1,48 @@
-import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
 import { PDFDocument } from 'pdf-lib'
 import AppShell from '../../shared/AppShell'
+import FolderBar from './FolderBar'
 import LibraryView from './LibraryView'
 import { loadDoc } from './pdf'
-import { ab } from './logic'
+import { ab, filterDocs, sortDocs, type SortMode } from './logic'
 import {
   addDoc,
+  addFolder,
   deleteDoc,
+  deleteFolderCascade,
+  duplicateDoc,
   listAnnots,
   listDocs,
+  listFolders,
   listPageNotes,
   restoreDoc,
+  setDocFolder,
   uid,
   updateDoc,
-  type MargeDoc
+  type MargeDoc,
+  type MargeFolder
 } from './store'
 
 const BASE = import.meta.env.BASE_URL
 
 type Toast = { key: number; msg: string; action?: () => void }
+type FolderSel = 'all' | 'none' | string
 
 export default function MargeApp() {
   const [docs, setDocs] = useState<MargeDoc[]>([])
+  const [folders, setFolders] = useState<MargeFolder[]>([])
   const [mergeSel, setMergeSel] = useState<string[]>([])
   const [toast, setToast] = useState<Toast | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [dragDocId, setDragDocId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortMode>('date')
+  const [folderSel, setFolderSel] = useState<FolderSel>('all')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void listDocs().then(setDocs)
+    void listFolders().then(setFolders)
   }, [])
 
   useEffect(() => {
@@ -38,10 +52,18 @@ export default function MargeApp() {
   }, [toast])
 
   const refresh = (): Promise<void> =>
-    listDocs().then((l) => {
-      setDocs(l)
+    Promise.all([listDocs(), listFolders()]).then(([d, f]) => {
+      setDocs(d)
+      setFolders(f)
       return undefined
     })
+
+  const visibleDocs = useMemo(() => {
+    let l = filterDocs(docs, query)
+    if (folderSel === 'none') l = l.filter((d) => !d.folderId)
+    else if (folderSel !== 'all') l = l.filter((d) => d.folderId === folderSel)
+    return sortDocs(l, sort)
+  }, [docs, query, sort, folderSel])
 
   const importFiles = async (list: File[]): Promise<void> => {
     let n = 0
@@ -56,7 +78,8 @@ export default function MargeApp() {
         title: f.name.replace(/\.pdf$/i, ''),
         data: new Blob([buf], { type: 'application/pdf' }),
         pages,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        ...(folderSel !== 'all' && folderSel !== 'none' ? { folderId: folderSel } : {})
       })
       n++
     }
@@ -104,10 +127,39 @@ export default function MargeApp() {
     })
   }
 
+  const createFolder = async (name: string, icon: string, color: string): Promise<void> => {
+    await addFolder({ id: uid(), name, icon, color, at: Date.now() })
+    await refresh()
+    setToast({ key: Date.now(), msg: `Dossier « ${name} » créé 📁` })
+  }
+
+  const removeFolder = async (id: string): Promise<void> => {
+    const f = folders.find((x) => x.id === id)
+    await deleteFolderCascade(id)
+    await refresh()
+    if (folderSel === id) setFolderSel('all')
+    setToast({ key: Date.now(), msg: `Dossier « ${f?.name ?? ''} » supprimé — documents conservés, sans dossier` })
+  }
+
+  const dropDoc = async (folderId: string | null): Promise<void> => {
+    if (!dragDocId) return
+    await setDocFolder(dragDocId, folderId)
+    setDragDocId(null)
+    await refresh()
+    const f = folders.find((x) => x.id === folderId)
+    setToast({ key: Date.now(), msg: `Déplacé dans « ${f?.name ?? 'Sans dossier'} »` })
+  }
+
+  const duplicate = async (d: MargeDoc): Promise<void> => {
+    await duplicateDoc(d)
+    await refresh()
+    setToast({ key: Date.now(), msg: `« ${d.title} » dupliqué ⧉` })
+  }
+
   const onDrop = (e: ReactDragEvent): void => {
     e.preventDefault()
     setDragOver(false)
-    void importFiles(Array.from(e.dataTransfer.files))
+    if (e.dataTransfer?.files?.length) void importFiles(Array.from(e.dataTransfer.files))
   }
 
   return (
@@ -124,22 +176,37 @@ export default function MargeApp() {
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
       sidebar={
-        <div className="marge-side">
-          <div className="marge-side-label">Bibliothèque</div>
-          <p className="marge-empty">
-            {docs.length} document{docs.length > 1 ? 's' : ''} PDF · {mergeSel.length} sélectionné{mergeSel.length > 1 ? 's' : ''}
-          </p>
-          <button className="db-btn marge-side-btn" onClick={() => fileRef.current?.click()}>
-            ↑ Importer un PDF
-          </button>
-          <button className="db-btn marge-side-btn" disabled={mergeSel.length < 2} onClick={() => void mergeSelected()}>
-            📚 Fusionner la sélection ({mergeSel.length})
-          </button>
-        </div>
+        <>
+          <FolderBar
+            folders={folders}
+            docs={docs}
+            folderSel={folderSel}
+            dragDocId={dragDocId}
+            onSelect={setFolderSel}
+            onDropDoc={(fid) => void dropDoc(fid)}
+            onCreate={(n, i, c) => void createFolder(n, i, c)}
+            onDeleteFolder={(id) => void removeFolder(id)}
+          />
+          <div className="marge-side-actions">
+            <p className="marge-empty">
+              {docs.length} document{docs.length > 1 ? 's' : ''} PDF · {mergeSel.length} sélectionné{mergeSel.length > 1 ? 's' : ''}
+            </p>
+            <button className="db-btn marge-side-btn" onClick={() => fileRef.current?.click()}>
+              ↑ Importer un PDF
+            </button>
+            <button className="db-btn marge-side-btn" disabled={mergeSel.length < 2} onClick={() => void mergeSelected()}>
+              📚 Fusionner la sélection ({mergeSel.length})
+            </button>
+          </div>
+        </>
       }
     >
       <LibraryView
-        docs={docs}
+        docs={visibleDocs}
+        query={query}
+        sort={sort}
+        onQuery={setQuery}
+        onSort={setSort}
         mergeSel={mergeSel}
         onToggleMerge={(id) => setMergeSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))}
         onImportClick={() => fileRef.current?.click()}
@@ -148,6 +215,8 @@ export default function MargeApp() {
           void updateDoc(id, { title, updatedAt: Date.now() }).then(() => refresh())
         }}
         onDelete={(d) => void removeDoc(d)}
+        onDuplicate={(d) => void duplicate(d)}
+        onDragDocStart={setDragDocId}
       />
       <input
         ref={fileRef}
