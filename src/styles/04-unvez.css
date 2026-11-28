@@ -1,0 +1,65 @@
+.unvez-side-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 10px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.unvez-side-btn {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 2px 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.unvez-side-btn:hover {
+  background: var(--panel-2);
+}
+
+.unvez-side-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.unvez-side-add {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.unvez-side-add:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.unvez-view {
+  padding: 16px 20px;
+}
+
+.unvez-view h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.unvez-empty {
+  color: var(--muted);
+}
