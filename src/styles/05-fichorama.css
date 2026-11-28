@@ -97,3 +97,53 @@
 .fi-empty {
   color: var(--muted);
 }
+
+.fi-cat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fi-cat-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.fi-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.fi-field-row input,
+.fi-field-row select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.fi-field-row input[aria-label^="Libellé"] {
+  flex: 1;
+  min-width: 140px;
+}
+
+.fi-field-req {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fi-field-new {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
