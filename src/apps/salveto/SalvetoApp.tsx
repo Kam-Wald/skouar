@@ -3,6 +3,7 @@ import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import CourbesView from './CourbesView'
 import JournalView from './JournalView'
+import ParametresView from './ParametresView'
 import RapportsView from './RapportsView'
 import { OrdonnancesView, PreventifView, RdvView } from './MedViews'
 import { ProfilView, UrgenceView } from './ProfilView'
@@ -25,6 +26,7 @@ import {
   phaseOfDay,
   prevision,
   seedConfig,
+  seedProfil,
   seedRefs,
   sortEventsDesc,
   timeOf,
@@ -56,7 +58,19 @@ import {
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-type View = 'accueil' | 'journal' | 'courbes' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence' | 'rapports'
+type View =
+  | 'accueil'
+  | 'journal'
+  | 'courbes'
+  | 'traitements'
+  | 'cycle'
+  | 'rdv'
+  | 'ordonnances'
+  | 'preventif'
+  | 'profil'
+  | 'urgence'
+  | 'rapports'
+  | 'parametres'
 
 const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
@@ -69,7 +83,7 @@ const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Préventif', icon: '🩺', view: 'preventif' },
   { label: 'Profil santé', icon: '🧾', view: 'profil' },
   { label: 'Rapports', icon: '🗂️', view: 'rapports' },
-  { label: 'Paramètres', icon: '⚙️', soon: true }
+  { label: 'Paramètres', icon: '⚙️', view: 'parametres' }
 ]
 
 const QUICK_SUIVIS: SuiviId[] = [
@@ -211,6 +225,24 @@ export default function SalvetoApp() {
     notify('Entrée supprimée')
   }
 
+  const onSaveRefs = (r: SalvetoRefs): void => {
+    saveRefs(r)
+    setRefs(r)
+  }
+
+  const reloadAll = (): void => {
+    void Promise.all([loadConfig(), loadEvents(), loadRefs(), loadProfil(), loadAttachments()]).then(
+      ([c, evs, r, p, att]) => {
+        setConfig(c)
+        setEvents(sortEventsDesc(evs))
+        setRefs(r)
+        setProfil(p)
+        setAttachments(att)
+        setView('accueil')
+      }
+    )
+  }
+
   const onSaveProfil = (p: ProfilSante): void => {
     saveProfil(p)
     setProfil(p)
@@ -281,6 +313,17 @@ export default function SalvetoApp() {
           <CourbesView events={events} refs={refs} config={config} onSaveEvent={onSaveEvent} />
         ) : view === 'rapports' && profil ? (
           <RapportsView events={events} refs={refs} config={config} profil={profil} />
+        ) : view === 'parametres' ? (
+          <ParametresView
+            config={config}
+            refs={refs}
+            profil={profil ?? seedProfil()}
+            events={events}
+            attachments={attachments}
+            onSaveConfig={onSaveConfig}
+            onSaveRefs={onSaveRefs}
+            onImported={reloadAll}
+          />
         ) : view === 'profil' && profil ? (
           <ProfilView
             profil={profil}

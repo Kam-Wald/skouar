@@ -1036,3 +1036,114 @@ export function resumeSerie(points: SeriePoint[]): { min: number; max: number; m
     moy: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10
   }
 }
+
+/* ---------- Export / import JSON (17) — sauvegarde versionnée v1 ---------- */
+
+export interface SalvetoBackup {
+  app: 'salveto'
+  version: 1
+  exportedAt: string
+  withAttachments: boolean
+  config: SalvetoConfig
+  refs: SalvetoRefs
+  profil: ProfilSante
+  events: SalvetoEvent[]
+  attachments: Attachment[]
+}
+
+export interface BackupInput {
+  config: SalvetoConfig
+  refs: SalvetoRefs
+  profil: ProfilSante
+  events: SalvetoEvent[]
+  attachments: Attachment[]
+}
+
+export function buildBackup(input: BackupInput, withAttachments: boolean): SalvetoBackup {
+  return {
+    app: 'salveto',
+    version: 1,
+    exportedAt: toLocalISO(new Date()),
+    withAttachments,
+    config: input.config,
+    refs: input.refs,
+    profil: input.profil,
+    events: sortEventsDesc(input.events),
+    attachments: withAttachments ? input.attachments : []
+  }
+}
+
+export function validateBackup(raw: unknown): SalvetoBackup | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (r.app !== 'salveto' || r.version !== 1) return null
+  const config = migrateConfig(r.config)
+  const refs = migrateRefs(r.refs)
+  const profil = migrateProfil(r.profil)
+  if (!config || !refs || !profil) return null
+  const events = migrateEvents(r.events)
+  const attachments = Array.isArray(r.attachments)
+    ? r.attachments.filter(
+        (a): a is Attachment =>
+          !!a && typeof a === 'object' && typeof (a as Attachment).id === 'string' && typeof (a as Attachment).dataUrl === 'string'
+      )
+    : []
+  return {
+    app: 'salveto',
+    version: 1,
+    exportedAt: typeof r.exportedAt === 'string' ? r.exportedAt : '',
+    withAttachments: r.withAttachments === true,
+    config,
+    refs,
+    profil,
+    events,
+    attachments
+  }
+}
+
+export function parseImport(text: string): { ok: true; backup: SalvetoBackup } | { ok: false; error: string } {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return { ok: false, error: 'Fichier illisible (JSON invalide).' }
+  }
+  const b = validateBackup(raw)
+  if (!b) return { ok: false, error: 'Pas une sauvegarde Salveto valide (app « salveto », version 1, forme attendue).' }
+  return { ok: true, backup: b }
+}
+
+export type ImportMode = 'merge' | 'replace'
+
+export interface ImportPayload {
+  config: SalvetoConfig
+  refs: SalvetoRefs
+  profil: ProfilSante
+  events: SalvetoEvent[]
+  attachments: Attachment[]
+}
+
+export function mergeBackup(current: ImportPayload, incoming: SalvetoBackup, mode: ImportMode): ImportPayload {
+  if (mode === 'replace') {
+    return {
+      config: incoming.config,
+      refs: incoming.refs,
+      profil: incoming.profil,
+      events: incoming.events,
+      attachments: incoming.attachments
+    }
+  }
+  const evById = new Map(current.events.map((e) => [e.id, e]))
+  for (const e of incoming.events) evById.set(e.id, e)
+  const attById = new Map(current.attachments.map((a) => [a.id, a]))
+  for (const a of incoming.attachments) attById.set(a.id, a)
+  const refById = new Map(current.refs.items.map((r) => [r.id, r]))
+  for (const r of incoming.refs.items) refById.set(r.id, r)
+  return {
+    config: incoming.config,
+    refs: { ...incoming.refs, items: [...refById.values()] },
+    profil: incoming.profil,
+    events: sortEventsDesc([...evById.values()]),
+    attachments: [...attById.values()]
+  }
+}

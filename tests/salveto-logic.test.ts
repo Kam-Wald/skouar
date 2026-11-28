@@ -4,6 +4,7 @@ import {
   addDays,
   bandeauAccueil,
   bienfaits,
+  buildBackup,
   clampInt,
   cooccurrences,
   cyclesOf,
@@ -27,16 +28,19 @@ import {
   migrateEvents,
   migrateProfil,
   migrateRefs,
+  mergeBackup,
   monthGrid,
   monthRange,
   niceScale,
   normalizeTrigger,
+  parseImport,
   phaseOfDay,
   prevision,
   rdvTries,
   resumeSerie,
   searchEvents,
   seedConfig,
+  seedProfil,
   serieOf,
   statsMois,
   seedRefs,
@@ -47,6 +51,7 @@ import {
   todayDay,
   touchEvent,
   upsertRef,
+  validateBackup,
   validateEvent,
   type ProfilSante,
   type RefItem,
@@ -627,5 +632,67 @@ describe('Salveto logic — rapports (S10)', () => {
     expect(dernierRdvPasse(evs)?.label).toBe('Dr B')
     expect(resumeSerie([{ id: '1', day: '2025-01-01', date: '2025-01-01T00:00:00', value: 2 }, { id: '2', day: '2025-01-02', date: '2025-01-02T00:00:00', value: 4 }])).toEqual({ min: 2, max: 4, moy: 3 })
     expect(resumeSerie([])).toBeUndefined()
+  })
+})
+
+describe('Salveto logic — export/import JSON (S11)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  const input = {
+    config: { version: 1 as const, onboarded: true, desktopOnly: true, activeSuivis: ['moral' as const], questionsRdv: ['Q1'] },
+    refs: { version: 1 as const, items: [{ id: 't1', kind: 'traitement' as const, label: 'Doliprane', createdAt: '2025-01-01T00:00:00' }] },
+    profil: { ...seedProfil(), allergies: ['pénicilline'], groupeSanguin: 'O+' },
+    events: [mk('e1', 'moral', '2025-01-05T08:00:00', { value: 4 })],
+    attachments: [{ id: 'a1', name: 'scan.pdf', mime: 'application/pdf', size: 10, dataUrl: 'data:application/pdf;base64,eA==', createdAt: '2025-01-05T08:00:00' }]
+  }
+  it('buildBackup → JSON → parseImport : roundtrip valide, PJ incluses ou non', () => {
+    const full = buildBackup(input, true)
+    const r = parseImport(JSON.stringify(full))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.backup.app).toBe('salveto')
+      expect(r.backup.events.length).toBe(1)
+      expect(r.backup.attachments.length).toBe(1)
+      expect(r.backup.config.questionsRdv).toEqual(['Q1'])
+      expect(r.backup.profil.allergies).toEqual(['pénicilline'])
+    }
+    const sansPJ = buildBackup(input, false)
+    expect(sansPJ.withAttachments).toBe(false)
+    expect(sansPJ.attachments).toEqual([])
+    const r2 = parseImport(JSON.stringify(sansPJ))
+    expect(r2.ok && r2.backup.attachments.length === 0).toBe(true)
+  })
+  it('parseImport rejette JSON invalide et mauvais shape', () => {
+    expect(parseImport('pas du json').ok).toBe(false)
+    expect(parseImport(JSON.stringify({ app: 'autre', version: 1 })).ok).toBe(false)
+    expect(parseImport(JSON.stringify({ app: 'salveto', version: 9 })).ok).toBe(false)
+    expect(validateBackup(null)).toBeNull()
+  })
+  it('mergeBackup : replace = remplacement total ; merge = fusion par id (événements, PJ, refs)', () => {
+    const current = {
+      config: input.config,
+      refs: input.refs,
+      profil: input.profil,
+      events: [mk('e1', 'moral', '2025-01-05T08:00:00', { value: 2 }), mk('e2', 'note', '2025-01-06T08:00:00', { notes: 'à garder' })],
+      attachments: []
+    }
+    const incoming = buildBackup(
+      { ...input, events: [mk('e1', 'moral', '2025-01-05T08:00:00', { value: 5 }), mk('e3', 'crise', '2025-01-07T08:00:00', { value: 8 })] },
+      true
+    )
+    const replaced = mergeBackup(current, incoming, 'replace')
+    expect(replaced.events.map((e) => e.id).sort()).toEqual(['e1', 'e3'])
+    expect(replaced.events.find((e) => e.id === 'e1')?.value).toBe(5)
+    const merged = mergeBackup(current, incoming, 'merge')
+    expect(merged.events.map((e) => e.id).sort()).toEqual(['e1', 'e2', 'e3'])
+    expect(merged.events.find((e) => e.id === 'e1')?.value).toBe(5)
+    expect(merged.attachments.length).toBe(1)
+    expect(merged.refs.items.length).toBe(1)
   })
 })
