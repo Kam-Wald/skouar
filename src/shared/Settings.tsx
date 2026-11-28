@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ColorSwatches from './ColorSwatches'
 import { BG_PRESETS, launcherBgCss, loadLauncherBg, saveLauncherBg, type LauncherBg } from './launcherBg'
 import { exportBackup, importBackup, snapshotBeforeImport } from './backup'
@@ -39,9 +39,10 @@ export function broadcastSettings(): void {
 interface Props {
   appId?: string
   appName?: string
+  panel?: ReactNode
 }
 
-export default function SettingsButton({ appId, appName }: Props) {
+export default function SettingsButton({ appId, appName, panel }: Props) {
   const [open, setOpen] = useState(false)
   const [theme, setTheme] = useState(getTheme())
   const [accent, setAccent] = useState(getAccent())
@@ -299,7 +300,7 @@ export default function SettingsButton({ appId, appName }: Props) {
             {tab === 'app' && appId && (
               <section>
                 <h3>🧩 {appName ?? appId}</h3>
-                <p className="settings-muted">Les réglages de cette appli arrivent bientôt ici.</p>
+                {panel ?? <p className="settings-muted">Les réglages de cette appli arrivent bientôt ici.</p>}
                 <button className={`db-btn danger${armed ? ' armed' : ''}`} onClick={wipeApp}>
                   {armed ? `⚠️ Confirmer : effacer toutes les données de ${appName ?? appId} ?` : `🗑 Effacer les données de ${appName ?? appId}`}
                 </button>

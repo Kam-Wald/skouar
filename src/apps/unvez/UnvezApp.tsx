@@ -9,7 +9,9 @@ import ConvView from './ConvView'
 import { FolderModal, MemoModal, type MemoDraft } from './MemoModal'
 import MemosView from './MemosView'
 import { deleteMemo, listFolders, listMemos, moveMemo, removeFolder, saveFolder, saveMemo } from './memos'
-import { db, DEFAULT_SETTINGS, kv, type Folder, type Memo, type UnvezSettings } from './store'
+import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../shared/Settings'
+import SettingsPanel from './SettingsPanel'
+import { db, DEFAULT_SETTINGS, kv, type Folder, type Memo, type TapeEntry, type UnvezSettings } from './store'
 
 const app = apps.find((a) => a.id === 'unvez')!
 
@@ -33,17 +35,17 @@ export default function UnvezApp() {
 
   useEffect(() => {
     let alive = true
-    kv.loadKV<Partial<UnvezSettings>>('settings')
-      .then((s) => {
+    const appS = loadAppSettings('unvez') as Partial<UnvezSettings>
+    kv.loadKV<TapeEntry[]>('tape')
+      .then((tape) => {
         if (!alive) return
-        const loaded = { ...DEFAULT_SETTINGS, ...(s ?? {}) }
-        loaded.tape = (loaded.tape ?? []).filter((e) => e && typeof e === 'object')
-        setSettings(loaded)
+        const cleanTape = (Array.isArray(tape) ? tape : []).filter((e) => e && typeof e === 'object')
+        setSettings({ ...DEFAULT_SETTINGS, ...appS, tape: cleanTape })
       })
       .catch(() => {
         if (alive) {
-          setSettings({ ...DEFAULT_SETTINGS })
-          notify('Lecture des réglages impossible — valeurs par défaut en mémoire, rien n’est écrit')
+          setSettings({ ...DEFAULT_SETTINGS, ...appS, tape: [] })
+          notify('Lecture de la tape impossible — tape vide en mémoire, rien n’est écrit')
         }
       })
     Promise.all([listMemos(db), listFolders(db)])
@@ -73,10 +75,19 @@ export default function UnvezApp() {
     return () => clearTimeout(t)
   }, [toast])
 
+  useEffect(() => {
+    const on = () =>
+      setSettings((prev) => ({ ...(prev ?? DEFAULT_SETTINGS), ...(loadAppSettings('unvez') as Partial<UnvezSettings>) }))
+    window.addEventListener(SETTINGS_EVENT, on)
+    return () => window.removeEventListener(SETTINGS_EVENT, on)
+  }, [])
+
   const onSettings = (patch: Partial<UnvezSettings>): void => {
     setSettings((prev) => {
       const next = { ...(prev ?? DEFAULT_SETTINGS), ...patch }
-      void kv.saveKV('settings', next).catch(() => {})
+      const { tape, ...rest } = patch
+      if (tape !== undefined) void kv.saveKV('tape', tape).catch(() => {})
+      if (Object.keys(rest).length > 0) saveAppSettings('unvez', rest, true)
       return next
     })
   }
@@ -228,7 +239,17 @@ export default function UnvezApp() {
   )
 
   return (
-    <AppShell appId="unvez" appName="Unvez" logo={app.logo!} sidebar={sidebar}>
+    <AppShell
+      appId="unvez"
+      appName="Unvez"
+      logo={app.logo!}
+      sidebar={sidebar}
+      settingsPanel={
+        settings ? (
+          <SettingsPanel settings={settings} onSettings={onSettings} memos={memos} folders={folders} onReload={reload} />
+        ) : undefined
+      }
+    >
       {view === 'calc' &&
         (settings ? (
           <CalcView settings={settings} onSettings={onSettings} seed={calcSeed} onSaveMemo={openMemoFromCalc} />

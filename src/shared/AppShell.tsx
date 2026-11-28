@@ -28,6 +28,7 @@ interface AppShellProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
   hideChrome?: boolean
   mainClass?: string
   mainRef?: Ref<HTMLElement>
+  settingsPanel?: ReactNode
   children: ReactNode
 }
 
@@ -42,6 +43,7 @@ export default function AppShell({
   hideChrome = false,
   mainClass = 'blocs-main',
   mainRef,
+  settingsPanel,
   className,
   style,
   children,
@@ -70,7 +72,7 @@ export default function AppShell({
             {sidebar}
             <div className="blocs-sidebar-foot">
               <ThemeButton />
-              <SettingsButton appId={appId} appName={appName} />
+              <SettingsButton appId={appId} appName={appName} panel={settingsPanel} />
               {footExtra}
             </div>
           </aside>
