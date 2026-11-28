@@ -504,7 +504,12 @@ export interface BandeauItem {
   texte: string
 }
 
-export function bandeauAccueil(events: SalvetoEvent[], refs: SalvetoRefs, config: SalvetoConfig): BandeauItem[] {
+export function bandeauAccueil(
+  events: SalvetoEvent[],
+  refs: SalvetoRefs,
+  config: SalvetoConfig,
+  profil?: ProfilSante
+): BandeauItem[] {
   const out: BandeauItem[] = []
   const today = todayDay()
   const { aVenir } = rdvTries(events)
@@ -547,8 +552,23 @@ export function bandeauAccueil(events: SalvetoEvent[], refs: SalvetoRefs, config
       })
     }
   }
+
   if (config.activeSuivis.includes('moral') && !eventsOnDay(events, today).some((e) => e.type === 'moral')) {
     out.push({ kind: 'saisie', texte: 'Ton moral du jour n’est pas encore noté' })
+  }
+  if (profil) {
+    for (const v of profil.vaccinations) {
+      if (!v.rappel) continue
+      const j = diffDays(today, v.rappel)
+      if (j < 0) {
+        out.push({ kind: 'preventif', texte: `Rappel vaccin ${v.label} dépassé (prévu le ${fmtDay(v.rappel)})` })
+      } else if (j <= 30) {
+        out.push({
+          kind: 'preventif',
+          texte: `Rappel vaccin ${v.label} ${j === 0 ? 'aujourd’hui' : `dans ${j} j`} (${fmtDay(v.rappel)})`
+        })
+      }
+    }
   }
   return out
 }
@@ -664,4 +684,140 @@ export function dernieresValeurs(events: SalvetoEvent[], refs: SalvetoRefs): Der
       const e = last.get(r.id)
       return { refId: r.id, label: r.label, unite: r.unite, value: e?.value, date: e?.date }
     })
+}
+
+/* ---------- Profil santé (9) — entité unique versionnée ---------- */
+
+export const GROUPES_SANGUINS = ['A+', 'A−', 'B+', 'B−', 'AB+', 'AB−', 'O+', 'O−', 'Je ne sais pas']
+
+export interface Vaccin {
+  id: string
+  label: string
+  date: string
+  rappel?: string
+  note?: string
+}
+
+export interface ProfilSante {
+  version: 1
+  antecedents: string
+  maladies: string
+  allergies: string[]
+  groupeSanguin?: string
+  traitementsEnCours: string
+  contactNom?: string
+  contactTel?: string
+  antecedentsFamiliaux: string
+  vaccinations: Vaccin[]
+}
+
+export function seedProfil(): ProfilSante {
+  return {
+    version: 1,
+    antecedents: '',
+    maladies: '',
+    allergies: [],
+    traitementsEnCours: '',
+    antecedentsFamiliaux: '',
+    vaccinations: []
+  }
+}
+
+export function migrateProfil(raw: unknown): ProfilSante | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  if (r.version !== 1) return undefined
+  const s = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const allergies = Array.isArray(r.allergies)
+    ? r.allergies.filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+    : []
+  const vaccinations: Vaccin[] = []
+  if (Array.isArray(r.vaccinations)) {
+    for (const v of r.vaccinations) {
+      if (!v || typeof v !== 'object') continue
+      const x = v as Record<string, unknown>
+      if (typeof x.id !== 'string' || !x.id || typeof x.label !== 'string' || !x.label.trim()) continue
+      if (typeof x.date !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(x.date)) continue
+      vaccinations.push({ ...(x as object), label: x.label, date: x.date } as Vaccin)
+    }
+  }
+  const opt = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined)
+  return {
+    ...(r as object),
+    version: 1,
+    antecedents: s(r.antecedents),
+    maladies: s(r.maladies),
+    allergies,
+    groupeSanguin: opt(r.groupeSanguin),
+    traitementsEnCours: s(r.traitementsEnCours),
+    contactNom: opt(r.contactNom),
+    contactTel: opt(r.contactTel),
+    antecedentsFamiliaux: s(r.antecedentsFamiliaux),
+    vaccinations
+  }
+}
+
+/* ---------- Pièces jointes (9.D) — data-URL en Dexie, poids surveillé (17.A) ---------- */
+
+export interface Attachment {
+  id: string
+  name: string
+  mime: string
+  size: number
+  dataUrl: string
+  refId?: string
+  refType?: 'rdv' | 'ordonnance' | 'profil'
+  createdAt: string
+}
+
+export const PJ_MAX_SIZE = 8 * 1024 * 1024
+
+export function fmtSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—'
+  if (bytes < 1024) return `${bytes} o`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+}
+
+function fileReaderDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result as string)
+    fr.onerror = () => reject(fr.error)
+    fr.readAsDataURL(file)
+  })
+}
+
+export function fileToDataUrl(file: File, maxPx = 1400): Promise<string> {
+  if (!file.type.startsWith('image/')) return fileReaderDataUrl(file)
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxPx / img.width, maxPx / img.height)
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        URL.revokeObjectURL(url)
+        if (!ctx) {
+          resolve(fileReaderDataUrl(file))
+          return
+        }
+        ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      } catch {
+        URL.revokeObjectURL(url)
+        resolve(fileReaderDataUrl(file))
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(fileReaderDataUrl(file))
+    }
+    img.src = url
+  })
 }
