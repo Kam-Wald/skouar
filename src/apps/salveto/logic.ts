@@ -927,3 +927,53 @@ export function dayMarkers(events: SalvetoEvent[], day: string): DayMarkers {
     saisie: dayEvs.length > 0
   }
 }
+
+/* ---------- Courbes (12) + marqueurs d'événements ---------- */
+
+export interface SeriePoint {
+  id: string
+  day: string
+  date: string
+  value: number
+}
+
+export function serieOf(events: SalvetoEvent[], type: EventType, refId?: string): SeriePoint[] {
+  return events
+    .filter((e) => e.type === type && e.value != null && (refId === undefined || e.refId === refId))
+    .map((e) => ({ id: e.id, day: dayOf(e.date), date: e.date, value: e.value as number }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+export function inWindow<T extends { day: string }>(items: T[], days: number): T[] {
+  const from = addDays(todayDay(), -(days - 1))
+  return items.filter((p) => p.day >= from)
+}
+
+export function marqueursOf(events: SalvetoEvent[]): SalvetoEvent[] {
+  return sortEventsDesc(eventsOfType(events, 'marqueur'))
+}
+
+export function niceScale(minV: number, maxV: number, maxTicks = 5): { min: number; max: number; ticks: number[] } {
+  if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return { min: 0, max: 1, ticks: [0, 1] }
+  let lo = minV
+  let hi = maxV
+  if (lo === hi) {
+    lo -= 1
+    hi += 1
+  }
+  const rawStep = (hi - lo) / maxTicks
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)))
+  const norm = rawStep / mag
+  const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag
+  const min = Math.floor(lo / step) * step
+  const max = Math.ceil(hi / step) * step
+  const ticks: number[] = []
+  for (let t = min; t <= max + 1e-9; t += step) ticks.push(Math.round(t * 1000) / 1000)
+  return { min, max, ticks }
+}
+
+export const PERIODES_COURBE = [
+  { jours: 30, label: '1 mois' },
+  { jours: 90, label: '3 mois' },
+  { jours: 365, label: '1 an' }
+] as const
