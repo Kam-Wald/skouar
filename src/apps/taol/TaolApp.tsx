@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AppShell from '../../shared/AppShell'
+import ChartView from './ChartView'
 import ColorSwatches from '../../shared/ColorSwatches'
 import { EMBEDDED_FONTS, SYSTEM_FONTS } from '../../shared/fonts'
 import { notify } from '../../shared/notify'
@@ -10,6 +11,7 @@ import {
   boxMax,
   cfBoxOf,
   cfMatch,
+  chartData,
   colSparkMax,
   columnValues,
   coveredBy,
@@ -47,6 +49,8 @@ import {
   type Cell,
   type CellValue,
   type CfOp,
+  type ChartObj,
+  type ChartType,
   type CfRule,
   type NumFmt,
   type Sheet,
@@ -98,6 +102,10 @@ export default function TaolApp(): JSX.Element {
   const [zoom, setZoom] = useState(1)
   const [gotoOpen, setGotoOpen] = useState(false)
   const [gotoVal, setGotoVal] = useState('')
+  const [chartModal, setChartModal] = useState<Box | null>(null)
+  const [chartDraft, setChartDraft] = useState<{ type: ChartType; title: string; header: boolean; firstColLabels: boolean; seriesInRows: boolean }>({ type: 'line', title: '', header: true, firstColLabels: true, seriesInRows: false })
+  const [selChart, setSelChart] = useState<string | null>(null)
+  const [chartDragPos, setChartDragPos] = useState<{ id: string; dx: number; dy: number } | null>(null)
   const [commentFor, setCommentFor] = useState<Pos | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const [valFor, setValFor] = useState<number | null>(null)
@@ -261,6 +269,7 @@ export default function TaolApp(): JSX.Element {
       setRange(null)
     }
     setEdit(null)
+    setSelChart(null)
   }
 
   const selectRow = (r: number, extend: boolean): void => {
@@ -273,6 +282,7 @@ export default function TaolApp(): JSX.Element {
       setRange({ c1: 0, r1: r, c2: nCols - 1, r2: r })
     }
     setEdit(null)
+    setSelChart(null)
   }
 
   const selectCol = (c: number, extend: boolean): void => {
@@ -285,6 +295,7 @@ export default function TaolApp(): JSX.Element {
       setRange({ c1: c, r1: 0, c2: c, r2: nRows - 1 })
     }
     setEdit(null)
+    setSelChart(null)
   }
 
   const copySelection = (): void => {
@@ -487,6 +498,77 @@ export default function TaolApp(): JSX.Element {
       const p = key ? parseKey(key) : null
       if (p && (p.col !== sel.col || p.row !== sel.row)) applyFill(p)
       setFillTo(null)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
+  const createChart = (): void => {
+    if (!chartModal || !sheet) return
+    const box = chartModal
+    const draft = chartDraft
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      const ch: ChartObj = {
+        id: uid(),
+        type: draft.type,
+        box,
+        anchor: { col: sel.col, row: sel.row },
+        w: 380,
+        h: 250,
+        title: draft.title.trim() || sh.name,
+        header: draft.header,
+        firstColLabels: draft.firstColLabels,
+        seriesInRows: draft.seriesInRows
+      }
+      sh.charts = [...(sh.charts ?? []), ch]
+    })
+    setChartModal(null)
+  }
+
+  const updateChart = (id: string, patch: Partial<ChartObj>): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      sh.charts = (sh.charts ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c))
+    })
+  }
+
+  const deleteChart = (id: string): void => {
+    mutate((w) => {
+      const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+      sh.charts = (sh.charts ?? []).filter((c) => c.id !== id)
+    })
+    setSelChart(null)
+  }
+
+  const startChartDrag = (e: React.MouseEvent, id: string): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSelChart(id)
+    const startX = e.clientX
+    const startY = e.clientY
+    const z = zoom || 1
+    const move = (ev: MouseEvent): void => {
+      setChartDragPos({ id, dx: (ev.clientX - startX) / z, dy: (ev.clientY - startY) / z })
+    }
+    const up = (ev: MouseEvent): void => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      const dx = (ev.clientX - startX) / z
+      const dy = (ev.clientY - startY) / z
+      setChartDragPos(null)
+      if (Math.abs(dx) + Math.abs(dy) > 3 && sheet) {
+        const ch = sheet.charts?.find((c) => c.id === id)
+        if (ch) {
+          const left = (colLeft[ch.anchor.col] ?? 41) + dx
+          const top = (rowTop[ch.anchor.row] ?? 27) + dy
+          let col = 0
+          for (let c = 0; c < nCols; c++) if ((colLeft[c] ?? 41) <= left) col = c
+          let row = 0
+          for (let r = 0; r < nRows; r++) if ((rowTop[r] ?? 27) <= top) row = r
+          updateChart(id, { anchor: { col, row } })
+        }
+      }
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
@@ -706,6 +788,7 @@ export default function TaolApp(): JSX.Element {
       setRowMenu(null)
       setSearch(null)
       setGotoOpen(false)
+      setSelChart(null)
       setCommentFor(null)
       setValFor(null)
       setCfFor(null)
@@ -816,7 +899,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON, SI.CONDITIONS, RECHERCHEV, SOMME.SI/NB.SI/MOYENNE.SI (+.SI.ET), TEXTE, AUJOURDHUI, DATE, JOUR, MOIS, ANNEE, ARRONDI/ARRONDI.SUP/ARRONDI.INF, ENT, MOD, ABS, PUISSANCE, ESTNUM, ESTVIDE, ESTTEXTE, ESTERREUR, JOINDRE, CONCAT, NBCAR, GAUCHE, DROITE, STXT ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1 ; % en suffixe).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre (+ décimales, entier, heure), bordures, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), conditionnelle (fond/barres, sur colonne ou plage). Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme. Ctrl+H : rechercher-remplacer · Ctrl+G / F5 : atteindre · Ctrl+; : date du jour · Ctrl+Maj+; : heure · zoom −/+ en haut · volets : figer ici / libérer · masquer lignes/colonnes via les menus ▼ · auto-complétion sur la colonne (validation bloquante si liste définie).
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre (+ décimales, entier, heure), bordures, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), conditionnelle (fond/barres, sur colonne ou plage). Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme. Ctrl+H : rechercher-remplacer · Ctrl+G / F5 : atteindre · Ctrl+; : date du jour · Ctrl+Maj+; : heure · zoom −/+ en haut · volets : figer ici / libérer · masquer lignes/colonnes via les menus ▼ · auto-complétion sur la colonne (validation bloquante si liste définie). 📈 Graphique : sélectionne une plage puis bouton « Graphique » (courbe/barres/camembert, aperçu live, déplaçable à la souris).
           </p>
         </div>
       }
@@ -856,6 +939,21 @@ export default function TaolApp(): JSX.Element {
               +
             </button>
           </span>
+          <span className="taol-sep" />
+          <button
+            type="button"
+            className="db-btn"
+            disabled={!range}
+            title="Insérer un graphique sur la plage sélectionnée"
+            onClick={() => {
+              if (range) {
+                setChartModal(range)
+                setChartDraft({ type: 'line', title: sheet.name, header: true, firstColLabels: true, seriesInRows: false })
+              }
+            }}
+          >
+            📈 Graphique
+          </button>
           <span className="taol-sep" />
           <span className="taol-wb-name">
             {sheet.name}
@@ -1090,6 +1188,7 @@ export default function TaolApp(): JSX.Element {
           )}
         </div>
         <div className="taol-grid-wrap" style={{ zoom } as React.CSSProperties}>
+          <div className="taol-grid-inner">
           <table className="taol-table">
             <thead>
               <tr>
@@ -1451,6 +1550,59 @@ export default function TaolApp(): JSX.Element {
               ))}
             </tbody>
           </table>
+          {sheet.charts?.map((ch) => {
+            const data = chartData(sheet, ch.box, { header: ch.header, firstColLabels: ch.firstColLabels, seriesInRows: ch.seriesInRows })
+            const drag = chartDragPos?.id === ch.id ? chartDragPos : null
+            const left = (colLeft[ch.anchor.col] ?? 41) + (drag?.dx ?? 0)
+            const top = (rowTop[ch.anchor.row] ?? 27) + (drag?.dy ?? 0)
+            const selected = selChart === ch.id
+            return (
+              <div
+                key={ch.id}
+                className={`taol-chart${selected ? ' selected' : ''}`}
+                style={{ left, top, width: ch.w }}
+                onMouseDown={() => setSelChart(ch.id)}
+              >
+                <div className="taol-chart-head" title="Déplacer le graphique" onMouseDown={(e) => startChartDrag(e, ch.id)}>
+                  <span className="taol-chart-head-title">{ch.title}</span>
+                  {selected && (
+                    <>
+                      <select
+                        className="taol-select taol-chart-type"
+                        value={ch.type}
+                        title="Type de graphique"
+                        onChange={(e) => updateChart(ch.id, { type: e.target.value as ChartType })}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <option value="line">Courbe</option>
+                        <option value="bar">Barres</option>
+                        <option value="pie">Camembert</option>
+                      </select>
+                      <select
+                        className="taol-select taol-chart-type"
+                        value={`${ch.w}x${ch.h}`}
+                        title="Taille"
+                        onChange={(e) => {
+                          const [w, h] = e.target.value.split('x').map(Number)
+                          updateChart(ch.id, { w, h })
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <option value="300x200">Petit</option>
+                        <option value="380x250">Moyen</option>
+                        <option value="520x340">Grand</option>
+                      </select>
+                      <button type="button" className="taol-mini" title="Supprimer le graphique" onClick={() => deleteChart(ch.id)} onMouseDown={(e) => e.stopPropagation()}>
+                        ×
+                      </button>
+                    </>
+                  )}
+                </div>
+                <ChartView data={data} type={ch.type} title="" w={ch.w} h={ch.h - 26} />
+              </div>
+            )
+          })}
+          </div>
         </div>
         <div className="taol-status">
           {range ? (
@@ -1753,6 +1905,63 @@ export default function TaolApp(): JSX.Element {
                     ))}
                 </>
               )}
+            </div>
+          </div>
+        )}
+        {chartModal && sheet && (
+          <div className="taol-modal-overlay" onClick={() => setChartModal(null)}>
+            <div className="taol-modal taol-chart-modal" onClick={(e) => e.stopPropagation()}>
+              <p className="taol-modal-title">
+                Nouveau graphique — plage {keyOf(chartModal.c1, chartModal.r1)}:{keyOf(chartModal.c2, chartModal.r2)}
+              </p>
+              <div className="taol-cf-row">
+                <select
+                  className="taol-select"
+                  value={chartDraft.type}
+                  onChange={(e) => setChartDraft((d) => ({ ...d, type: e.target.value as ChartType }))}
+                >
+                  <option value="line">Courbe</option>
+                  <option value="bar">Barres</option>
+                  <option value="pie">Camembert</option>
+                </select>
+                <input
+                  className="taol-formula taol-chart-title-input"
+                  placeholder="Titre"
+                  value={chartDraft.title}
+                  onChange={(e) => setChartDraft((d) => ({ ...d, title: e.target.value }))}
+                />
+              </div>
+              <div className="taol-cf-row">
+                <label className="taol-menu-check">
+                  <input type="checkbox" checked={chartDraft.header} onChange={(e) => setChartDraft((d) => ({ ...d, header: e.target.checked }))} />
+                  <span>Première ligne = noms des séries</span>
+                </label>
+                <label className="taol-menu-check">
+                  <input type="checkbox" checked={chartDraft.firstColLabels} onChange={(e) => setChartDraft((d) => ({ ...d, firstColLabels: e.target.checked }))} />
+                  <span>Première colonne = étiquettes</span>
+                </label>
+                <label className="taol-menu-check">
+                  <input type="checkbox" checked={chartDraft.seriesInRows} onChange={(e) => setChartDraft((d) => ({ ...d, seriesInRows: e.target.checked }))} />
+                  <span>Séries en lignes (transposé)</span>
+                </label>
+              </div>
+              <div className="taol-chart-preview">
+                <ChartView
+                  data={chartData(sheet, chartModal, { header: chartDraft.header, firstColLabels: chartDraft.firstColLabels, seriesInRows: chartDraft.seriesInRows })}
+                  type={chartDraft.type}
+                  title={chartDraft.title.trim() || sheet.name}
+                  w={380}
+                  h={250}
+                />
+              </div>
+              <div className="taol-modal-actions">
+                <button type="button" className="db-btn" onClick={() => setChartModal(null)}>
+                  Annuler
+                </button>
+                <button type="button" className="db-btn" onClick={createChart}>
+                  Insérer le graphique
+                </button>
+              </div>
             </div>
           </div>
         )}

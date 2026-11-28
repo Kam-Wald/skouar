@@ -16,6 +16,7 @@ export interface Sheet {
   widths?: Record<number, number>
   hiddenRows?: Record<number, boolean>
   hiddenCols?: Record<number, boolean>
+  charts?: ChartObj[]
 }
 
 export interface Workbook {
@@ -1130,6 +1131,21 @@ function shiftSheetMeta(sh: Sheet, axis: Axis, at: number, delta: number): void 
   } else {
     sh.hiddenRows = shiftKeyed(sh.hiddenRows, at, delta)
   }
+  if (sh.charts) {
+    const isDel = delta < 0
+    const nd = Math.abs(delta)
+    const out: ChartObj[] = []
+    for (const ch of sh.charts) {
+      const a1 = axis === 'row' ? ch.box.r1 : ch.box.c1
+      const a2 = axis === 'row' ? ch.box.r2 : ch.box.c2
+      if (isDel && a1 >= at && a2 < at + nd) continue
+      const box = axis === 'row' ? { ...ch.box, r1: shiftEdgeCoord(ch.box.r1, at, delta), r2: shiftEdgeCoord(ch.box.r2, at, delta) } : { ...ch.box, c1: shiftEdgeCoord(ch.box.c1, at, delta), c2: shiftEdgeCoord(ch.box.c2, at, delta) }
+      const ac = shiftRefCoord(axis === 'row' ? ch.anchor.row : ch.anchor.col, at, delta)
+      if (ac === null) continue
+      out.push({ ...ch, box, anchor: axis === 'row' ? { ...ch.anchor, row: ac } : { ...ch.anchor, col: ac } })
+    }
+    sh.charts = out
+  }
   if (sh.cf) {
     const isDel = delta < 0
     const nd = Math.abs(delta)
@@ -1503,4 +1519,83 @@ export function toggleHidden(sh: Sheet, axis: 'row' | 'col', idx: number): void 
 export function unhideAll(sh: Sheet, axis: 'row' | 'col'): void {
   if (axis === 'row') sh.hiddenRows = undefined
   else sh.hiddenCols = undefined
+}
+
+// ---------- Graphiques (phase 3) ----------
+
+export type ChartType = 'line' | 'bar' | 'pie'
+
+export interface ChartObj {
+  id: string
+  type: ChartType
+  box: Box
+  anchor: { col: number; row: number }
+  w: number
+  h: number
+  title: string
+  header: boolean
+  firstColLabels: boolean
+  seriesInRows: boolean
+}
+
+export interface ChartData {
+  labels: string[]
+  series: { name: string; values: number[] }[]
+}
+
+export function chartData(sh: Sheet, box: Box, opts: { header?: boolean; firstColLabels?: boolean; seriesInRows?: boolean } = {}): ChartData {
+  const header = opts.header ?? true
+  const firstColLabels = opts.firstColLabels ?? true
+  const seriesInRows = opts.seriesInRows ?? false
+  const cell = (c: number, r: number): CellValue => sh.cells[keyOf(c, r)]?.v ?? null
+  if (!seriesInRows) {
+    const dataC1 = firstColLabels ? box.c1 + 1 : box.c1
+    const dataR1 = header ? box.r1 + 1 : box.r1
+    const labels: string[] = []
+    for (let r = dataR1; r <= box.r2; r++) labels.push(firstColLabels && dataR1 <= box.r2 ? strOf(cell(box.c1, r)) : String(r - dataR1 + 1))
+    const series: ChartData['series'] = []
+    for (let c = dataC1; c <= box.c2; c++) {
+      const name = header ? strOf(cell(c, box.r1)) : indexToCol(c)
+      const values: number[] = []
+      for (let r = dataR1; r <= box.r2; r++) {
+        const v = cell(c, r)
+        values.push(typeof v === 'number' ? v : 0)
+      }
+      series.push({ name: name === '' ? indexToCol(c) : name, values })
+    }
+    return { labels, series }
+  }
+  const dataC1 = firstColLabels ? box.c1 + 1 : box.c1
+  const dataR1 = header ? box.r1 + 1 : box.r1
+  const labels: string[] = []
+  for (let c = dataC1; c <= box.c2; c++) labels.push(header ? strOf(cell(c, box.r1)) : indexToCol(c))
+  const series: ChartData['series'] = []
+  for (let r = dataR1; r <= box.r2; r++) {
+    const name = firstColLabels ? strOf(cell(box.c1, r)) : `Série ${r - dataR1 + 1}`
+    const values: number[] = []
+    for (let c = dataC1; c <= box.c2; c++) {
+      const v = cell(c, r)
+      values.push(typeof v === 'number' ? v : 0)
+    }
+    series.push({ name: name === '' ? `Série ${r - dataR1 + 1}` : name, values })
+  }
+  return { labels, series }
+}
+
+export function niceScale(max: number, ticks = 5): { max: number; step: number } {
+  if (!Number.isFinite(max) || max <= 0) return { max: 1, step: 0.2 }
+  const raw = max / ticks
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+  const norm = raw / mag
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag
+  return { max: parseFloat((Math.ceil(max / step) * step).toPrecision(12)), step: parseFloat(step.toPrecision(12)) }
+}
+
+export function niceFloor(min: number, ticks = 5): { min: number; step: number } {
+  if (!Number.isFinite(min) || min >= 0) return { min: 0, step: niceScale(1, ticks).step }
+  const raw = min / ticks
+  const mag = Math.pow(10, Math.floor(Math.log10(-raw)))
+  const norm = -raw / mag
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag
+  return { min: parseFloat((Math.floor(min / step) * step).toPrecision(12)), step: parseFloat(step.toPrecision(12)) }
 }

@@ -68,3 +68,24 @@ describe('Taol (smoke jsdom)', () => {
     div.remove()
   })
 })
+
+describe('ChartView (smoke jsdom)', () => {
+  it('rend courbe, barres et camembert en SVG', async () => {
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const ChartView = (await import('../src/apps/taol/ChartView')).default
+    const data = { labels: ['Ana', 'Tom', 'Léa'], series: [{ name: 'Note', values: [15, 12, 17] }] }
+    for (const type of ['line', 'bar', 'pie'] as const) {
+      const div = document.createElement('div')
+      document.body.appendChild(div)
+      const root = createRoot(div)
+      await React.act(async () => {
+        root.render(React.createElement(ChartView, { data, type, title: 'Notes', w: 380, h: 250 }))
+      })
+      expect(div.querySelector('svg')).toBeTruthy()
+      expect(div.textContent).toContain('Note')
+      root.unmount()
+      div.remove()
+    }
+  })
+})

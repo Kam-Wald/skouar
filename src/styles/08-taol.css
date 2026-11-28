@@ -674,3 +674,143 @@
     display: none !important;
   }
 }
+
+/* ---------- Graphiques (phase 3) ---------- */
+
+.taol-grid-inner {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+.taol-chart {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.taol-chart.selected {
+  outline: 2px solid var(--accent);
+  z-index: 6;
+}
+
+.taol-chart-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.taol-chart-head:active {
+  cursor: grabbing;
+}
+
+.taol-chart-head-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.taol-chart-type {
+  max-width: 90px;
+  font-size: 0.7rem;
+  padding: 1px 4px;
+}
+
+.taol-chart-body {
+  position: relative;
+  overflow: hidden;
+}
+
+.taol-chart-title {
+  margin: 0;
+  padding: 4px 8px 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taol-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.taol-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taol-chart-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.taol-chart-svg {
+  display: block;
+}
+
+.taol-chart-tick {
+  fill: var(--muted);
+  font-size: 9px;
+  font-family: var(--font-mono);
+}
+
+.taol-chart-pie-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.taol-chart-pie-wrap .taol-chart-legend {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow: auto;
+  max-height: 100%;
+}
+
+.taol-chart-modal {
+  width: min(460px, 92vw);
+}
+
+.taol-chart-title-input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.taol-chart-preview {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+}
