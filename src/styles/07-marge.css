@@ -2,21 +2,34 @@
   min-height: 100%;
 }
 
+.marge-app.drag-over .marge-main {
+  outline: 2px dashed var(--accent);
+  outline-offset: -8px;
+}
+
 .marge-side {
   padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .marge-side-label {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  opacity: 0.6;
-  margin-bottom: 6px;
+  color: var(--muted);
 }
 
 .marge-empty {
   font-size: 0.8rem;
-  opacity: 0.55;
+  color: var(--muted);
+  margin: 0;
+}
+
+.marge-side-btn {
+  width: 100%;
+  text-align: left;
 }
 
 .marge-placeholder {
@@ -31,4 +44,141 @@
 .marge-placeholder h1 {
   margin: 0;
   font-size: 2.5rem;
+}
+
+.marge-lib {
+  padding: 18px 22px 40px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.marge-lib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.marge-lib-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.marge-lib-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.marge-lib-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 6px 0 18px;
+}
+
+.marge-empty-cta {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 56px 24px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.marge-empty-cta:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.marge-empty-ic {
+  font-size: 2.2rem;
+}
+
+.marge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.marge-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.marge-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.marge-card-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.marge-card-thumb {
+  aspect-ratio: 1 / 1.35;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.marge-thumb-cv {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.marge-card-body {
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.marge-card-body strong {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marge-card-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.marge-card-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.marge-card-del:hover {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
 }

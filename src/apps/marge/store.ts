@@ -70,3 +70,46 @@ export const db = createAppDb('skouar-marge', [
     }
   }
 ])
+
+type MargeDocRow = Omit<MargeDoc, 'data'> & { data: ArrayBuffer }
+
+const toRow = async (d: MargeDoc): Promise<MargeDocRow> => ({ ...d, data: await d.data.arrayBuffer() })
+const toDoc = (r: MargeDocRow): MargeDoc => ({ ...r, data: new Blob([r.data], { type: 'application/pdf' }) })
+
+export const docsT = db.table<MargeDocRow, string>('docs')
+export const annotsT = db.table<MargeAnnot, string>('annots')
+export const pageNotesT = db.table<MargePageNote, string>('pageNotes')
+export const foldersT = db.table<MargeFolder, string>('folders')
+export const signaturesT = db.table<MargeSignature, string>('signatures')
+
+export async function listDocs(): Promise<MargeDoc[]> {
+  return (await docsT.orderBy('updatedAt').reverse().toArray()).map(toDoc)
+}
+
+export async function addDoc(d: MargeDoc): Promise<void> {
+  await docsT.put(await toRow(d))
+}
+
+export async function updateDoc(id: string, patch: Partial<Omit<MargeDoc, 'data'>>): Promise<void> {
+  await docsT.update(id, patch)
+}
+
+export async function listAnnots(docId: string): Promise<MargeAnnot[]> {
+  return annotsT.where('docId').equals(docId).toArray()
+}
+
+export async function listPageNotes(docId: string): Promise<MargePageNote[]> {
+  return pageNotesT.where('docId').equals(docId).toArray()
+}
+
+export async function restoreDoc(doc: MargeDoc, annots: MargeAnnot[], notes: MargePageNote[]): Promise<void> {
+  await docsT.put(await toRow(doc))
+  await annotsT.bulkPut(annots)
+  await pageNotesT.bulkPut(notes)
+}
+
+export async function deleteDoc(id: string): Promise<void> {
+  await annotsT.where('docId').equals(id).delete()
+  await pageNotesT.where('docId').equals(id).delete()
+  await docsT.delete(id)
+}
