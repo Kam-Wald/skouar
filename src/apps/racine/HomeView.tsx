@@ -3,7 +3,7 @@ import { notify } from '../../shared/notify'
 import { allCrisisTriggers, crisisCoOccurrences } from './crise'
 import { addEvent, ensureRef, fmtTime, summarize, todayEvents, validatePayload } from './events'
 import QuickEntry from './QuickEntry'
-import { makeEvent, saveEvent, TRACKER_LABELS, type EventType, type HealthEvent } from './store'
+import { makeEvent, saveEvent, TRACKER_LABELS, type EventType, type HealthEvent, type RefEntity } from './store'
 
 const QUICK: [EventType, string][] = [
   ['moral', '+ Moral'],
@@ -13,16 +13,18 @@ const QUICK: [EventType, string][] = [
   ['sommeil', '+ Sommeil'],
   ['symptome', '+ Symptôme'],
   ['habitude', '+ Habitude'],
+  ['traitement', '+ Efficacité'],
   ['note', '+ Note']
 ]
 
 interface Props {
   activeTrackers: EventType[]
   events: HealthEvent[]
+  refs: RefEntity[]
   onChanged: () => Promise<void>
 }
 
-export default function HomeView({ activeTrackers, events, onChanged }: Props): JSX.Element {
+export default function HomeView({ activeTrackers, events, refs, onChanged }: Props): JSX.Element {
   const [entry, setEntry] = useState<EventType | null>(null)
   const [crise, setCrise] = useState<HealthEvent | null>(null)
 
@@ -92,6 +94,7 @@ export default function HomeView({ activeTrackers, events, onChanged }: Props): 
           criseEvent={criseNow}
           allTriggers={allCrisisTriggers(events)}
           coOcc={crisisCoOccurrences(events)}
+          traitementRefs={refs.filter((r) => r.kind === 'traitement')}
           onSave={(p, n) => void onSave(p, n)}
           onSaveCrise={(ev, p, n) => void onSaveCrise(ev, p, n)}
           onClose={() => {

@@ -5,7 +5,8 @@ import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../shared/S
 import { apps } from '../registry'
 import HomeView from './HomeView'
 import Onboarding from './Onboarding'
-import { DEFAULT_RACINE_SETTINGS, listEvents, TRACKERS, type EventType, type HealthEvent, type RacineSettings } from './store'
+import TraitementsView from './TraitementsView'
+import { DEFAULT_RACINE_SETTINGS, listEvents, listRefs, TRACKERS, type EventType, type HealthEvent, type RacineSettings, type RefEntity } from './store'
 
 const app = apps.find((a) => a.id === 'racine')!
 
@@ -35,18 +36,23 @@ export default function RacineApp() {
   const [view, setView] = useState<View>('home')
   const [toast, setToast] = useState('')
   const [events, setEvents] = useState<HealthEvent[]>([])
+  const [refs, setRefs] = useState<RefEntity[]>([])
   const [settings, setSettings] = useState<RacineSettings>(loadSettings)
 
   const reload = async (): Promise<void> => {
-    const ev = await listEvents()
+    const [ev, rf] = await Promise.all([listEvents(), listRefs()])
     setEvents(ev)
+    setRefs(rf)
   }
 
   useEffect(() => {
     let alive = true
-    void listEvents()
-      .then((ev) => {
-        if (alive) setEvents(ev)
+    void Promise.all([listEvents(), listRefs()])
+      .then(([ev, rf]) => {
+        if (alive) {
+          setEvents(ev)
+          setRefs(rf)
+        }
       })
       .catch(() => {
         if (alive) notify('Lecture impossible — état vide en mémoire, rien n’est écrit')
@@ -110,7 +116,9 @@ export default function RacineApp() {
   return (
     <AppShell appId="racine" appName="Racine" logo={app.logo!} sidebar={sidebar}>
       {view === 'home' ? (
-        <HomeView activeTrackers={activeTrackers} events={events} onChanged={reload} />
+        <HomeView activeTrackers={activeTrackers} events={events} refs={refs} onChanged={reload} />
+      ) : view === 'traitements' ? (
+        <TraitementsView events={events} refs={refs} onChanged={reload} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>

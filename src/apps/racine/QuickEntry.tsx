@@ -3,19 +3,21 @@ import { notify } from '../../shared/notify'
 import BodyMap from './BodyMap'
 import { crisisTriggers, toggleTrigger, type CoOcc } from './crise'
 import { LEVEL_LABELS, validatePayload } from './events'
-import { TRACKER_LABELS, type EventType, type HealthEvent } from './store'
+import { EFFETS, EFFET_LABELS } from './traitement'
+import { TRACKER_LABELS, type EventType, type HealthEvent, type RefEntity } from './store'
 
 interface Props {
   type: EventType
   criseEvent: HealthEvent | null
   allTriggers: string[]
   coOcc: CoOcc[]
+  traitementRefs: RefEntity[]
   onSave: (payload: Record<string, unknown>, note: string) => void
   onSaveCrise: (ev: HealthEvent, payload: Record<string, unknown>, note: string) => void
   onClose: () => void
 }
 
-export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, onSave, onSaveCrise, onClose }: Props): JSX.Element {
+export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, traitementRefs, onSave, onSaveCrise, onClose }: Props): JSX.Element {
   const [note, setNote] = useState('')
   const [poids, setPoids] = useState('')
   const [coucher, setCoucher] = useState('')
@@ -25,6 +27,7 @@ export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, onSav
   const [habit, setHabit] = useState('')
   const [noteLibre, setNoteLibre] = useState('')
   const [newTrig, setNewTrig] = useState('')
+  const [traitId, setTraitId] = useState('')
 
   const label = TRACKER_LABELS[type]
   const submit = async (payload: Record<string, unknown>): Promise<void> => {
@@ -183,6 +186,40 @@ export default function QuickEntry({ type, criseEvent, allTriggers, coOcc, onSav
             Enregistrer
           </button>
         </div>
+      )}
+      {type === 'traitement' && (
+        <>
+          {traitementRefs.length === 0 ? (
+            <p className="ra-muted">Crée d’abord un traitement dans la vue « Traitements ».</p>
+          ) : (
+            <>
+              <select aria-label="Traitement concerné" value={traitId} onChange={(e) => setTraitId(e.target.value)}>
+                <option value="">— choisir —</option>
+                {traitementRefs.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              <div className="ra-levels">
+                {EFFETS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    className="ra-level-btn"
+                    aria-label={`Effet ${EFFET_LABELS[e]}`}
+                    onClick={() => {
+                      const r = traitementRefs.find((x) => x.id === traitId)
+                      if (r) void submit({ refId: r.id, name: r.name, effet: e })
+                    }}
+                  >
+                    {EFFET_LABELS[e]}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
       {type === 'note' && (
         <>

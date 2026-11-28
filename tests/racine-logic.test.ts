@@ -63,8 +63,8 @@ describe('racine — store (CDC §16, logique)', () => {
     expect((await db.table('profile').count())).toBe(1)
   })
 
-  it('trackers par défaut : 9 suivis tous actifs, onboarding non fait', () => {
-    expect(TRACKERS.length).toBe(9)
+  it('trackers par défaut : 10 suivis tous actifs, onboarding non fait', () => {
+    expect(TRACKERS.length).toBe(10)
     expect(Object.keys(DEFAULT_RACINE_SETTINGS.trackers).sort()).toEqual([...TRACKERS].sort())
     expect(Object.values(DEFAULT_RACINE_SETTINGS.trackers).every(Boolean)).toBe(true)
     expect(DEFAULT_RACINE_SETTINGS.onboarded).toBe(false)

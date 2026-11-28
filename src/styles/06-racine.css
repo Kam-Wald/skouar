@@ -269,3 +269,50 @@
   border-left: 3px solid var(--accent);
   padding-left: 10px;
 }
+
+.ra-ref-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.ra-ref-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--panel-2);
+}
+
+.ra-ref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ra-ranking {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.ra-ranking li {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 14px;
+}
+
+.ra-entry select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.ra-entry select:focus-visible {
+  border-color: var(--accent);
+}
