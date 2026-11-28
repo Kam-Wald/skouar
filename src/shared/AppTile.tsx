@@ -14,7 +14,8 @@ interface DndProps {
 }
 
 export default function AppTile({ app, idx, ...dnd }: { app: AppMeta; idx: string } & DndProps): JSX.Element {
-  const cls = `app-tile${app.soon ? ' soon' : ''}${dnd.dragging ? ' dragging' : ''}${dnd.dropBefore ? ' drop-before' : ''}`
+  const wip = !app.soon && !app.component
+  const cls = `app-tile${app.soon ? ' soon' : ''}${wip ? ' wip' : ''}${dnd.dragging ? ' dragging' : ''}${dnd.dropBefore ? ' drop-before' : ''}`
   const grip = dnd.edit ? (
     <span
       className="app-tile-grip"
@@ -61,6 +62,7 @@ export default function AppTile({ app, idx, ...dnd }: { app: AppMeta; idx: strin
       </span>
       <span className="app-tile-desc">{app.description}</span>
       {app.soon && <span className="app-tile-badge">Bientôt</span>}
+      {wip && <span className="app-tile-badge wip">En chantier</span>}
     </>
   )
   const disabled = !!app.soon || !app.component

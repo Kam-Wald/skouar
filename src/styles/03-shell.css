@@ -287,6 +287,20 @@
   border-color: var(--border);
   box-shadow: none;
 }
+.app-tile.wip {
+  opacity: 0.72;
+  cursor: default;
+  border-style: dashed;
+}
+.app-tile.wip:hover {
+  transform: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+.app-tile-badge.wip {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.45);
+}
 .app-tile-badge {
   align-self: flex-start;
   font-family: var(--font-mono);
