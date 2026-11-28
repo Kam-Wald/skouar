@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { HABITUDE_SUGGESTIONS, MORAL_LABELS, clampInt, clampNum, makeEvent, type SalvetoEvent, type SuiviId } from './logic'
+import BodyMap from './BodyMap'
+import {
+  DECLENCHEUR_SUGGESTIONS,
+  HABITUDE_SUGGESTIONS,
+  MORAL_LABELS,
+  clampInt,
+  clampNum,
+  makeEvent,
+  type SalvetoEvent,
+  type SuiviId
+} from './logic'
 
 interface Props {
   suivi: SuiviId
@@ -13,6 +23,9 @@ export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
   const [reveil, setReveil] = useState('')
   const [duree, setDuree] = useState('')
   const [intensite, setIntensite] = useState<number | undefined>()
+  const [zones, setZones] = useState<string[]>([])
+  const [decl, setDecl] = useState<string[]>([])
+  const [declTxt, setDeclTxt] = useState('')
 
   const save = (patch: Partial<SalvetoEvent>): void => {
     onSave(makeEvent(suivi, patch))
@@ -74,6 +87,14 @@ export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
   }
 
   if (suivi === 'crise') {
+    const toggleZone = (id: string): void => {
+      setZones((z) => (z.includes(id) ? z.filter((x) => x !== id) : [...z, id]))
+    }
+    const addDecl = (): void => {
+      const t = declTxt.trim()
+      if (t && !decl.some((d) => d.toLowerCase() === t.toLowerCase())) setDecl([...decl, t])
+      setDeclTxt('')
+    }
     return (
       <div className="sa-panel sa-panel-crise" data-panel="crise">
         <p className="sa-panel-title">Crise / douleur — intensité ?</p>
@@ -89,18 +110,67 @@ export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
             </button>
           ))}
         </div>
+        <p className="sa-panel-hint">Localisation sur la carte du corps :</p>
+        <BodyMap selected={zones} onToggle={toggleZone} />
         <input
           className="db-input"
           type="text"
-          placeholder="Localisation (ex. tête, ventre)…"
+          placeholder="Précision texte (facultatif, ex. « côté gauche »)"
           value={txt}
           onChange={(e) => setTxt(e.target.value)}
         />
+        <p className="sa-panel-hint">Déclencheurs suspectés :</p>
+        <div className="sa-panel-row">
+          <input
+            className="db-input"
+            type="text"
+            list="sa-declencheurs"
+            placeholder="Ajouter un facteur…"
+            value={declTxt}
+            onChange={(e) => setDeclTxt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addDecl()
+              }
+            }}
+          />
+          <datalist id="sa-declencheurs">
+            {DECLENCHEUR_SUGGESTIONS.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+          <button type="button" className="db-btn" onClick={addDecl} disabled={!declTxt.trim()}>
+            +
+          </button>
+        </div>
+        {decl.length > 0 && (
+          <div className="sa-chips">
+            {decl.map((d) => (
+              <button
+                key={d}
+                type="button"
+                className="sa-chip sa-chip-btn"
+                title="Retirer"
+                onClick={() => setDecl(decl.filter((x) => x !== d))}
+              >
+                {d} ×
+              </button>
+            ))}
+          </div>
+        )}
         <button
           type="button"
           className="db-btn sa-panel-save"
           disabled={!intensite}
-          onClick={() => save({ value: intensite, label: txt.trim() || undefined })}
+          onClick={() =>
+            save({
+              value: intensite,
+              label: txt.trim() || undefined,
+              zones: zones.length ? zones : undefined,
+              declencheurs: decl.length ? decl : undefined
+            })
+          }
         >
           Enregistrer la crise
         </button>

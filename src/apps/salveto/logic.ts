@@ -252,3 +252,81 @@ export const HABITUDE_SUGGESTIONS = ['Sport', 'Sortie', 'Temps d’écran élev�
 
 export const EFFETS = ['aucun', 'léger', 'marqué', 'négatif'] as const
 export type Effet = (typeof EFFETS)[number]
+
+/* ---------- Carte du corps (4.E) ---------- */
+
+export interface BodyZone {
+  id: string
+  label: string
+}
+
+export const BODY_ZONES: BodyZone[] = [
+  { id: 'tete', label: 'Tête' },
+  { id: 'cou', label: 'Cou' },
+  { id: 'epaule', label: 'Épaules' },
+  { id: 'bras', label: 'Bras' },
+  { id: 'main', label: 'Mains' },
+  { id: 'poitrine', label: 'Poitrine' },
+  { id: 'ventre', label: 'Ventre' },
+  { id: 'dos', label: 'Dos' },
+  { id: 'hanche', label: 'Hanches / fesses' },
+  { id: 'cuisse', label: 'Cuisses' },
+  { id: 'genou', label: 'Genoux' },
+  { id: 'mollet', label: 'Mollets' },
+  { id: 'pied', label: 'Pieds' }
+]
+
+export const DECLENCHEUR_SUGGESTIONS = [
+  'Aliment',
+  'Manque de sommeil',
+  'Stress',
+  'Météo',
+  'Effort physique',
+  'Temps d’écran',
+  'Autre'
+]
+
+/* ---------- Co-occurrences (4.I) — observation statistique uniquement ---------- */
+
+export interface Cooc {
+  trigger: string
+  crises: number
+  total: number
+  ratio: number
+}
+
+export function normalizeTrigger(t: string): string {
+  return t.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+export function cooccurrences(events: SalvetoEvent[]): Cooc[] {
+  const crises = eventsOfType(events, 'crise')
+  if (crises.length === 0) return []
+  const crisesByDay = new Map<string, number>()
+  for (const c of crises) {
+    const d = dayOf(c.date)
+    crisesByDay.set(d, (crisesByDay.get(d) ?? 0) + 1)
+  }
+  const map = new Map<string, { label: string; crises: number }>()
+  const bump = (raw: string, n: number): void => {
+    const k = normalizeTrigger(raw)
+    if (!k || n <= 0) return
+    const cur = map.get(k)
+    if (cur) cur.crises += n
+    else map.set(k, { label: raw.trim(), crises: n })
+  }
+  for (const c of crises) {
+    for (const d of c.declencheurs ?? []) bump(d, 1)
+  }
+  for (const h of eventsOfType(events, 'habitude')) {
+    if (!h.label) continue
+    bump(h.label, crisesByDay.get(dayOf(h.date)) ?? 0)
+  }
+  return [...map.values()]
+    .map((v) => ({ trigger: v.label, crises: v.crises, total: crises.length, ratio: v.crises / crises.length }))
+    .sort((a, b) => b.crises - a.crises || b.ratio - a.ratio || a.trigger.localeCompare(b.trigger))
+}
+
+export function fmtPct(r: number): string {
+  return `${Math.round(r * 100)} %`
+}

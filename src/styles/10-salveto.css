@@ -335,3 +335,99 @@ button.sa-side-row:hover {
   font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
 }
+
+/* ---------- Salveto : carte du corps (S3) ---------- */
+
+.sa-bodymap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sa-bodymap-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.sa-bodymap-switch button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 2px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.sa-bodymap-switch button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.sa-bodymap-svg {
+  width: 150px;
+  height: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.sa-body-zone {
+  cursor: pointer;
+}
+
+.sa-body-zone :is(rect, circle, ellipse, path) {
+  fill: var(--panel-2);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.sa-body-zone:hover :is(rect, circle, ellipse, path) {
+  stroke: var(--accent);
+}
+
+.sa-body-zone.active :is(rect, circle, ellipse, path) {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.sa-bodymap-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.sa-chip-btn {
+  cursor: pointer;
+  font: inherit;
+}
+
+.sa-chip-btn:hover {
+  border-color: #e5484d;
+  color: #e5484d;
+}
+
+/* ---------- Salveto : co-occurrences (S3) ---------- */
+
+.sa-cooc {
+  margin-top: 24px;
+  max-width: 640px;
+}
+
+.sa-cooc-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0 0 8px;
+}
+
+.sa-cooc-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
