@@ -531,3 +531,62 @@ describe('présentation (PR F)', () => {
     expect(sh.cf![1].col).toBe(1)
   })
 })
+
+describe('graphiques (phase 3)', () => {
+  it('chartData : colonnes = séries, 1re ligne = noms, 1re colonne = étiquettes', async () => {
+    const { chartData } = await import('../src/apps/taol/logic')
+    const sh: Sheet = {
+      id: 's',
+      name: 'F',
+      cells: { A1: { v: '' }, B1: { v: 'Note' }, C1: { v: 'Coeff' }, A2: { v: 'Ana' }, B2: { v: 15 }, C2: { v: 2 }, A3: { v: 'Tom' }, B3: { v: 12 }, C3: { v: 3 } }
+    }
+    const d = chartData(sh, { c1: 0, r1: 0, c2: 2, r2: 2 })
+    expect(d.labels).toEqual(['Ana', 'Tom'])
+    expect(d.series).toEqual([
+      { name: 'Note', values: [15, 12] },
+      { name: 'Coeff', values: [2, 3] }
+    ])
+  })
+
+  it('chartData : sans en-tête / sans étiquettes / transposé', async () => {
+    const { chartData } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: { A1: { v: 1 }, B1: { v: 2 }, A2: { v: 3 }, B2: { v: 4 } } }
+    const noHeader = chartData(sh, { c1: 0, r1: 0, c2: 1, r2: 1 }, { header: false, firstColLabels: false })
+    expect(noHeader.labels).toEqual(['1', '2'])
+    expect(noHeader.series).toEqual([
+      { name: 'A', values: [1, 3] },
+      { name: 'B', values: [2, 4] }
+    ])
+    const tr = chartData(sh, { c1: 0, r1: 0, c2: 1, r2: 1 }, { header: false, firstColLabels: false, seriesInRows: true })
+    expect(tr.labels).toEqual(['A', 'B'])
+    expect(tr.series).toEqual([
+      { name: 'Série 1', values: [1, 2] },
+      { name: 'Série 2', values: [3, 4] }
+    ])
+  })
+
+  it('niceScale / niceFloor', async () => {
+    const { niceScale, niceFloor } = await import('../src/apps/taol/logic')
+    expect(niceScale(97)).toEqual({ max: 100, step: 20 })
+    expect(niceScale(0)).toEqual({ max: 1, step: 0.2 })
+    expect(niceScale(0.3)).toEqual({ max: 0.3, step: 0.1 })
+    expect(niceFloor(-13).min).toBe(-15)
+    expect(niceFloor(5).min).toBe(0)
+  })
+
+  it('les graphiques suivent insert/delete lignes & colonnes (ancre + plage)', async () => {
+    const { insertRowsWb, deleteColsWb } = await import('../src/apps/taol/logic')
+    const sh: Sheet = {
+      id: 's1',
+      name: 'F',
+      cells: { B2: { v: 1 } },
+      charts: [{ id: 'c1', type: 'bar', box: { c1: 1, r1: 1, c2: 2, r2: 3 }, anchor: { col: 4, row: 5 }, w: 380, h: 250, title: 'T', header: true, firstColLabels: true, seriesInRows: false }]
+    }
+    const wb: Workbook = { sheets: [sh], activeSheetId: 's1', activeCell: 'A1' }
+    insertRowsWb(wb, 's1', 2, 1)
+    expect(sh.charts![0].box).toEqual({ c1: 1, r1: 1, c2: 2, r2: 4 })
+    expect(sh.charts![0].anchor).toEqual({ col: 4, row: 6 })
+    deleteColsWb(wb, 's1', 1, 2)
+    expect(sh.charts ?? []).toHaveLength(0)
+  })
+})
