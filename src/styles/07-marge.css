@@ -1,0 +1,17 @@
+.marge-main {
+  min-height: 100%;
+}
+
+.marge-placeholder {
+  min-height: 60vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.marge-placeholder h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
