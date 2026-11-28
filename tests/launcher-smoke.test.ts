@@ -30,7 +30,7 @@ describe('Launcher (smoke jsdom)', () => {
       root.render(React.createElement(MemoryRouter, null, React.createElement(LauncherHome)))
     })
     const html = div.innerHTML
-    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Karneto', 'Skrid', 'Ler', 'Kod', 'Cockpit', 'Skeud', 'Fichorama', 'Bientôt', 'launcher-search', 'Réglages']) {
+    for (const needle of ['launcher', 'Skouar', 'app-tile', 'Karneto', 'Skrid', 'Ler', 'Kod', 'Cockpit', 'Skeud', 'Fichorama', 'Salveto', 'Bientôt', 'launcher-search', 'Réglages']) {
       expect(html).toContain(needle)
     }
     const tiles = div.querySelectorAll('.app-tile').length
@@ -38,10 +38,10 @@ describe('Launcher (smoke jsdom)', () => {
     const soon = div.querySelectorAll('.app-tile.soon').length
     expect(soon).toBeGreaterThanOrEqual(4)
     const text = div.textContent ?? ''
-    for (const tag of ['notes & bdd', 'écriture', 'pdf', 'photos', 'éditeur de code', 'productivité & focus', 'tableur', 'dessin & vectoriel', 'fichiers & zip', 'audio', 'budget', 'unités & calcul', 'fiches & notation']) {
+    for (const tag of ['notes & bdd', 'écriture', 'pdf', 'photos', 'éditeur de code', 'productivité & focus', 'tableur', 'dessin & vectoriel', 'fichiers & zip', 'audio', 'budget', 'unités & calcul', 'fiches & notation', 'santé & humeur']) {
       expect(text).toContain(tag)
     }
-    expect(div.querySelectorAll('.app-tile-tag').length).toBe(13)
+    expect(div.querySelectorAll('.app-tile-tag').length).toBe(14)
     root.unmount()
   })
 
@@ -99,7 +99,7 @@ describe('Launcher (smoke jsdom)', () => {
     })
     expect(search.value).toBe('')
     expect(document.activeElement).toBe(search)
-    expect(div.querySelectorAll('.app-tile').length).toBe(13)
+    expect(div.querySelectorAll('.app-tile').length).toBe(14)
     await React.act(async () => {
       search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })

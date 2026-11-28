@@ -8,6 +8,7 @@ export interface AppMeta {
   icon: string
   logo?: string
   soon?: boolean
+  desktopOnly?: boolean
   component?: LazyExoticComponent<ComponentType>
 }
 
@@ -65,6 +66,16 @@ export const apps: AppMeta[] = [
     icon: '🗂️',
     logo: `${import.meta.env.BASE_URL}app-icons/fichorama.svg`,
     component: lazy(() => import('./fichorama/FichoramaApp'))
+  },
+  {
+    id: 'salveto',
+    name: 'Salveto',
+    description: 'Journal de suivi santé et humeur, 100 % local : moral, énergie, poids, sommeil, crises, cycle, RDV, ordonnances.',
+    tag: 'santé & humeur',
+    icon: '🩺',
+    logo: `${import.meta.env.BASE_URL}app-icons/salveto.svg`,
+    desktopOnly: true,
+    component: lazy(() => import('./salveto/SalvetoApp'))
   },
   {
     id: 'tres',

@@ -3,7 +3,8 @@ import Dexie from 'dexie'
 export const uid = (): string => Math.random().toString(36).slice(2) + Date.now().toString(36)
 
 export interface KVRow {
-  id: string
+  id?: string
+  key?: string
   value: unknown
 }
 
@@ -15,7 +16,8 @@ export function kvOf(db: Dexie): {
   return {
     loadKV: async <T,>(id: string): Promise<T | undefined> => ((await t().get(id))?.value) as T | undefined,
     saveKV: async (id: string, value: unknown): Promise<void> => {
-      await t().put({ id, value })
+      const keyPath = (t().schema.primKey.keyPath as string | undefined) ?? 'id'
+      await t().put(keyPath === 'key' ? { key: id, value } : { id, value })
     }
   }
 }
@@ -74,5 +76,6 @@ export const APP_DB_MAP: Record<string, string> = {
   kod: 'skouar-kod',
   cockpit: 'skouar-cockpit',
   taol: 'skouar-taol',
-  fichorama: 'skouar-fichorama'
+  fichorama: 'skouar-fichorama',
+  salveto: 'skouar-salveto'
 }
