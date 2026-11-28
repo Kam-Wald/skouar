@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   BODY_ZONES,
+  bienfaits,
   clampInt,
   cooccurrences,
   dayOf,
+  dernieresValeurs,
   eventsOfType,
   eventsOnDay,
   fmtDuree,
@@ -12,14 +14,19 @@ import {
   makeEvent,
   migrateConfig,
   migrateEvents,
+  migrateRefs,
   normalizeTrigger,
   seedConfig,
+  seedRefs,
   sortEventsDesc,
   timeOf,
   toLocalISO,
   touchEvent,
+  upsertRef,
   validateEvent,
-  type SalvetoEvent
+  type RefItem,
+  type SalvetoEvent,
+  type SalvetoRefs
 } from '../src/apps/salveto/logic'
 
 describe('Salveto logic — dates locales', () => {
@@ -167,5 +174,84 @@ describe('Salveto logic — co-occurrences (4.I)', () => {
     expect(fmtPct(2 / 3)).toBe('67 %')
     expect(BODY_ZONES.some((z) => z.id === 'dos')).toBe(true)
     expect(BODY_ZONES.length).toBe(13)
+  })
+})
+
+describe('Salveto logic — refs, bienfaits, dernières valeurs (S4)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+
+  it('migrateRefs valide les items (id requis, kind connu, label non vide) et conserve les champs inconnus', () => {
+    const m = migrateRefs({
+      version: 1,
+      items: [
+        { id: 't1', kind: 'traitement', label: 'Doliprane', extra: 'x' },
+        { id: '', kind: 'traitement', label: 'x' },
+        { id: 't2', kind: 'bidon', label: 'x' },
+        { kind: 'constante', label: 'sans id' },
+        'non-objet'
+      ]
+    })
+    expect(m?.items.length).toBe(1)
+    expect(m?.items[0].id).toBe('t1')
+    expect((m?.items[0] as unknown as Record<string, unknown>).extra).toBe('x')
+    expect(migrateRefs({ version: 2 })).toBeUndefined()
+    expect(seedRefs().items).toEqual([])
+  })
+
+  it('upsertRef ajoute ou remplace par id sans toucher aux autres', () => {
+    let refs: SalvetoRefs = seedRefs()
+    const a: RefItem = { id: 'a', kind: 'traitement', label: 'A', createdAt: '2025-01-01T00:00:00' }
+    const b: RefItem = { id: 'b', kind: 'constante', label: 'Tension', unite: 'mmHg', createdAt: '2025-01-01T00:00:00' }
+    refs = upsertRef(refs, a)
+    refs = upsertRef(refs, b)
+    refs = upsertRef(refs, { ...a, label: 'A renommé' })
+    expect(refs.items.length).toBe(2)
+    expect(refs.items.find((x) => x.id === 'a')?.label).toBe('A renommé')
+  })
+
+  it('bienfaits agrège les effets par traitement et trie du plus bénéfique au moins utile', () => {
+    const refs: SalvetoRefs = {
+      version: 1,
+      items: [
+        { id: 'doli', kind: 'traitement', label: 'Doliprane', createdAt: '' },
+        { id: 'sport', kind: 'traitement', label: 'Sport', createdAt: '' }
+      ]
+    }
+    const evs = [
+      mk('1', 'traitement', '2025-01-01T08:00:00', { refId: 'doli', label: 'Doliprane', effet: 'marqué' }),
+      mk('2', 'traitement', '2025-01-02T08:00:00', { refId: 'doli', label: 'Doliprane', effet: 'léger' }),
+      mk('3', 'traitement', '2025-01-03T08:00:00', { refId: 'sport', label: 'Sport', effet: 'marqué' }),
+      mk('4', 'traitement', '2025-01-04T08:00:00', { refId: 'sport', label: 'Sport', effet: 'négatif' }),
+      mk('5', 'moral', '2025-01-01T09:00:00', { value: 4 })
+    ]
+    const bien = bienfaits(evs, refs)
+    expect(bien.map((b) => b.refId)).toEqual(['doli', 'sport'])
+    expect(bien[0].score).toBe(3 + 2)
+    expect(bien[0].prises).toBe(2)
+    expect(bien[0].effetCounts).toEqual({ aucun: 0, léger: 1, marqué: 1, négatif: 0 })
+    expect(bien[1].score).toBe(3 - 3)
+    expect(bienfaits([mk('1', 'note', '2025-01-01T10:00:00', {})], refs)).toEqual([])
+  })
+
+  it('dernieresValeurs garde la valeur la plus récente par constante', () => {
+    const refs: SalvetoRefs = {
+      version: 1,
+      items: [{ id: 'ta', kind: 'constante', label: 'Tension', unite: 'mmHg', createdAt: '' }]
+    }
+    const evs = [
+      mk('1', 'constante', '2025-01-01T08:00:00', { refId: 'ta', label: 'Tension', value: 120 }),
+      mk('2', 'constante', '2025-01-05T08:00:00', { refId: 'ta', label: 'Tension', value: 128 })
+    ]
+    const d = dernieresValeurs(evs, refs)
+    expect(d.length).toBe(1)
+    expect(d[0].value).toBe(128)
+    expect(dayOf(d[0].date!)).toBe('2025-01-05')
   })
 })

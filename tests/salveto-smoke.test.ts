@@ -60,7 +60,7 @@ describe('Salveto (smoke jsdom) — S1 coquille + onboarding', () => {
     })
     expect(div.textContent).toContain('Accueil')
     expect(div.textContent).not.toContain('Cycle menstruel')
-    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(8)
+    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(10)
     expect(div.querySelectorAll('.sa-side-row').length).toBe(11)
     await React.act(async () => {
       await new Promise((r) => setTimeout(r, 600))

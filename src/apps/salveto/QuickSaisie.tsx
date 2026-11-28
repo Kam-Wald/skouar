@@ -1,23 +1,31 @@
 import { useState } from 'react'
+import { uid } from '../../shared/db'
 import BodyMap from './BodyMap'
 import {
   DECLENCHEUR_SUGGESTIONS,
+  EFFETS,
   HABITUDE_SUGGESTIONS,
   MORAL_LABELS,
   clampInt,
   clampNum,
   makeEvent,
+  toLocalISO,
+  type Effet,
+  type RefItem,
   type SalvetoEvent,
+  type SalvetoRefs,
   type SuiviId
 } from './logic'
 
 interface Props {
   suivi: SuiviId
+  refs: SalvetoRefs
   onSave: (e: SalvetoEvent) => void
+  onUpsertRef: (r: RefItem) => void
   onClose: () => void
 }
 
-export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
+export default function QuickSaisie({ suivi, refs, onSave, onUpsertRef, onClose }: Props) {
   const [txt, setTxt] = useState('')
   const [coucher, setCoucher] = useState('')
   const [reveil, setReveil] = useState('')
@@ -26,6 +34,11 @@ export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
   const [zones, setZones] = useState<string[]>([])
   const [decl, setDecl] = useState<string[]>([])
   const [declTxt, setDeclTxt] = useState('')
+  const [selRef, setSelRef] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newLabel, setNewLabel] = useState('')
+  const [newUnite, setNewUnite] = useState('')
+  const [newSeuil, setNewSeuil] = useState('')
 
   const save = (patch: Partial<SalvetoEvent>): void => {
     onSave(makeEvent(suivi, patch))
@@ -301,6 +314,188 @@ export default function QuickSaisie({ suivi, onSave, onClose }: Props) {
         >
           Enregistrer
         </button>
+        <button type="button" className="sa-panel-close" onClick={onClose}>
+          Annuler
+        </button>
+      </div>
+    )
+  }
+
+  if (suivi === 'traitement') {
+    const traitements = refs.items.filter((r) => r.kind === 'traitement')
+    const cur = traitements.find((r) => r.id === selRef) ?? traitements[0]
+    const create = (): void => {
+      const label = newLabel.trim()
+      if (!label) return
+      const item: RefItem = { id: uid(), kind: 'traitement', label, createdAt: toLocalISO(new Date()) }
+      onUpsertRef(item)
+      setSelRef(item.id)
+      setCreating(false)
+      setNewLabel('')
+    }
+    return (
+      <div className="sa-panel" data-panel="traitement">
+        <p className="sa-panel-title">Quelle prise / activité ?</p>
+        {traitements.length > 0 && !creating ? (
+          <select className="db-select" value={cur?.id ?? ''} onChange={(e) => setSelRef(e.target.value)}>
+            {traitements.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="sa-panel-row">
+            <input
+              className="db-input"
+              type="text"
+              placeholder="Nom du traitement / activité…"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+            />
+            <button type="button" className="db-btn" onClick={create} disabled={!newLabel.trim()}>
+              Créer
+            </button>
+          </div>
+        )}
+        {traitements.length > 0 && creating && (
+          <div className="sa-panel-row">
+            <input
+              className="db-input"
+              type="text"
+              placeholder="Nom du traitement / activité…"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+            />
+            <button type="button" className="db-btn" onClick={create} disabled={!newLabel.trim()}>
+              Créer
+            </button>
+          </div>
+        )}
+        {traitements.length > 0 && !creating && (
+          <button type="button" className="sa-link" onClick={() => setCreating(true)}>
+            + nouveau traitement / activité
+          </button>
+        )}
+        {cur && (
+          <>
+            <p className="sa-panel-hint">Effet ressenti pour « {cur.label} » :</p>
+            <div className="sa-scale sa-effets">
+              {EFFETS.map((eff) => (
+                <button
+                  key={eff}
+                  type="button"
+                  className="sa-scale-btn sa-effet-btn"
+                  data-effet={eff}
+                  onClick={() => save({ refId: cur.id, label: cur.label, effet: eff as Effet })}
+                >
+                  {eff}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <button type="button" className="sa-panel-close" onClick={onClose}>
+          Annuler
+        </button>
+      </div>
+    )
+  }
+
+  if (suivi === 'constante') {
+    const constantes = refs.items.filter((r) => r.kind === 'constante')
+    const cur = constantes.find((r) => r.id === selRef) ?? constantes[0]
+    const create = (): void => {
+      const label = newLabel.trim()
+      if (!label) return
+      const item: RefItem = {
+        id: uid(),
+        kind: 'constante',
+        label,
+        unite: newUnite.trim() || undefined,
+        seuil: clampNum(newSeuil, 0, 1e9),
+        createdAt: toLocalISO(new Date())
+      }
+      onUpsertRef(item)
+      setSelRef(item.id)
+      setCreating(false)
+      setNewLabel('')
+      setNewUnite('')
+      setNewSeuil('')
+    }
+    return (
+      <div className="sa-panel" data-panel="constante">
+        <p className="sa-panel-title">Quelle constante ?</p>
+        {constantes.length > 0 && !creating ? (
+          <select className="db-select" value={cur?.id ?? ''} onChange={(e) => setSelRef(e.target.value)}>
+            {constantes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+                {c.unite ? ` (${c.unite})` : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <div className="sa-panel-row">
+              <input
+                className="db-input"
+                type="text"
+                placeholder="Nom (tension, température…)"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+              />
+              <input
+                className="db-input sa-unit-input"
+                type="text"
+                placeholder="Unité"
+                value={newUnite}
+                onChange={(e) => setNewUnite(e.target.value)}
+              />
+              <input
+                className="db-input sa-unit-input"
+                type="number"
+                placeholder="Seuil indicatif"
+                value={newSeuil}
+                onChange={(e) => setNewSeuil(e.target.value)}
+              />
+              <button type="button" className="db-btn" onClick={create} disabled={!newLabel.trim()}>
+                Créer
+              </button>
+            </div>
+          </>
+        )}
+        {constantes.length > 0 && !creating && (
+          <button type="button" className="sa-link" onClick={() => setCreating(true)}>
+            + nouvelle constante
+          </button>
+        )}
+        {cur && (
+          <>
+            <p className="sa-panel-hint">
+              Valeur{cur.unite ? ` (${cur.unite})` : ''}
+              {cur.seuil != null ? ` — seuil indicatif : ${cur.seuil}` : ''} :
+            </p>
+            <div className="sa-panel-row">
+              <input
+                className="db-input sa-poids-input"
+                type="number"
+                step="any"
+                placeholder="Valeur"
+                value={txt}
+                onChange={(e) => setTxt(e.target.value)}
+              />
+              <button
+                type="button"
+                className="db-btn"
+                disabled={!clampNum(txt, 0, 1e9)}
+                onClick={() => save({ refId: cur.id, label: cur.label, value: clampNum(txt, 0, 1e9) })}
+              >
+                Noter
+              </button>
+            </div>
+          </>
+        )}
         <button type="button" className="sa-panel-close" onClick={onClose}>
           Annuler
         </button>

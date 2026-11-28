@@ -1,5 +1,14 @@
 import { createAppDb, kvOf } from '../../shared/db'
-import { migrateConfig, migrateEvents, seedConfig, type SalvetoConfig, type SalvetoEvent } from './logic'
+import {
+  migrateConfig,
+  migrateEvents,
+  migrateRefs,
+  seedConfig,
+  seedRefs,
+  type SalvetoConfig,
+  type SalvetoEvent,
+  type SalvetoRefs
+} from './logic'
 
 export const db = createAppDb('skouar-salveto', [
   { version: 1, stores: { kv: 'key', events: 'id, type, date' } }
@@ -55,4 +64,27 @@ export async function deleteEvent(id: string): Promise<void> {
   } catch {
     /* idem */
   }
+}
+
+const REFS_KEY = 'refs'
+
+export async function loadRefs(): Promise<SalvetoRefs> {
+  try {
+    const v = await kv.loadKV<unknown>(REFS_KEY)
+    const m = migrateRefs(v)
+    if (m) return m
+  } catch {
+    // IDB indisponible : seed en mémoire, aucune écriture
+  }
+  return seedRefs()
+}
+
+let refsTimer: ReturnType<typeof setTimeout> | undefined
+export function saveRefs(r: SalvetoRefs): void {
+  if (refsTimer) clearTimeout(refsTimer)
+  refsTimer = setTimeout(() => {
+    void kv.saveKV(REFS_KEY, r).catch(() => {
+      /* stockage indisponible : l’état reste en mémoire */
+    })
+  }, 300)
 }

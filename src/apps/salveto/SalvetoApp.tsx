@@ -4,51 +4,73 @@ import { notify } from '../../shared/notify'
 import QuickSaisie from './QuickSaisie'
 import {
   ALL_SUIVIS,
+  bienfaits,
   cooccurrences,
+  dayOf,
+  dernieresValeurs,
+  eventsOfType,
   eventsOnDay,
   fmtPct,
   isSuiviActive,
   labelOfEvent,
   makeEvent,
   seedConfig,
+  seedRefs,
   sortEventsDesc,
   timeOf,
   todayDay,
+  upsertRef,
+  type RefItem,
   type SalvetoConfig,
   type SalvetoEvent,
+  type SalvetoRefs,
   type SuiviId
 } from './logic'
-import { loadConfig, loadEvents, saveConfig, saveEvent } from './store'
+import { loadConfig, loadEvents, loadRefs, saveConfig, saveEvent, saveRefs } from './store'
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-const NAV: { label: string; icon: string; soon?: boolean }[] = [
-  { label: 'Accueil', icon: '🏠' },
+const NAV: { label: string; icon: string; view?: 'accueil' | 'traitements'; soon?: boolean }[] = [
+  { label: 'Accueil', icon: '🏠', view: 'accueil' },
   { label: 'Journal', icon: '📖', soon: true },
   { label: 'Courbes', icon: '📈', soon: true },
   { label: 'Cycle', icon: '🌸', soon: true },
   { label: 'RDV', icon: '🗓️', soon: true },
   { label: 'Ordonnances', icon: '📄', soon: true },
-  { label: 'Traitements', icon: '💊', soon: true },
+  { label: 'Traitements', icon: '💊', view: 'traitements' },
   { label: 'Préventif', icon: '🩺', soon: true },
   { label: 'Profil santé', icon: '🧾', soon: true },
   { label: 'Rapports', icon: '🗂️', soon: true },
   { label: 'Paramètres', icon: '⚙️', soon: true }
 ]
 
-const QUICK_SUIVIS: SuiviId[] = ['moral', 'energie', 'poids', 'crise', 'sommeil', 'symptome', 'habitude', 'note']
+const QUICK_SUIVIS: SuiviId[] = [
+  'moral',
+  'energie',
+  'poids',
+  'crise',
+  'sommeil',
+  'symptome',
+  'habitude',
+  'note',
+  'traitement',
+  'constante'
+]
 
 export default function SalvetoApp() {
   const [config, setConfig] = useState<SalvetoConfig | null>(null)
   const [events, setEvents] = useState<SalvetoEvent[]>([])
+  const [refs, setRefs] = useState<SalvetoRefs>(seedRefs())
+  const [view, setView] = useState<'accueil' | 'traitements'>('accueil')
   const [checked, setChecked] = useState<Set<SuiviId>>(() => new Set(ALL_SUIVIS.map((s) => s.id)))
   const [panel, setPanel] = useState<SuiviId | null>(null)
   const coocs = useMemo(() => cooccurrences(events), [events])
 
   useEffect(() => {
-    void Promise.all([loadConfig(), loadEvents()]).then(([c, evs]) => {
+    void Promise.all([loadConfig(), loadEvents(), loadRefs()]).then(([c, evs, r]) => {
       setConfig(c)
       setEvents(sortEventsDesc(evs))
+      setRefs(r)
     })
   }, [])
 
@@ -115,6 +137,22 @@ export default function SalvetoApp() {
 
   const quick = ALL_SUIVIS.filter((s) => QUICK_SUIVIS.includes(s.id) && config.activeSuivis.includes(s.id))
   const today = eventsOnDay(events, todayDay())
+  const bien = bienfaits(events, refs)
+  const traitementsRefs = refs.items.filter((r) => r.kind === 'traitement')
+  const dernieres = dernieresValeurs(events, refs)
+  const prisesParRef = new Map<string, number>()
+  for (const e of eventsOfType(events, 'traitement')) {
+    const k = e.refId ?? e.label ?? '?'
+    prisesParRef.set(k, (prisesParRef.get(k) ?? 0) + 1)
+  }
+
+  const onUpsertRef = (r: RefItem): void => {
+    setRefs((prev) => {
+      const next = upsertRef(prev, r)
+      saveRefs(next)
+      return next
+    })
+  }
 
   const onSaveEvent = (e: SalvetoEvent): void => {
     void saveEvent(e)
@@ -132,20 +170,90 @@ export default function SalvetoApp() {
         <div className="sa-side">
           <p className="sa-side-title">Salveto</p>
           {NAV.map((n) =>
-            n.soon ? (
+            n.view ? (
+              <button
+                key={n.label}
+                type="button"
+                className={`sa-side-row${view === n.view ? ' active' : ''}`}
+                data-nav={n.view}
+                onClick={() => setView(n.view!)}
+              >
+                <span aria-hidden>{n.icon}</span> {n.label}
+              </button>
+            ) : (
               <span key={n.label} className="sa-side-row soon" aria-disabled>
                 <span aria-hidden>{n.icon}</span> {n.label} <em>bientôt</em>
               </span>
-            ) : (
-              <button key={n.label} type="button" className="sa-side-row active">
-                <span aria-hidden>{n.icon}</span> {n.label}
-              </button>
             )
           )}
         </div>
       }
     >
       <div className="salveto-main">
+        {view === 'traitements' ? (
+          <>
+            <h1 className="sa-h1">Traitements & activités suivis</h1>
+            <section className="sa-bien">
+              <h2 className="sa-h2">Ce qui me fait du bien</h2>
+              <p className="sa-cooc-note">
+                D’après tes seules notes d’effet ressenti — aucune recommandation, aucune alerte de prise.
+              </p>
+              {bien.length === 0 ? (
+                <p className="sa-empty">Aucune prise notée pour l’instant.</p>
+              ) : (
+                <ul className="sa-cooc-list">
+                  {bien.map((b) => (
+                    <li key={b.refId} className="sa-bien-row" data-ref={b.refId}>
+                      <strong>{b.label}</strong> — score {b.score >= 0 ? `+${b.score}` : b.score} · {b.prises} prise
+                      {b.prises > 1 ? 's' : ''}{' '}
+                      <span className="sa-muted">
+                        (
+                        {Object.entries(b.effetCounts)
+                          .filter(([, n]) => n > 0)
+                          .map(([e, n]) => `${e} × ${n}`)
+                          .join(' · ') || 'aucun effet noté'}
+                        )
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h2 className="sa-h2">Traitements suivis ({traitementsRefs.length})</h2>
+              {traitementsRefs.length === 0 ? (
+                <p className="sa-empty">Aucun traitement suivi — saisis-en un depuis l’accueil (« + Traitement »).</p>
+              ) : (
+                <ul className="sa-cooc-list">
+                  {traitementsRefs.map((t) => (
+                    <li key={t.id}>
+                      <strong>{t.label}</strong> — {prisesParRef.get(t.id) ?? 0} prise(s) notée(s)
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h2 className="sa-h2">Constantes définies ({dernieres.length})</h2>
+              {dernieres.length === 0 ? (
+                <p className="sa-empty">Aucune constante — saisis-en une depuis l’accueil (« + Constante »).</p>
+              ) : (
+                <ul className="sa-cooc-list">
+                  {dernieres.map((d) => (
+                    <li key={d.refId}>
+                      <strong>{d.label}</strong>
+                      {d.unite ? ` (${d.unite})` : ''} —{' '}
+                      {d.value != null
+                        ? `dernière valeur ${d.value}${d.unite ? ` ${d.unite}` : ''} le ${d.date ? dayOf(d.date) : ''}`
+                        : 'aucune valeur saisie'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        ) : (
+          <>
         <h1 className="sa-h1">Accueil</h1>
         <p className="sa-muted">Saisie rapide — {quick.length} suivis actifs.</p>
         <div className="sa-quick">
@@ -161,7 +269,9 @@ export default function SalvetoApp() {
             </button>
           ))}
         </div>
-        {panel && <QuickSaisie suivi={panel} onSave={onSaveEvent} onClose={() => setPanel(null)} />}
+        {panel && (
+          <QuickSaisie suivi={panel} refs={refs} onSave={onSaveEvent} onUpsertRef={onUpsertRef} onClose={() => setPanel(null)} />
+        )}
         <h2 className="sa-h2">Aujourd’hui ({today.length})</h2>
         {today.length === 0 ? (
           <p className="sa-empty">Aucune saisie aujourd’hui pour l’instant.</p>
@@ -190,6 +300,8 @@ export default function SalvetoApp() {
               ))}
             </ul>
           </section>
+        )}
+          </>
         )}
       </div>
     </AppShell>

@@ -57,7 +57,7 @@ describe('Salveto S2 — saisie rapide (smoke jsdom)', () => {
   it('accueil : 8 boutons rapides visibles, saisie moral en 2 clics persistée et listée dans le résumé du jour', async () => {
     await seedOnboarded()
     const { React, root, div } = await renderApp()
-    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(8)
+    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(10)
     await React.act(async () => {
       btn(div, '[data-quick="moral"]').click()
     })
@@ -199,7 +199,7 @@ describe('Salveto S2 — saisie rapide (smoke jsdom)', () => {
     await seedOnboarded(SUIVI_IDS.filter((id) => id !== 'note'))
     const { root, div } = await renderApp()
     expect(div.querySelector('[data-quick="note"]')).toBeNull()
-    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(7)
+    expect(div.querySelectorAll('.sa-quick-btn').length).toBe(9)
     expect(div.textContent).toContain('Note : Journée calme à la maison')
     const { loadEvents } = await import('../src/apps/salveto/store')
     expect((await loadEvents()).some((e) => e.type === 'note')).toBe(true)
