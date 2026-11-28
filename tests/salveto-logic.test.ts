@@ -16,10 +16,12 @@ import {
   fmtDay,
   fmtDuree,
   fmtPct,
+  fmtSize,
   labelOfEvent,
   makeEvent,
   migrateConfig,
   migrateEvents,
+  migrateProfil,
   migrateRefs,
   normalizeTrigger,
   phaseOfDay,
@@ -34,6 +36,7 @@ import {
   touchEvent,
   upsertRef,
   validateEvent,
+  type ProfilSante,
   type RefItem,
   type SalvetoConfig,
   type SalvetoEvent,
@@ -422,5 +425,57 @@ describe('Salveto logic — RDV, ordonnances, préventif, bandeau (S6)', () => {
   it('migrateConfig : questionsRdv défaut [] et conservé si présent', () => {
     expect(migrateConfig({ version: 1, onboarded: true, activeSuivis: [] })?.questionsRdv).toEqual([])
     expect(migrateConfig({ version: 1, onboarded: true, activeSuivis: [], questionsRdv: ['Q1', 42] })?.questionsRdv).toEqual(['Q1'])
+  })
+})
+
+describe('Salveto logic — profil santé + pièces jointes (S7)', () => {
+  it('migrateProfil : défauts, allergies/vaccinations validés, champs inconnus conservés, version inconnue rejetée', () => {
+    const m = migrateProfil({
+      version: 1,
+      allergies: ['pénicilline', '', 42],
+      vaccinations: [
+        { id: 'v1', label: 'COVID', date: '2024-01-10', rappel: '2025-01-10' },
+        { id: 'v2', label: 'sans date' },
+        'bidon'
+      ],
+      groupeSanguin: 'O+',
+      champFutur: true
+    })
+    expect(m?.allergies).toEqual(['pénicilline'])
+    expect(m?.vaccinations.length).toBe(1)
+    expect(m?.vaccinations[0].rappel).toBe('2025-01-10')
+    expect(m?.groupeSanguin).toBe('O+')
+    expect((m as unknown as Record<string, unknown>).champFutur).toBe(true)
+    expect(m?.antecedents).toBe('')
+    expect(migrateProfil({ version: 2 })).toBeUndefined()
+    expect(migrateProfil(null)).toBeUndefined()
+  })
+
+  it('bandeauAccueil avec profil : rappel vaccin dépassé / proche affiché (passif)', () => {
+    const today = todayDay()
+    const cfg: SalvetoConfig = { version: 1, onboarded: true, desktopOnly: true, activeSuivis: [] }
+    const profil: ProfilSante = {
+      version: 1,
+      antecedents: '',
+      maladies: '',
+      allergies: [],
+      traitementsEnCours: '',
+      antecedentsFamiliaux: '',
+      vaccinations: [
+        { id: 'v1', label: 'Tétanos', date: addDays(today, -800), rappel: addDays(today, -5) },
+        { id: 'v2', label: 'Hépatite B', date: addDays(today, -30), rappel: addDays(today, 10) }
+      ]
+    }
+    const b = bandeauAccueil([], { version: 1, items: [] }, cfg, profil)
+    expect(b.some((x) => x.kind === 'preventif' && x.texte.includes('Tétanos') && x.texte.includes('dépassé'))).toBe(true)
+    expect(b.some((x) => x.kind === 'preventif' && x.texte.includes('Hépatite B') && x.texte.includes('dans 10 j'))).toBe(true)
+    // sans profil : aucun rappel vaccin
+    expect(bandeauAccueil([], { version: 1, items: [] }, cfg).some((x) => x.texte.includes('vaccin'))).toBe(false)
+  })
+
+  it('fmtSize', () => {
+    expect(fmtSize(500)).toBe('500 o')
+    expect(fmtSize(2048)).toBe('2 Ko')
+    expect(fmtSize(3 * 1024 * 1024)).toBe('3.0 Mo')
   })
 })

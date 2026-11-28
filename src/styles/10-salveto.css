@@ -554,3 +554,72 @@ button.sa-side-row:hover {
   align-items: center;
   gap: 6px;
 }
+
+/* ---------- Salveto : profil santé + pièces jointes + carte d'urgence (S7) ---------- */
+
+.sa-profil-form {
+  max-width: 720px;
+}
+
+.sa-file-btn {
+  display: inline-block;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.sa-pj-row a {
+  color: var(--accent);
+}
+
+.sa-urgence-btn {
+  border: 2px solid #e5484d;
+  background: #e5484d18;
+  color: #e5484d;
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  margin: 4px 0 8px;
+}
+
+.sa-urgence-btn:hover {
+  background: #e5484d2e;
+}
+
+.sa-urgence {
+  min-height: 70vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.sa-urgence-card {
+  max-width: 560px;
+  width: 100%;
+  background: var(--panel);
+  border: 2px solid #e5484d;
+  border-radius: 18px;
+  padding: 24px 28px;
+}
+
+.sa-urgence-dl {
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sa-urgence-dl dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sa-urgence-dl dd {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}

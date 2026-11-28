@@ -2,16 +2,21 @@ import { createAppDb, kvOf } from '../../shared/db'
 import {
   migrateConfig,
   migrateEvents,
+  migrateProfil,
   migrateRefs,
   seedConfig,
+  seedProfil,
   seedRefs,
+  type Attachment,
+  type ProfilSante,
   type SalvetoConfig,
   type SalvetoEvent,
   type SalvetoRefs
 } from './logic'
 
 export const db = createAppDb('skouar-salveto', [
-  { version: 1, stores: { kv: 'key', events: 'id, type, date' } }
+  { version: 1, stores: { kv: 'key', events: 'id, type, date' } },
+  { version: 2, stores: { attachments: 'id, refId, refType, createdAt' } }
 ])
 const kv = kvOf(db)
 
@@ -87,4 +92,53 @@ export function saveRefs(r: SalvetoRefs): void {
       /* stockage indisponible : l’état reste en mémoire */
     })
   }, 300)
+}
+
+const PROFIL_KEY = 'profil'
+
+export async function loadProfil(): Promise<ProfilSante> {
+  try {
+    const v = await kv.loadKV<unknown>(PROFIL_KEY)
+    const m = migrateProfil(v)
+    if (m) return m
+  } catch {
+    // IDB indisponible : seed en mémoire, aucune écriture
+  }
+  return seedProfil()
+}
+
+let profilTimer: ReturnType<typeof setTimeout> | undefined
+export function saveProfil(p: ProfilSante): void {
+  if (profilTimer) clearTimeout(profilTimer)
+  profilTimer = setTimeout(() => {
+    void kv.saveKV(PROFIL_KEY, p).catch(() => {
+      /* stockage indisponible : l’état reste en mémoire */
+    })
+  }, 300)
+}
+
+const attT = () => db.table<Attachment, string>('attachments')
+
+export async function loadAttachments(): Promise<Attachment[]> {
+  try {
+    return await attT().toArray()
+  } catch {
+    return []
+  }
+}
+
+export async function saveAttachment(a: Attachment): Promise<void> {
+  try {
+    await attT().put(a)
+  } catch {
+    /* stockage indisponible : la PJ reste en mémoire */
+  }
+}
+
+export async function deleteAttachment(id: string): Promise<void> {
+  try {
+    await attT().delete(id)
+  } catch {
+    /* idem */
+  }
 }

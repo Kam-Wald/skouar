@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import { OrdonnancesView, PreventifView, RdvView } from './MedViews'
+import { ProfilView, UrgenceView } from './ProfilView'
 import QuickSaisie from './QuickSaisie'
 import {
   ALL_SUIVIS,
@@ -27,17 +28,31 @@ import {
   todayDay,
   touchEvent,
   upsertRef,
+  type Attachment,
+  type ProfilSante,
   type RefItem,
   type SalvetoConfig,
   type SalvetoEvent,
   type SalvetoRefs,
   type SuiviId
 } from './logic'
-import { loadConfig, loadEvents, loadRefs, saveConfig, saveEvent, saveRefs } from './store'
+import {
+  deleteAttachment,
+  loadAttachments,
+  loadConfig,
+  loadEvents,
+  loadProfil,
+  loadRefs,
+  saveAttachment,
+  saveConfig,
+  saveEvent,
+  saveProfil,
+  saveRefs
+} from './store'
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-type View = 'accueil' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif'
+type View = 'accueil' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence'
 
 const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
@@ -48,7 +63,7 @@ const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Ordonnances', icon: '📄', view: 'ordonnances' },
   { label: 'Traitements', icon: '💊', view: 'traitements' },
   { label: 'Préventif', icon: '🩺', view: 'preventif' },
-  { label: 'Profil santé', icon: '🧾', soon: true },
+  { label: 'Profil santé', icon: '🧾', view: 'profil' },
   { label: 'Rapports', icon: '🗂️', soon: true },
   { label: 'Paramètres', icon: '⚙️', soon: true }
 ]
@@ -71,17 +86,23 @@ export default function SalvetoApp() {
   const [config, setConfig] = useState<SalvetoConfig | null>(null)
   const [events, setEvents] = useState<SalvetoEvent[]>([])
   const [refs, setRefs] = useState<SalvetoRefs>(seedRefs())
+  const [profil, setProfil] = useState<ProfilSante | null>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [view, setView] = useState<View>('accueil')
   const [checked, setChecked] = useState<Set<SuiviId>>(() => new Set(ALL_SUIVIS.map((s) => s.id)))
   const [panel, setPanel] = useState<SuiviId | null>(null)
   const coocs = useMemo(() => cooccurrences(events), [events])
 
   useEffect(() => {
-    void Promise.all([loadConfig(), loadEvents(), loadRefs()]).then(([c, evs, r]) => {
-      setConfig(c)
-      setEvents(sortEventsDesc(evs))
-      setRefs(r)
-    })
+    void Promise.all([loadConfig(), loadEvents(), loadRefs(), loadProfil(), loadAttachments()]).then(
+      ([c, evs, r, p, att]) => {
+        setConfig(c)
+        setEvents(sortEventsDesc(evs))
+        setRefs(r)
+        setProfil(p)
+        setAttachments(att)
+      }
+    )
   }, [])
 
   if (!config) {
@@ -179,7 +200,33 @@ export default function SalvetoApp() {
     setConfig(c)
   }
 
-  const bandeau = bandeauAccueil(events, refs, config)
+  const onSaveProfil = (p: ProfilSante): void => {
+    saveProfil(p)
+    setProfil(p)
+    notify('Profil santé enregistré')
+  }
+
+  const onSaveAttachment = (a: Attachment): void => {
+    void saveAttachment(a)
+    setAttachments((prev) => [...prev.filter((x) => x.id !== a.id), a])
+  }
+
+  const onDeleteAttachment = (id: string): void => {
+    void deleteAttachment(id)
+    setAttachments((prev) => prev.filter((x) => x.id !== id))
+    notify('Pièce jointe supprimée')
+  }
+
+  const onAttach = (id: string, refId: string, refType: 'rdv' | 'ordonnance' | 'profil'): void => {
+    setAttachments((prev) => {
+      const next = prev.map((a) => (a.id === id ? { ...a, refId: refId || undefined, refType } : a))
+      const a = next.find((x) => x.id === id)
+      if (a) void saveAttachment(a)
+      return next
+    })
+  }
+
+  const bandeau = profil ? bandeauAccueil(events, refs, config, profil) : bandeauAccueil(events, refs, config)
 
   const onSaveEvent = (e: SalvetoEvent): void => {
     void saveEvent(e)
@@ -217,7 +264,19 @@ export default function SalvetoApp() {
       }
     >
       <div className="salveto-main">
-        {view === 'rdv' ? (
+        {view === 'profil' && profil ? (
+          <ProfilView
+            profil={profil}
+            events={events}
+            attachments={attachments}
+            onSaveProfil={onSaveProfil}
+            onSaveAttachment={onSaveAttachment}
+            onDeleteAttachment={onDeleteAttachment}
+            onAttach={onAttach}
+          />
+        ) : view === 'urgence' && profil ? (
+          <UrgenceView profil={profil} />
+        ) : view === 'rdv' ? (
           <RdvView
             events={events}
             refs={refs}
@@ -372,6 +431,9 @@ export default function SalvetoApp() {
         ) : (
           <>
         <h1 className="sa-h1">Accueil</h1>
+        <button type="button" className="sa-urgence-btn" onClick={() => setView('urgence')}>
+          🚨 Carte d’urgence (1 clic)
+        </button>
         {bandeau.length > 0 && (
           <div className="sa-bandeau" role="status">
             <p className="sa-bandeau-title">Rappels passifs (uniquement à l’ouverture de l’app) :</p>
