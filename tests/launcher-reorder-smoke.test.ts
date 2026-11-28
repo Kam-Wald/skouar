@@ -97,17 +97,17 @@ describe('Launcher — réorganisation des tuiles (smoke jsdom)', () => {
   })
 
   it('ordre persisté appliqué au rechargement + recherche respecte l’ordre ; « Réinitialiser » efface', async () => {
-    localStorage.setItem(KEY, JSON.stringify(['salveto', 'taol']))
+    localStorage.setItem(KEY, JSON.stringify(['racine', 'taol']))
     const { React, root, div } = await renderLauncher()
     const ids = tileIds(div)
-    expect(tileAppIds(div)[0]).toBe('salveto')
+    expect(tileAppIds(div)[0]).toBe('racine')
     expect(tileAppIds(div)[1]).toBe('taol')
     // recherche : ordre perso appliqué aux résultats filtrés
     const search = div.querySelector('.launcher-search') as HTMLInputElement
     await React.act(async () => {
       setVal(search, 'a')
     })
-    expect(tileAppIds(div)[0]).toBe('salveto')
+    expect(tileAppIds(div)[0]).toBe('racine')
     await React.act(async () => {
       setVal(search, '')
     })
