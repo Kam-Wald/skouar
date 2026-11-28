@@ -73,5 +73,6 @@ export const APP_DB_MAP: Record<string, string> = {
   skeud: 'skouar-skeud',
   kod: 'skouar-kod',
   cockpit: 'skouar-cockpit',
-  taol: 'skouar-taol'
+  taol: 'skouar-taol',
+  fichorama: 'skouar-fichorama'
 }
