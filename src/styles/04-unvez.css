@@ -63,3 +63,192 @@
 .unvez-empty {
   color: var(--muted);
 }
+
+.unvez-conv {
+  max-width: 720px;
+}
+
+.conv-top {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.conv-top select,
+.conv-field select,
+.conv-field input,
+.conv-search {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.conv-search {
+  flex: 1;
+  min-width: 180px;
+}
+
+.conv-results {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.conv-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.conv-results button:hover {
+  background: var(--panel-2);
+}
+
+.conv-pair {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.conv-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conv-field input {
+  width: 100%;
+  font-size: 20px;
+  font-family: var(--font-mono);
+}
+
+.conv-swap,
+.conv-fav {
+  align-self: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.conv-fav.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.conv-formula {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 10px 0;
+}
+
+.conv-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.unvez-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.unvez-btn:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.unvez-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.conv-all {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.conv-unit-row {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.conv-unit-row:hover {
+  background: var(--panel-2);
+}
+
+.conv-unit-sym {
+  font-family: var(--font-mono);
+}
+
+.conv-unit-val {
+  font-family: var(--font-mono);
+}
+
+.conv-unit-note {
+  display: block;
+  padding: 0 10px 6px;
+  color: var(--muted);
+}
+
+.conv-recents {
+  color: var(--muted);
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.conv-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.conv-chip:hover {
+  background: var(--panel-2);
+}
