@@ -821,3 +821,109 @@ export function fileToDataUrl(file: File, maxPx = 1400): Promise<string> {
     img.src = url
   })
 }
+
+/* ---------- Journal : recherche, filtres, calendrier mensuel (14) ---------- */
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  moral: 'Moral',
+  energie: 'Énergie',
+  poids: 'Poids',
+  crise: 'Crise',
+  sommeil: 'Sommeil',
+  symptome: 'Symptôme',
+  constante: 'Constante',
+  cycle: 'Cycle',
+  traitement: 'Traitement',
+  habitude: 'Habitude',
+  rdv: 'RDV',
+  ordonnance: 'Ordonnance',
+  marqueur: 'Marqueur',
+  note: 'Note'
+}
+
+export const EVENT_TYPE_ICONS: Record<EventType, string> = {
+  moral: '🙂',
+  energie: '⚡',
+  poids: '⚖️',
+  crise: '💥',
+  sommeil: '🌙',
+  symptome: '🤒',
+  constante: '🌡️',
+  cycle: '🌸',
+  traitement: '💊',
+  habitude: '🏃',
+  rdv: '🗓️',
+  ordonnance: '📄',
+  marqueur: '📌',
+  note: '✏️'
+}
+
+export function eventSearchText(e: SalvetoEvent): string {
+  return [
+    e.label,
+    e.notes,
+    e.contenu,
+    e.motif,
+    e.lieu,
+    e.medecin,
+    e.crDiag,
+    e.crExamens,
+    e.crProchaine,
+    e.flux,
+    e.effet,
+    ...(e.zones ?? []),
+    ...(e.declencheurs ?? [])
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+export function searchEvents(events: SalvetoEvent[], q: string): SalvetoEvent[] {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return events
+  return events.filter((e) => eventSearchText(e).includes(needle))
+}
+
+export const MOIS = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre'
+]
+
+export function monthGrid(year: number, month: number): (string | null)[][] {
+  const first = new Date(year, month, 1)
+  const startOffset = (first.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (string | null)[] = []
+  for (let i = 0; i < startOffset; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(toDay(new Date(year, month, d)))
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (string | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
+
+export interface DayMarkers {
+  crise: boolean
+  regles: boolean
+  saisie: boolean
+}
+
+export function dayMarkers(events: SalvetoEvent[], day: string): DayMarkers {
+  const dayEvs = eventsOnDay(events, day)
+  return {
+    crise: dayEvs.some((e) => e.type === 'crise'),
+    regles: events.some((e) => e.type === 'cycle' && day >= dayOf(e.date) && (!e.fin || day <= dayOf(e.fin))),
+    saisie: dayEvs.length > 0
+  }
+}

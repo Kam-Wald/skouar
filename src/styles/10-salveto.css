@@ -623,3 +623,126 @@ button.sa-side-row:hover {
   margin: 2px 0 0;
   font-size: 1.05rem;
 }
+
+/* ---------- Salveto : journal + calendrier + édition (S8) ---------- */
+
+.sa-journal-toolbar {
+  margin: 8px 0 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sa-search {
+  min-width: 220px;
+}
+
+.sa-journal-row {
+  max-width: 720px;
+}
+
+.sa-journal-icon {
+  font-size: 1rem;
+}
+
+.sa-journal-label {
+  flex: 1;
+}
+
+.sa-journal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.sa-danger {
+  color: #e5484d;
+}
+
+.sa-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 16px;
+  z-index: 50;
+  overflow: auto;
+}
+
+.sa-modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  max-width: 560px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sa-cal-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.sa-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  max-width: 560px;
+}
+
+.sa-cal-dow {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.sa-cal-cell {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: 8px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+
+.sa-cal-cell.null {
+  border: none;
+  background: none;
+  cursor: default;
+}
+
+.sa-cal-cell.today {
+  border-color: var(--accent);
+}
+
+.sa-cal-cell.active {
+  background: var(--accent-soft);
+}
+
+.sa-cal-cell.empty .sa-cal-num {
+  color: var(--muted);
+}
+
+.sa-cal-num {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sa-cal-marks {
+  font-size: 0.62rem;
+  line-height: 1;
+}
