@@ -615,3 +615,63 @@
   gap: 4px;
   padding: 8px 10px 10px;
 }
+
+/* ---------- Fichorama : paramètres catégorie (S6) ---------- */
+
+.fi-fields-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fi-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fi-field-label {
+  flex: 1;
+  min-width: 120px;
+}
+
+.fi-field-type {
+  width: auto;
+  font-size: 0.8rem;
+  padding: 4px 6px;
+}
+
+.fi-field-opts {
+  flex: 1;
+  min-width: 140px;
+  font-size: 0.8rem;
+}
+
+.fi-field-req {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.fi-danger {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.fi-danger-btn {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+}
+
+.fi-danger-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fi-danger-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}

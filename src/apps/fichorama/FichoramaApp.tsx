@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
+import FieldsEditor from './FieldsEditor'
 import {
   CAT_COLORS,
   CAT_ICONS,
@@ -9,6 +10,7 @@ import {
   catStats,
   categoryOf,
   clampNote,
+  deleteCategory,
   fileToDataUrl,
   filterFiches,
   fmtDateIso,
@@ -121,6 +123,11 @@ export default function FichoramaApp(): JSX.Element {
   const [catName, setCatName] = useState('')
   const [catIcon, setCatIcon] = useState('🗂️')
   const [catColor, setCatColor] = useState(CAT_COLORS[0])
+  const [catFields, setCatFields] = useState<FieldDef[]>([])
+  const [settings, setSettings] = useState<string | null>(null)
+  const [setDraft, setSetDraft] = useState<Category | null>(null)
+  const [delConfirm, setDelConfirm] = useState(false)
+  const [delTarget, setDelTarget] = useState('')
   const [form, setForm] = useState<FormState | null>(null)
   const [renote, setRenote] = useState<string | null>(null)
   const [renoteVal, setRenoteVal] = useState(5)
@@ -164,11 +171,13 @@ export default function FichoramaApp(): JSX.Element {
       notify('Nom de catégorie requis')
       return
     }
+    const fields = catFields
     mutate((d) => {
-      d.categories.push({ id: `cat-${uid()}`, name, icon: catIcon, color: catColor, fields: [] })
+      d.categories.push({ id: `cat-${uid()}`, name, icon: catIcon, color: catColor, fields })
     })
     setNewCat(false)
     setCatName('')
+    setCatFields([])
     notify(`Catégorie « ${name} » créée`)
   }
 
@@ -219,6 +228,42 @@ export default function FichoramaApp(): JSX.Element {
       d.fiches = d.fiches.filter((x) => x.id !== f.id)
     })
     notify('Fiche supprimée')
+  }
+
+  const openSettings = (id: string): void => {
+    if (!data) return
+    const c = categoryOf(data, id)
+    if (!c) return
+    setSettings(id)
+    setSetDraft(structuredClone(c))
+    setDelConfirm(false)
+    setDelTarget('')
+  }
+
+  const saveSettings = (): void => {
+    if (!settings || !setDraft || !data) return
+    const name = setDraft.name.trim()
+    if (!name) {
+      notify('Nom de catégorie requis')
+      return
+    }
+    const draft = { ...setDraft, name }
+    mutate((d) => {
+      const i = d.categories.findIndex((c) => c.id === settings)
+      if (i >= 0) d.categories[i] = draft
+    })
+    setSettings(null)
+    notify('Catégorie enregistrée')
+  }
+
+  const removeCategory = (): void => {
+    if (!settings || !data) return
+    const target = delTarget !== '' ? delTarget : null
+    const name = categoryOf(data, settings)?.name ?? ''
+    mutate((d) => deleteCategory(d, settings, target))
+    setSettings(null)
+    if (view.kind === 'cat' && view.id === settings) setView({ kind: 'home' })
+    notify(`Catégorie « ${name} » supprimée${target ? ' (fiches déplacées)' : ' (fiches supprimées)'}`)
   }
 
   const saveRenote = (): void => {
@@ -338,9 +383,14 @@ export default function FichoramaApp(): JSX.Element {
           <div className="fi-cat">
             <div className="fi-cat-head fi-controls">
               {view.kind === 'cat' && cat && (
-                <button type="button" className="db-btn" onClick={() => setForm({ id: null, catId: cat.id, draft: emptyDraft() })}>
-                  + Nouvelle fiche
-                </button>
+                <>
+                  <button type="button" className="db-btn" onClick={() => setForm({ id: null, catId: cat.id, draft: emptyDraft() })}>
+                    + Nouvelle fiche
+                  </button>
+                  <button type="button" className="db-btn" title="Paramètres de la catégorie (champs, renommage, suppression)" onClick={() => openSettings(cat.id)}>
+                    ⚙ Paramètres
+                  </button>
+                </>
               )}
               <input className="fi-search fi-search-sm" placeholder="Filtrer (titre, commentaire)…" value={viewQ} onChange={(e) => setViewQ(e.target.value)} />
               <select className="fi-input fi-sort" value={sort} title="Trier par" onChange={(e) => setSort(e.target.value as SortKey)}>
@@ -536,12 +586,86 @@ export default function FichoramaApp(): JSX.Element {
                 <button key={c} type="button" className={`fi-swatch${catColor === c ? ' on' : ''}`} style={{ background: c }} onClick={() => setCatColor(c)} />
               ))}
             </div>
+            <p className="fi-section-title">Champs de la catégorie</p>
+            <FieldsEditor fields={catFields} onChange={setCatFields} />
             <div className="fi-modal-actions">
               <button type="button" className="db-btn" onClick={() => setNewCat(false)}>
                 Annuler
               </button>
               <button type="button" className="db-btn" onClick={addCategory}>
                 Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {settings && setDraft && data && (
+        <div className="fi-overlay" onClick={() => setSettings(null)}>
+          <div className="fi-modal fi-form" onClick={(e) => e.stopPropagation()}>
+            <p className="fi-modal-title">⚙ Paramètres — {setDraft.icon} {setDraft.name}</p>
+            <input
+              className="fi-input"
+              placeholder="Nom de la catégorie"
+              value={setDraft.name}
+              onChange={(e) => setSetDraft({ ...setDraft, name: e.target.value })}
+            />
+            <div className="fi-pick-row">
+              {CAT_ICONS.map((ic) => (
+                <button key={ic} type="button" className={`fi-pick${setDraft.icon === ic ? ' on' : ''}`} onClick={() => setSetDraft({ ...setDraft, icon: ic })}>
+                  {ic}
+                </button>
+              ))}
+            </div>
+            <div className="fi-pick-row">
+              {CAT_COLORS.map((c) => (
+                <button key={c} type="button" className={`fi-swatch${setDraft.color === c ? ' on' : ''}`} style={{ background: c }} onClick={() => setSetDraft({ ...setDraft, color: c })} />
+              ))}
+            </div>
+            <p className="fi-section-title">Champs affichés (les valeurs des fiches sont toujours conservées)</p>
+            <FieldsEditor fields={setDraft.fields} onChange={(fields) => setSetDraft({ ...setDraft, fields })} />
+            <div className="fi-danger">
+              {!delConfirm ? (
+                <button type="button" className="db-btn fi-danger-btn" onClick={() => setDelConfirm(true)}>
+                  🗑 Supprimer la catégorie…
+                </button>
+              ) : (
+                <div className="fi-danger-box">
+                  <p className="fi-danger-text">
+                    {data.fiches.filter((f) => f.categoryId === settings).length} fiche(s) concernée(s). Que faire des fiches ?
+                  </p>
+                  <select className="fi-input" value={delTarget} onChange={(e) => setDelTarget(e.target.value)}>
+                    <option value="">Les supprimer avec la catégorie</option>
+                    {data.categories
+                      .filter((c) => c.id !== settings)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          Les déplacer vers « {c.icon} {c.name} »
+                        </option>
+                      ))}
+                  </select>
+                  <div className="fi-modal-actions">
+                    <button type="button" className="db-btn" onClick={() => setDelConfirm(false)}>
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      className="db-btn fi-danger-btn"
+                      onClick={() => {
+                        if (window.confirm(`Confirmer la suppression de « ${setDraft.name} » ?`)) removeCategory()
+                      }}
+                    >
+                      Confirmer la suppression
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="fi-modal-actions">
+              <button type="button" className="db-btn" onClick={() => setSettings(null)}>
+                Annuler
+              </button>
+              <button type="button" className="db-btn" onClick={saveSettings}>
+                Enregistrer
               </button>
             </div>
           </div>

@@ -247,3 +247,33 @@ export function filterFiches(fs: Fiche[], f: FicheFilter): Fiche[] {
   }
   return out
 }
+
+// ---------- Paramètres catégorie (S6) ----------
+
+export const FIELD_TYPES: { type: FieldType; label: string }[] = [
+  { type: 'text', label: 'Texte' },
+  { type: 'number', label: 'Nombre' },
+  { type: 'date', label: 'Date' },
+  { type: 'select', label: 'Liste déroulante' }
+]
+
+export function removeField(cat: Category, id: string): void {
+  cat.fields = cat.fields.filter((f) => f.id !== id)
+}
+
+export function moveField(cat: Category, id: string, dir: -1 | 1): void {
+  const i = cat.fields.findIndex((f) => f.id === id)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= cat.fields.length) return
+  const [f] = cat.fields.splice(i, 1)
+  cat.fields.splice(j, 0, f)
+}
+
+export function deleteCategory(data: FichoramaData, id: string, moveToId: string | null): void {
+  if (moveToId && data.categories.some((c) => c.id === moveToId)) {
+    for (const f of data.fiches) if (f.categoryId === id) f.categoryId = moveToId
+  } else {
+    data.fiches = data.fiches.filter((f) => f.categoryId !== id)
+  }
+  data.categories = data.categories.filter((c) => c.id !== id)
+}
