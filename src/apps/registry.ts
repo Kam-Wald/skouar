@@ -88,13 +88,14 @@ export const apps: AppMeta[] = [
     component: lazy(() => import('./fichorama/FichoramaApp'))
   },
   {
-    id: 'salveto',
-    name: 'Salveto',
-    description: 'Journal de suivi santé et humeur, 100 % local : moral, énergie, poids, sommeil, crises, cycle, RDV, ordonnances.',
+    id: 'racine',
+    name: 'Racine',
+    description: 'Journal de suivi santé et humeur, 100 % local.',
     tag: 'santé & humeur',
     icon: '🩺',
-    logo: `${import.meta.env.BASE_URL}app-icons/salveto.svg`,
-    desktopOnly: true
+    logo: `${import.meta.env.BASE_URL}app-icons/racine.svg`,
+    desktopOnly: true,
+    component: lazy(() => import('./racine/RacineApp'))
   },
   {
     id: 'tres',

@@ -9,6 +9,7 @@ import './styles/02-launcher.css'
 import './styles/03-shell.css'
 import './styles/04-unvez.css'
 import './styles/05-fichorama.css'
+import './styles/06-racine.css'
 
 applyTheme(getTheme(), getAccent())
 
