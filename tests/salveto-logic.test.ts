@@ -18,19 +18,23 @@ import {
   fmtDuree,
   fmtPct,
   fmtSize,
+  inWindow,
   labelOfEvent,
+  marqueursOf,
   makeEvent,
   migrateConfig,
   migrateEvents,
   migrateProfil,
   migrateRefs,
   monthGrid,
+  niceScale,
   normalizeTrigger,
   phaseOfDay,
   prevision,
   rdvTries,
   searchEvents,
   seedConfig,
+  serieOf,
   seedRefs,
   sortEventsDesc,
   timeOf,
@@ -520,5 +524,54 @@ describe('Salveto logic — journal : recherche + calendrier (S8)', () => {
     expect(dayMarkers(evs, '2025-01-10')).toEqual({ crise: true, regles: true, saisie: true })
     expect(dayMarkers(evs, '2025-01-13')).toEqual({ crise: false, regles: false, saisie: false })
     expect(dayMarkers(evs, '2025-01-09').regles).toBe(true)
+  })
+})
+
+describe('Salveto logic — courbes + marqueurs (S9)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  it('serieOf : filtre par type, ne garde que les valeurs numériques, tri asc, filtre par refId', () => {
+    const evs = [
+      mk('b', 'poids', '2025-01-10T08:00:00', { value: 71 }),
+      mk('a', 'poids', '2025-01-05T08:00:00', { value: 72.5 }),
+      mk('n', 'poids', '2025-01-06T08:00:00', {}),
+      mk('c1', 'constante', '2025-01-06T08:00:00', { refId: 'ta', value: 120 }),
+      mk('c2', 'constante', '2025-01-07T08:00:00', { refId: 'gl', value: 5.5 })
+    ]
+    expect(serieOf(evs, 'poids').map((p) => p.value)).toEqual([72.5, 71])
+    expect(serieOf(evs, 'constante', 'ta').map((p) => p.value)).toEqual([120])
+    expect(serieOf(evs, 'moral')).toEqual([])
+  })
+  it('inWindow filtre sur la période glissante', () => {
+    const today = todayDay()
+    const pts = [
+      { day: addDays(today, -40), value: 1 },
+      { day: addDays(today, -10), value: 2 },
+      { day: today, value: 3 }
+    ]
+    expect(inWindow(pts, 30).map((p) => p.value)).toEqual([2, 3])
+    expect(inWindow(pts, 365).length).toBe(3)
+  })
+  it('niceScale produit des bornes/ticks « propres »', () => {
+    const s = niceScale(2, 9)
+    expect(s.min).toBeLessThanOrEqual(2)
+    expect(s.max).toBeGreaterThanOrEqual(9)
+    expect(s.ticks.length).toBeGreaterThanOrEqual(2)
+    expect(s.ticks.length).toBeLessThanOrEqual(7)
+    expect(niceScale(5, 5).min).toBeLessThan(5)
+    expect(niceScale(NaN, 3).ticks).toEqual([0, 1])
+  })
+  it('marqueursOf : tri desc des événements marqueur', () => {
+    const evs = [
+      mk('m1', 'marqueur', '2025-01-01T12:00:00', { label: 'début T1' }),
+      mk('m2', 'marqueur', '2025-02-01T12:00:00', { label: 'changement' })
+    ]
+    expect(marqueursOf(evs).map((m) => m.id)).toEqual(['m2', 'm1'])
   })
 })

@@ -565,6 +565,36 @@ export default function QuickSaisie({ suivi, refs, onSave, onUpsertRef, onClose 
     )
   }
 
+  if (suivi === 'marqueur') {
+    return (
+      <div className="sa-panel" data-panel="marqueur">
+        <p className="sa-panel-title">📌 Épingler un marqueur d’événement</p>
+        <input
+          className="db-input"
+          type="text"
+          placeholder="Libellé (ex. « début traitement », « changement de vie »)"
+          value={txt}
+          onChange={(e) => setTxt(e.target.value)}
+        />
+        <label className="sa-field">
+          Date
+          <input className="db-input" type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
+        </label>
+        <button
+          type="button"
+          className="db-btn sa-panel-save"
+          disabled={!txt.trim() || !debut}
+          onClick={() => save({ label: txt.trim(), date: `${debut}T12:00:00` })}
+        >
+          Épingler le marqueur
+        </button>
+        <button type="button" className="sa-panel-close" onClick={onClose}>
+          Annuler
+        </button>
+      </div>
+    )
+  }
+
   // note libre
   return (
     <div className="sa-panel" data-panel="note">
