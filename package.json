@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Lanceur d'apps local-first (React + PWA) — première app : Blocs, éditeur de blocs type Notion",
+  "description": "Lanceur d’applications local-first (React + PWA) — 100 % hors ligne, aucune télémétrie",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
