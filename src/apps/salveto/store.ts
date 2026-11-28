@@ -1,5 +1,5 @@
 import { createAppDb, kvOf } from '../../shared/db'
-import { migrateConfig, seedConfig, type SalvetoConfig } from './logic'
+import { migrateConfig, migrateEvents, seedConfig, type SalvetoConfig, type SalvetoEvent } from './logic'
 
 export const db = createAppDb('skouar-salveto', [
   { version: 1, stores: { kv: 'key', events: 'id, type, date' } }
@@ -28,4 +28,31 @@ export function saveConfig(c: SalvetoConfig): void {
       /* stockage indisponible : l’état reste en mémoire */
     })
   }, 400)
+}
+
+const eventsT = () => db.table<SalvetoEvent, string>('events')
+
+export async function loadEvents(): Promise<SalvetoEvent[]> {
+  try {
+    return migrateEvents(await eventsT().toArray())
+  } catch {
+    // IDB indisponible : liste vide en mémoire, aucune écriture
+    return []
+  }
+}
+
+export async function saveEvent(e: SalvetoEvent): Promise<void> {
+  try {
+    await eventsT().put(e)
+  } catch {
+    /* stockage indisponible : l’événement reste en mémoire */
+  }
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  try {
+    await eventsT().delete(id)
+  } catch {
+    /* idem */
+  }
 }

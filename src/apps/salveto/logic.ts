@@ -1,3 +1,5 @@
+import { uid } from '../../shared/db'
+
 export const SCHEMA_VERSION = 1
 
 export type SuiviId =
@@ -71,3 +73,182 @@ export function migrateConfig(raw: unknown): SalvetoConfig | undefined {
 export function isSuiviActive(config: SalvetoConfig, id: SuiviId): boolean {
   return config.activeSuivis.includes(id)
 }
+
+/* ---------- Événements datés (16.A / 16.B) ---------- */
+
+export type EventType =
+  | 'moral'
+  | 'energie'
+  | 'poids'
+  | 'crise'
+  | 'sommeil'
+  | 'symptome'
+  | 'constante'
+  | 'cycle'
+  | 'traitement'
+  | 'habitude'
+  | 'rdv'
+  | 'ordonnance'
+  | 'marqueur'
+  | 'note'
+
+export const EVENT_TYPES: EventType[] = [
+  'moral',
+  'energie',
+  'poids',
+  'crise',
+  'sommeil',
+  'symptome',
+  'constante',
+  'cycle',
+  'traitement',
+  'habitude',
+  'rdv',
+  'ordonnance',
+  'marqueur',
+  'note'
+]
+
+export interface SalvetoEvent {
+  id: string
+  type: EventType
+  date: string
+  value?: number
+  label?: string
+  heureCoucher?: string
+  heureReveil?: string
+  dureeMin?: number
+  zones?: string[]
+  declencheurs?: string[]
+  refId?: string
+  effet?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+export function toLocalISO(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+}
+
+export function dayOf(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+export function timeOf(iso: string): string {
+  return iso.slice(11, 16)
+}
+
+export function todayDay(): string {
+  return dayOf(toLocalISO(new Date()))
+}
+
+export function clampInt(v: unknown, min: number, max: number): number | undefined {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
+  if (typeof n !== 'number' || !Number.isFinite(n)) return undefined
+  return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+export function clampNum(v: unknown, min: number, max: number): number | undefined {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
+  if (typeof n !== 'number' || !Number.isFinite(n)) return undefined
+  return Math.max(min, Math.min(max, n))
+}
+
+export const MORAL_LABELS = ['Très mauvais', 'Mauvais', 'Moyen', 'Bon', 'Très bon'] as const
+
+export function makeEvent(type: EventType, patch: Partial<SalvetoEvent> = {}): SalvetoEvent {
+  const now = toLocalISO(new Date())
+  return { id: uid(), type, date: now, createdAt: now, updatedAt: now, ...patch }
+}
+
+export function touchEvent(e: SalvetoEvent): SalvetoEvent {
+  return { ...e, updatedAt: toLocalISO(new Date()) }
+}
+
+export function validateEvent(raw: unknown): SalvetoEvent | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.id !== 'string' || !r.id) return null
+  if (typeof r.type !== 'string' || !EVENT_TYPES.includes(r.type as EventType)) return null
+  if (typeof r.date !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(r.date)) return null
+  const e = { ...r, type: r.type as EventType } as unknown as SalvetoEvent
+  if (e.type === 'moral' || e.type === 'energie' || e.type === 'sommeil') e.value = clampInt(e.value, 1, 5)
+  else if (e.type === 'crise' || e.type === 'symptome') e.value = clampInt(e.value, 1, 10)
+  else if (e.type === 'poids') {
+    const p = typeof e.value === 'number' ? e.value : Number(e.value)
+    e.value = Number.isFinite(p) && p > 0 && p < 1000 ? Math.round(p * 10) / 10 : undefined
+  }
+  if (typeof e.createdAt !== 'string') e.createdAt = e.date
+  if (typeof e.updatedAt !== 'string') e.updatedAt = e.date
+  return e
+}
+
+export function migrateEvents(raw: unknown): SalvetoEvent[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map(validateEvent).filter((e): e is SalvetoEvent => e !== null)
+}
+
+export function sortEventsDesc(events: SalvetoEvent[]): SalvetoEvent[] {
+  return [...events].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id.localeCompare(a.id)))
+}
+
+export function eventsOfType(events: SalvetoEvent[], type: EventType): SalvetoEvent[] {
+  return events.filter((e) => e.type === type)
+}
+
+export function eventsOnDay(events: SalvetoEvent[], day: string): SalvetoEvent[] {
+  return sortEventsDesc(events.filter((e) => dayOf(e.date) === day))
+}
+
+export function fmtDuree(min: number): string {
+  if (!Number.isFinite(min) || min <= 0) return ''
+  if (min < 60) return `${Math.round(min)} min`
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  return m ? `${h} h ${m} min` : `${h} h`
+}
+
+export function labelOfEvent(e: SalvetoEvent): string {
+  switch (e.type) {
+    case 'moral':
+      return `Moral ${e.value ?? '?'}/5${e.notes ? ` — ${e.notes}` : ''}`
+    case 'energie':
+      return `Énergie ${e.value ?? '?'}/5${e.notes ? ` — ${e.notes}` : ''}`
+    case 'poids':
+      return `Poids ${e.value ?? '?'} kg`
+    case 'crise':
+      return `Crise ${e.value ?? '?'}/10${e.label ? ` — ${e.label}` : ''}`
+    case 'sommeil':
+      return `Sommeil ${e.heureCoucher || '—'} → ${e.heureReveil || '—'}, qualité ${e.value ?? '?'}/5`
+    case 'symptome':
+      return `Symptôme ${e.label ?? ''} ${e.value ?? '?'}/10${e.dureeMin ? `, ${fmtDuree(e.dureeMin)}` : ''}`
+    case 'habitude':
+      return `Habitude : ${e.label ?? ''}`
+    case 'note':
+      return `Note : ${(e.notes ?? '').slice(0, 80)}`
+    case 'constante':
+      return `Constante ${e.label ?? ''} : ${e.value ?? '?'}`
+    case 'traitement':
+      return `Prise ${e.label ?? ''} — effet ${e.effet ?? '?'}`
+    case 'cycle':
+      return `Cycle ${e.label ?? ''}`
+    case 'rdv':
+      return `RDV ${e.label ?? ''}`
+    case 'ordonnance':
+      return `Ordonnance ${e.label ?? ''}`
+    case 'marqueur':
+      return `📌 ${e.label ?? ''}`
+    default:
+      return e.type
+  }
+}
+
+export const HABITUDE_SUGGESTIONS = ['Sport', 'Sortie', 'Temps d’écran élevé', 'Vie sociale', 'Aliment inhabituel']
+
+export const EFFETS = ['aucun', 'léger', 'marqué', 'négatif'] as const
+export type Effet = (typeof EFFETS)[number]
