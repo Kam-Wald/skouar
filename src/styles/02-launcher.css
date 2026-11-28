@@ -148,8 +148,8 @@
 
 .app-tile-grip {
   position: absolute;
-  top: 8px;
-  left: 10px;
+  top: 28px;
+  right: 8px;
   cursor: grab;
   color: var(--muted);
   font-size: 1.25rem;
