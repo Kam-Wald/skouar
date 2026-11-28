@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
 import { PDFDocument } from 'pdf-lib'
 import AppShell from '../../shared/AppShell'
+import DocPages from './DocPages'
+import DocSidebar from './DocSidebar'
 import FolderBar from './FolderBar'
 import LibraryView from './LibraryView'
 import { loadDoc } from './pdf'
+import { useDocViewer } from './viewer'
 import { ab, filterDocs, sortDocs, type SortMode } from './logic'
 import {
   addDoc,
@@ -38,7 +41,21 @@ export default function MargeApp() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('date')
   const [folderSel, setFolderSel] = useState<FolderSel>('all')
+  const [view, setView] = useState<'lib' | 'view'>('lib')
+  const [cur, setCur] = useState<MargeDoc | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const v = useDocViewer(view === 'view' ? cur : null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const openFile = (d: MargeDoc): void => {
+    setCur(d)
+    setView('view')
+  }
+
+  const closeFile = (): void => {
+    setView('lib')
+    setCur(null)
+  }
 
   useEffect(() => {
     void listDocs().then(setDocs)
@@ -169,6 +186,7 @@ export default function MargeApp() {
       logo={`${BASE}app-icons/marge.svg`}
       className={`marge-app${dragOver ? ' drag-over' : ''}`}
       mainClass="marge-main"
+      mainRef={mainRef}
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
@@ -176,6 +194,9 @@ export default function MargeApp() {
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
       sidebar={
+        view === 'view' && cur ? (
+          <DocSidebar doc={cur} v={v} onClose={closeFile} />
+        ) : (
         <>
           <FolderBar
             folders={folders}
@@ -199,8 +220,12 @@ export default function MargeApp() {
             </button>
           </div>
         </>
+        )
       }
     >
+      {view === 'view' && cur ? (
+        <DocPages doc={cur} v={v} mainRef={mainRef} />
+      ) : (
       <LibraryView
         docs={visibleDocs}
         query={query}
@@ -217,7 +242,9 @@ export default function MargeApp() {
         onDelete={(d) => void removeDoc(d)}
         onDuplicate={(d) => void duplicate(d)}
         onDragDocStart={setDragDocId}
+        onOpen={openFile}
       />
+      )}
       <input
         ref={fileRef}
         type="file"

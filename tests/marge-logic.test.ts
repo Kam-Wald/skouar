@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { relTime, safeName, parseRanges, filterDocs, sortDocs, progressOf, duplicateTitle } from '../src/apps/marge/logic'
+import { relTime, safeName, parseRanges, filterDocs, sortDocs, progressOf, duplicateTitle, clampScale, fitWidthScale, clampPage } from '../src/apps/marge/logic'
 
 describe('marge — logic (fonctions pures)', () => {
   it('relTime : à l’instant, minutes, heures, puis date fr-FR', () => {
@@ -62,5 +62,26 @@ describe('marge — logic (fonctions pures)', () => {
 
   it('duplicateTitle : « Copie de X »', () => {
     expect(duplicateTitle('rapport')).toBe('Copie de rapport')
+  })
+
+  it('clampScale : borné entre 0,3 et 3, NaN → 1', () => {
+    expect(clampScale(0.1)).toBe(0.3)
+    expect(clampScale(10)).toBe(3)
+    expect(clampScale(1.5)).toBe(1.5)
+    expect(clampScale(NaN)).toBe(1)
+  })
+
+  it('fitWidthScale : largeur dispo - 56 marge, borné', () => {
+    expect(fitWidthScale(856, 600)).toBeCloseTo(800 / 600, 10)
+    expect(fitWidthScale(100, 600)).toBe(0.3)
+    expect(fitWidthScale(900, 0)).toBe(1)
+  })
+
+  it('clampPage : entre 1 et numPages', () => {
+    expect(clampPage(0, 10)).toBe(1)
+    expect(clampPage(5, 10)).toBe(5)
+    expect(clampPage(99, 10)).toBe(10)
+    expect(clampPage(3, 0)).toBe(1)
+    expect(clampPage(NaN, 10)).toBe(1)
   })
 })

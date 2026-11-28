@@ -53,6 +53,24 @@ export function duplicateTitle(t: string): string {
   return `Copie de ${t}`
 }
 
+export const SCALE_MIN = 0.3
+export const SCALE_MAX = 3
+
+export function clampScale(s: number): number {
+  if (!Number.isFinite(s)) return 1
+  return Math.min(SCALE_MAX, Math.max(SCALE_MIN, s))
+}
+
+export function fitWidthScale(rootWidth: number, basePageWidth: number): number {
+  if (basePageWidth <= 0) return 1
+  return clampScale((rootWidth - 56) / basePageWidth)
+}
+
+export function clampPage(n: number, numPages: number): number {
+  if (!Number.isFinite(n)) return 1
+  return Math.min(Math.max(1, Math.floor(n)), Math.max(1, numPages))
+}
+
 export function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

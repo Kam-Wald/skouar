@@ -15,3 +15,16 @@ export async function loadDoc(buf: ArrayBuffer): Promise<pdfjsLib.PDFDocumentPro
     standardFontDataUrl: FONTS_URL
   }).promise
 }
+
+export async function renderTextLayer(
+  page: pdfjsLib.PDFPageProxy,
+  container: HTMLElement,
+  viewport: pdfjsLib.PageViewport
+): Promise<void> {
+  const layer = new pdfjsLib.TextLayer({
+    textContentSource: page.streamTextContent(),
+    container,
+    viewport
+  })
+  await layer.render()
+}
