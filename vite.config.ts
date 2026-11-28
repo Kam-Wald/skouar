@@ -13,7 +13,7 @@ export default defineConfig({
         name: 'Skouar',
         short_name: 'Skouar',
         description:
-          "Lanceur d'apps local-first — première app : Blocs, éditeur de blocs type Notion",
+          "Lanceur d’applications local-first (PWA) — 100 % hors ligne, aucune télémétrie",
         theme_color: '#0d9488',
         background_color: '#0f172a',
         display: 'standalone',
