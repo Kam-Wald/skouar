@@ -61,3 +61,9 @@ export function annotsMatching(annots: { id: string; page: number; text?: string
   if (!n) return []
   return annots.filter((a) => (a.text ?? '').toLowerCase().includes(n)).map((a) => ({ id: a.id, page: a.page }))
 }
+
+export function notesMatching(notes: { id: string; page: number; text: string }[], q: string): { id: string; page: number }[] {
+  const n = q.trim().toLowerCase()
+  if (!n) return []
+  return notes.filter((x) => x.text.toLowerCase().includes(n)).map((x) => ({ id: x.id, page: x.page }))
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cacheFromItems, findMatches, annotsMatching, type TItem } from '../src/apps/marge/search'
+import { cacheFromItems, findMatches, annotsMatching, notesMatching, type TItem } from '../src/apps/marge/search'
 
 const item = (str: string, i: number): TItem => ({ str, transform: [1, 0, 0, -1, i * 60, 140], width: 50, height: 10 })
 
@@ -36,5 +36,15 @@ describe('marge — search (logique pure)', () => {
     ]
     expect(annotsMatching(annots, 'contrat').map((a) => a.id)).toEqual(['a1', 'a2'])
     expect(annotsMatching(annots, '')).toEqual([])
+  })
+
+  it('notesMatching : retrouve les notes de page par texte, casse-insensible', () => {
+    const notes = [
+      { id: 'n1', page: 3, text: 'Page clé du contrat' },
+      { id: 'n2', page: 4, text: 'rien' }
+    ]
+    expect(notesMatching(notes, 'contrat').map((n) => n.id)).toEqual(['n1'])
+    expect(notesMatching(notes, 'PAGE')).toEqual([{ id: 'n1', page: 3 }])
+    expect(notesMatching(notes, '')).toEqual([])
   })
 })
