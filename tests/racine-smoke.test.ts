@@ -48,6 +48,12 @@ describe('Racine — squelette (smoke jsdom, vrais clics)', () => {
     })
     await flush(React, 30)
     expect(div.querySelector('.ra-view h2')?.textContent).toContain('Journal')
+    expect(div.querySelector('.ra-journal')).toBeTruthy()
+    await React.act(async () => {
+      sideBtn('Rapports').click()
+    })
+    await flush(React, 30)
+    expect(div.querySelector('.ra-view h2')?.textContent).toContain('Rapports')
     expect(div.querySelector('.ra-view')?.textContent).toContain('prochaine sous-partie')
     await React.act(async () => {
       sideBtn('Profil santé').click()

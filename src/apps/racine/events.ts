@@ -46,6 +46,8 @@ export function validatePayload(type: EventType, p: Record<string, unknown>): st
       if (typeof p.date !== 'number' || !isFinite(p.date)) return 'Date de l’ordonnance requise'
       if (!String(p.medecin ?? '').trim()) return 'Médecin requis'
       return String(p.contenu ?? '').trim() ? null : 'Contenu requis'
+    case 'marqueur':
+      return String(p.label ?? '').trim() ? null : 'Libellé du marqueur requis'
     default:
       return null
   }
