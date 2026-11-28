@@ -1,4 +1,4 @@
-import type { ComponentType, LazyExoticComponent } from 'react'
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 
 export interface AppMeta {
   id: string
@@ -64,10 +64,11 @@ export const apps: AppMeta[] = [
   {
     id: 'unvez',
     name: 'Unvez',
-    description: 'Calculatrice + convertisseur d’unités (longueur, poids, devises…).',
+    description: 'Calculatrices et convertisseur d’unités, avec mémos enregistrés classables en dossiers.',
     tag: 'unités & calcul',
     icon: '📐',
-    logo: `${import.meta.env.BASE_URL}app-icons/unvez.svg`
+    logo: `${import.meta.env.BASE_URL}app-icons/unvez.svg`,
+    component: lazy(() => import('./unvez/UnvezApp'))
   },
   {
     id: 'taol',

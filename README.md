@@ -18,7 +18,7 @@ Tes données restent sur ton appareil (IndexedDB + localStorage).
 | Skeud 🖼️ | · photos | en reconstruction |
 | Kod 💻 | · éditeur de code | en reconstruction |
 | Cockpit 🎛️ | · productivité & focus | en reconstruction |
-| Unvez 📐 | · unités & calcul | en reconstruction |
+| Unvez 📐 | · unités & calcul | squelette en place (CDC : `docs/cdc-unvez.md`) |
 | Taol 🧮 | · tableur | en reconstruction |
 | Fichorama 👢 | · fiches & notation | en reconstruction |
 | Salveto 🩺 | · santé & humeur (desktop-only) | en reconstruction |
