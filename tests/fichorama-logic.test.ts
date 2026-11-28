@@ -182,3 +182,36 @@ describe('Fichorama — paramètres catégorie (S6)', () => {
     expect(d2.fiches[0].id).toBe('f1')
   })
 })
+
+describe('Fichorama — export / import JSON (S7)', () => {
+  it('exportJson → parseImport roundtrip valide', async () => {
+    const { exportJson, parseImport, seedData } = await import('../src/apps/fichorama/logic')
+    const d = seedData()
+    d.fiches.push(fiche('f1', 'cat-films', 'A', [7], { image: 'data:image/jpeg;base64,AAAA', values: { genre: 'SF' } }))
+    const back = parseImport(exportJson(d))
+    expect(back).not.toBeNull()
+    expect(back!.fiches[0].image).toContain('data:image/jpeg')
+    expect(back!.categories.length).toBe(9)
+  })
+
+  it('parseImport : invalide → null', async () => {
+    const { parseImport } = await import('../src/apps/fichorama/logic')
+    expect(parseImport('pas du json')).toBeNull()
+    expect(parseImport('{"version":2}')).toBeNull()
+    expect(parseImport('{"version":1,"categories":[],"fiches":"x"}')).toBeNull()
+  })
+
+  it('mergeData : fusion par id (les existantes gagnent, les inconnues ajoutées)', async () => {
+    const { mergeData, seedData } = await import('../src/apps/fichorama/logic')
+    const cur = seedData()
+    cur.fiches.push(fiche('f1', 'cat-films', 'Local', [5]))
+    const inc = seedData()
+    inc.categories.push({ id: 'cat-jeux2', name: 'Capsules', icon: '💊', color: '#000', fields: [] })
+    inc.fiches.push(fiche('f1', 'cat-films', 'Importé', [9]), fiche('f9', 'cat-films', 'Nouveau', [8]))
+    const m = mergeData(cur, inc)
+    expect(m.categories.length).toBe(10)
+    expect(m.fiches.length).toBe(2)
+    expect(m.fiches.find((f) => f.id === 'f1')!.title).toBe('Local')
+    expect(m.fiches.find((f) => f.id === 'f9')!.title).toBe('Nouveau')
+  })
+})
