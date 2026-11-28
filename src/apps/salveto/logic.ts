@@ -977,3 +977,62 @@ export const PERIODES_COURBE = [
   { jours: 90, label: '3 mois' },
   { jours: 365, label: '1 an' }
 ] as const
+
+/* ---------- Rapports (13) : stats mensuelles, tendances, fiche médecin ---------- */
+
+export function monthRange(year: number, month: number): { from: string; to: string } {
+  return { from: toDay(new Date(year, month, 1)), to: toDay(new Date(year, month + 1, 0)) }
+}
+
+function moy(vals: number[]): number | undefined {
+  const v = vals.filter((x) => Number.isFinite(x))
+  return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined
+}
+
+export interface MonthStats {
+  nbCrises: number
+  moyMoral?: number
+  moyEnergie?: number
+  moySommeil?: number
+  moyPoids?: number
+  nbSaisies: number
+  joursSaisis: number
+  joursSansSaisie: number
+}
+
+export function statsMois(events: SalvetoEvent[], from: string, to: string): MonthStats {
+  const inM = events.filter((e) => dayOf(e.date) >= from && dayOf(e.date) <= to)
+  const days = new Set(inM.map((e) => dayOf(e.date)))
+  const val = (t: EventType): number[] => inM.filter((e) => e.type === t && e.value != null).map((e) => e.value as number)
+  return {
+    nbCrises: inM.filter((e) => e.type === 'crise').length,
+    moyMoral: moy(val('moral')),
+    moyEnergie: moy(val('energie')),
+    moySommeil: moy(val('sommeil')),
+    moyPoids: moy(val('poids')),
+    nbSaisies: inM.length,
+    joursSaisis: days.size,
+    joursSansSaisie: diffDays(from, to) + 1 - days.size
+  }
+}
+
+export function tendance(a: number | undefined, b: number | undefined): string {
+  if (a == null || b == null) return '—'
+  if (a > b + 0.2) return 'en hausse'
+  if (a < b - 0.2) return 'en baisse'
+  return 'stable'
+}
+
+export function dernierRdvPasse(events: SalvetoEvent[]): SalvetoEvent | undefined {
+  return rdvTries(events).passes[0]
+}
+
+export function resumeSerie(points: SeriePoint[]): { min: number; max: number; moy: number } | undefined {
+  if (!points.length) return undefined
+  const vals = points.map((p) => p.value)
+  return {
+    min: Math.min(...vals),
+    max: Math.max(...vals),
+    moy: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10
+  }
+}

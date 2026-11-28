@@ -11,6 +11,7 @@ import {
   dayOf,
   diffDays,
   dernieresValeurs,
+  dernierRdvPasse,
   echeancesPreventives,
   eventsOfType,
   eventsOnDay,
@@ -27,18 +28,22 @@ import {
   migrateProfil,
   migrateRefs,
   monthGrid,
+  monthRange,
   niceScale,
   normalizeTrigger,
   phaseOfDay,
   prevision,
   rdvTries,
+  resumeSerie,
   searchEvents,
   seedConfig,
   serieOf,
+  statsMois,
   seedRefs,
   sortEventsDesc,
   timeOf,
   toLocalISO,
+  tendance,
   todayDay,
   touchEvent,
   upsertRef,
@@ -573,5 +578,54 @@ describe('Salveto logic — courbes + marqueurs (S9)', () => {
       mk('m2', 'marqueur', '2025-02-01T12:00:00', { label: 'changement' })
     ]
     expect(marqueursOf(evs).map((m) => m.id)).toEqual(['m2', 'm1'])
+  })
+})
+
+describe('Salveto logic — rapports (S10)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  it('monthRange + statsMois : crises, moyennes, jours saisis/sans saisie', () => {
+    const { from, to } = monthRange(2025, 0)
+    expect(from).toBe('2025-01-01')
+    expect(to).toBe('2025-01-31')
+    const evs = [
+      mk('1', 'crise', '2025-01-05T10:00:00', { value: 8 }),
+      mk('2', 'crise', '2025-01-20T10:00:00', { value: 4 }),
+      mk('3', 'moral', '2025-01-05T09:00:00', { value: 4 }),
+      mk('4', 'moral', '2025-01-06T09:00:00', { value: 2 }),
+      mk('5', 'sommeil', '2025-01-05T22:00:00', { value: 5 }),
+      mk('6', 'poids', '2025-02-02T08:00:00', { value: 70 })
+    ]
+    const s = statsMois(evs, from, to)
+    expect(s.nbCrises).toBe(2)
+    expect(s.moyMoral).toBe(3)
+    expect(s.moySommeil).toBe(5)
+    expect(s.moyPoids).toBeUndefined()
+    expect(s.nbSaisies).toBe(5)
+    expect(s.joursSaisis).toBe(3)
+    expect(s.joursSansSaisie).toBe(28)
+  })
+  it('tendance hausse/baisse/stable', () => {
+    expect(tendance(4, 2)).toBe('en hausse')
+    expect(tendance(2, 4)).toBe('en baisse')
+    expect(tendance(3, 3.1)).toBe('stable')
+    expect(tendance(undefined, 3)).toBe('—')
+  })
+  it('dernierRdvPasse + resumeSerie', () => {
+    const today = todayDay()
+    const evs = [
+      mk('r1', 'rdv', `${addDays(today, -30)}T10:00:00`, { label: 'Dr A' }),
+      mk('r2', 'rdv', `${addDays(today, -5)}T10:00:00`, { label: 'Dr B' }),
+      mk('r3', 'rdv', `${addDays(today, 5)}T10:00:00`, { label: 'Dr C' })
+    ]
+    expect(dernierRdvPasse(evs)?.label).toBe('Dr B')
+    expect(resumeSerie([{ id: '1', day: '2025-01-01', date: '2025-01-01T00:00:00', value: 2 }, { id: '2', day: '2025-01-02', date: '2025-01-02T00:00:00', value: 4 }])).toEqual({ min: 2, max: 4, moy: 3 })
+    expect(resumeSerie([])).toBeUndefined()
   })
 })

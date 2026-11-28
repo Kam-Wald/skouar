@@ -816,3 +816,18 @@ button.sa-side-row:hover {
   font-size: 10px;
   font-weight: 600;
 }
+
+/* ---------- Salveto : rapports (S10) ---------- */
+
+.sa-rapport {
+  max-width: 640px;
+}
+
+@media print {
+  .blocs-sidebar,
+  .sa-no-print,
+  .sa-bandeau,
+  .sa-urgence-btn {
+    display: none !important;
+  }
+}
