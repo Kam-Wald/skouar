@@ -125,8 +125,10 @@ describe('Salveto S8 — journal : timeline, filtres, recherche, calendrier, éd
     const edited = evs.find((e) => e.value === 9)
     expect(edited).toBeTruthy()
     expect(edited!.updatedAt >= edited!.createdAt).toBe(true)
-    // suppression avec confirmation
-    const row2 = div.querySelector('.sa-journal-row') as HTMLElement
+    // suppression avec confirmation (on cible la note, pas une ligne au hasard)
+    const row2 = Array.from(div.querySelectorAll('.sa-journal-row')).find((r) =>
+      r.textContent?.includes('Note :')
+    ) as HTMLElement
     const id = row2.getAttribute('data-event')!
     await React.act(async () => {
       btnByText(div, 'Supprimer', row2).click()

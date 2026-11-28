@@ -3,6 +3,7 @@ import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import CourbesView from './CourbesView'
 import JournalView from './JournalView'
+import RapportsView from './RapportsView'
 import { OrdonnancesView, PreventifView, RdvView } from './MedViews'
 import { ProfilView, UrgenceView } from './ProfilView'
 import QuickSaisie from './QuickSaisie'
@@ -55,7 +56,7 @@ import {
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-type View = 'accueil' | 'journal' | 'courbes' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence'
+type View = 'accueil' | 'journal' | 'courbes' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence' | 'rapports'
 
 const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
@@ -67,7 +68,7 @@ const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Traitements', icon: '💊', view: 'traitements' },
   { label: 'Préventif', icon: '🩺', view: 'preventif' },
   { label: 'Profil santé', icon: '🧾', view: 'profil' },
-  { label: 'Rapports', icon: '🗂️', soon: true },
+  { label: 'Rapports', icon: '🗂️', view: 'rapports' },
   { label: 'Paramètres', icon: '⚙️', soon: true }
 ]
 
@@ -278,6 +279,8 @@ export default function SalvetoApp() {
           <JournalView events={events} onUpdateEvent={onUpdateEvent} onDeleteEvent={onDeleteEvent} />
         ) : view === 'courbes' ? (
           <CourbesView events={events} refs={refs} config={config} onSaveEvent={onSaveEvent} />
+        ) : view === 'rapports' && profil ? (
+          <RapportsView events={events} refs={refs} config={config} profil={profil} />
         ) : view === 'profil' && profil ? (
           <ProfilView
             profil={profil}
