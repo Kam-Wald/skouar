@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
   BODY_ZONES,
+  addDays,
   bienfaits,
   clampInt,
   cooccurrences,
+  cyclesOf,
   dayOf,
+  diffDays,
   dernieresValeurs,
   eventsOfType,
   eventsOnDay,
+  fmtDay,
   fmtDuree,
   fmtPct,
   labelOfEvent,
@@ -16,6 +20,8 @@ import {
   migrateEvents,
   migrateRefs,
   normalizeTrigger,
+  phaseOfDay,
+  prevision,
   seedConfig,
   seedRefs,
   sortEventsDesc,
@@ -253,5 +259,74 @@ describe('Salveto logic — refs, bienfaits, dernières valeurs (S4)', () => {
     expect(d.length).toBe(1)
     expect(d[0].value).toBe(128)
     expect(dayOf(d[0].date!)).toBe('2025-01-05')
+  })
+})
+
+describe('Salveto logic — jours + cycle menstruel (S5)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  it('addDays / diffDays / fmtDay en local', () => {
+    expect(addDays('2025-01-31', 1)).toBe('2025-02-01')
+    expect(addDays('2024-12-31', 1)).toBe('2025-01-01')
+    expect(diffDays('2025-01-01', '2025-01-29')).toBe(28)
+    expect(fmtDay('2025-01-05')).toBe('05/01/2025')
+  })
+  it('cyclesOf : durées de règles et de cycle, tri asc, fin invalide ignorée', () => {
+    const evs = [
+      mk('a', 'cycle', '2025-01-01T08:00:00', { fin: '2025-01-05T22:00:00', flux: 'moyen' }),
+      mk('b', 'cycle', '2025-01-29T08:00:00', { fin: '2025-02-02T22:00:00' }),
+      mk('c', 'cycle', '2025-02-26T08:00:00', { fin: '2025-02-20T22:00:00' })
+    ]
+    const cycles = cyclesOf(evs)
+    expect(cycles.map((c) => c.debut)).toEqual(['2025-01-01', '2025-01-29', '2025-02-26'])
+    expect(cycles[0].dureeRegles).toBe(5)
+    expect(cycles[1].dureeCycle).toBe(28)
+    expect(cycles[2].dureeCycle).toBe(28)
+    expect(cycles[2].fin).toBeUndefined()
+    expect(cycles[0].flux).toBe('moyen')
+  })
+  it('prevision : moyenne des cycles, prochaine période, fenêtre ovulatoire indicative', () => {
+    const evs = [
+      mk('a', 'cycle', '2025-01-01T08:00:00', { fin: '2025-01-04T22:00:00' }),
+      mk('b', 'cycle', '2025-01-29T08:00:00', { fin: '2025-02-01T22:00:00' }),
+      mk('c', 'cycle', '2025-02-26T08:00:00', { fin: '2025-03-01T22:00:00' })
+    ]
+    const p = prevision(cyclesOf(evs))
+    expect(p.nbPeriodes).toBe(3)
+    expect(p.baseCycles).toBe(2)
+    expect(p.moyCycle).toBe(28)
+    expect(p.moyRegles).toBe(4)
+    expect(p.prochaineRegles).toBe('2025-03-26')
+    expect(p.ovulation).toBe('2025-03-12')
+    expect(p.fenetreDebut).toBe('2025-03-10')
+    expect(p.fenetreFin).toBe('2025-03-14')
+  })
+  it('prevision sans assez de cycles : pas de prévision', () => {
+    const p = prevision(cyclesOf([mk('a', 'cycle', '2025-01-01T08:00:00', {})]))
+    expect(p.moyCycle).toBeUndefined()
+    expect(p.prochaineRegles).toBeUndefined()
+  })
+  it('phaseOfDay : règles, ovulatoire, folliculaire, lutéale', () => {
+    const evs = [
+      mk('a', 'cycle', '2025-01-01T08:00:00', { fin: '2025-01-05T22:00:00' }),
+      mk('b', 'cycle', '2025-01-29T08:00:00', { fin: '2025-02-02T22:00:00' })
+    ]
+    const cycles = cyclesOf(evs)
+    expect(phaseOfDay(cycles, '2025-01-03')).toBe('règles')
+    expect(phaseOfDay(cycles, '2025-02-12')).toBe('ovulatoire (indicatif)')
+    expect(phaseOfDay(cycles, '2025-02-05')).toBe('folliculaire')
+    expect(phaseOfDay(cycles, '2025-02-20')).toBe('lutéale')
+    expect(phaseOfDay([], '2025-02-20')).toBe('')
+  })
+  it('labelOfEvent cycle au format lisible', () => {
+    expect(labelOfEvent(mk('a', 'cycle', '2025-01-01T08:00:00', { fin: '2025-01-05T22:00:00', flux: 'abondant' }))).toBe(
+      'Règles 01/01/2025 → 05/01/2025 · flux abondant'
+    )
   })
 })
