@@ -7,6 +7,7 @@ import {
   clampInt,
   cooccurrences,
   cyclesOf,
+  dayMarkers,
   dayOf,
   diffDays,
   dernieresValeurs,
@@ -23,10 +24,12 @@ import {
   migrateEvents,
   migrateProfil,
   migrateRefs,
+  monthGrid,
   normalizeTrigger,
   phaseOfDay,
   prevision,
   rdvTries,
+  searchEvents,
   seedConfig,
   seedRefs,
   sortEventsDesc,
@@ -477,5 +480,45 @@ describe('Salveto logic — profil santé + pièces jointes (S7)', () => {
     expect(fmtSize(500)).toBe('500 o')
     expect(fmtSize(2048)).toBe('2 Ko')
     expect(fmtSize(3 * 1024 * 1024)).toBe('3.0 Mo')
+  })
+})
+
+describe('Salveto logic — journal : recherche + calendrier (S8)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  it('searchEvents cherche dans notes, libellés, zones, déclencheurs…', () => {
+    const evs = [
+      mk('1', 'crise', '2025-01-01T10:00:00', { label: 'tête', zones: ['tete'], declencheurs: ['Stress'], notes: 'migraine' }),
+      mk('2', 'note', '2025-01-02T10:00:00', { notes: 'journée famille' }),
+      mk('3', 'rdv', '2025-01-03T10:00:00', { label: 'Dr Martin', motif: 'migraine de suivi' })
+    ]
+    expect(searchEvents(evs, 'migraine').map((e) => e.id).sort()).toEqual(['1', '3'])
+    expect(searchEvents(evs, 'stress').map((e) => e.id)).toEqual(['1'])
+    expect(searchEvents(evs, 'famille').map((e) => e.id)).toEqual(['2'])
+    expect(searchEvents(evs, '').length).toBe(3)
+    expect(searchEvents(evs, 'xyz').length).toBe(0)
+  })
+  it('monthGrid : janvier 2025 commence un mercredi → 2 cellules vides en tête, semaines de 7, lundi en premier', () => {
+    const g = monthGrid(2025, 0)
+    expect(g[0].slice(0, 2)).toEqual([null, null])
+    expect(g[0][2]).toBe('2025-01-01')
+    expect(g.flat().filter(Boolean).length).toBe(31)
+    expect(g.every((w) => w.length === 7)).toBe(true)
+  })
+  it('dayMarkers : crise, règles (période début→fin), saisie faite / jour sans saisie', () => {
+    const evs = [
+      mk('1', 'crise', '2025-01-10T10:00:00', { value: 7 }),
+      mk('2', 'cycle', '2025-01-08T08:00:00', { fin: '2025-01-12T22:00:00' }),
+      mk('3', 'moral', '2025-01-10T09:00:00', { value: 3 })
+    ]
+    expect(dayMarkers(evs, '2025-01-10')).toEqual({ crise: true, regles: true, saisie: true })
+    expect(dayMarkers(evs, '2025-01-13')).toEqual({ crise: false, regles: false, saisie: false })
+    expect(dayMarkers(evs, '2025-01-09').regles).toBe(true)
   })
 })

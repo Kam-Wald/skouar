@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
+import JournalView from './JournalView'
 import { OrdonnancesView, PreventifView, RdvView } from './MedViews'
 import { ProfilView, UrgenceView } from './ProfilView'
 import QuickSaisie from './QuickSaisie'
@@ -38,6 +39,7 @@ import {
 } from './logic'
 import {
   deleteAttachment,
+  deleteEvent,
   loadAttachments,
   loadConfig,
   loadEvents,
@@ -52,11 +54,11 @@ import {
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-type View = 'accueil' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence'
+type View = 'accueil' | 'journal' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif' | 'profil' | 'urgence'
 
 const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
-  { label: 'Journal', icon: '📖', soon: true },
+  { label: 'Journal', icon: '📖', view: 'journal' },
   { label: 'Courbes', icon: '📈', soon: true },
   { label: 'Cycle', icon: '🌸', view: 'cycle' },
   { label: 'RDV', icon: '🗓️', view: 'rdv' },
@@ -200,6 +202,12 @@ export default function SalvetoApp() {
     setConfig(c)
   }
 
+  const onDeleteEvent = (id: string): void => {
+    void deleteEvent(id)
+    setEvents((prev) => prev.filter((e) => e.id !== id))
+    notify('Entrée supprimée')
+  }
+
   const onSaveProfil = (p: ProfilSante): void => {
     saveProfil(p)
     setProfil(p)
@@ -264,7 +272,9 @@ export default function SalvetoApp() {
       }
     >
       <div className="salveto-main">
-        {view === 'profil' && profil ? (
+        {view === 'journal' ? (
+          <JournalView events={events} onUpdateEvent={onUpdateEvent} onDeleteEvent={onDeleteEvent} />
+        ) : view === 'profil' && profil ? (
           <ProfilView
             profil={profil}
             events={events}
