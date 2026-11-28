@@ -3,7 +3,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadDoc } from './pdf'
 import { clampPage, clampScale, fitWidthScale } from './logic'
 import { annotsMatching, cacheFromItems, findMatches, type SearchMatch, type TItem, type TextCache } from './search'
-import { listAnnots, updateDoc, type MargeAnnot, type MargeDoc } from './store'
+import { COLORS, TOOLS, type Tool } from './annot'
+import { listAnnots, listSignatures, updateDoc, type MargeAnnot, type MargeDoc, type MargeSignature } from './store'
 
 export const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
@@ -29,6 +30,36 @@ export function useDocViewer(doc: MargeDoc | null) {
   const [mIdx, setMIdx] = useState(0)
   const textCacheRef = useRef(new Map<number, TextCache>())
   const docRef = useRef<PDFDocumentProxy | null>(null)
+  const [tool, setTool] = useState<Tool>('select')
+  const [color, setColorState] = useState(() => localStorage.getItem('skouar:marge:color') || COLORS[0])
+  const [stampIdx, setStampIdx] = useState(0)
+  const [textSize, setTextSize] = useState(16)
+  const [signatures, setSignatures] = useState<MargeSignature[]>([])
+  const [hint, setHint] = useState('')
+
+  useEffect(() => {
+    void listSignatures().then(setSignatures)
+  }, [])
+
+  const setColor = useCallback((c: string) => {
+    localStorage.setItem('skouar:marge:color', c)
+    setColorState(c)
+  }, [])
+
+  const activeSign = useCallback((): MargeSignature | undefined => {
+    const id = localStorage.getItem('skouar:marge:sign')
+    return signatures.find((s) => s.id === id) ?? signatures[0]
+  }, [signatures])
+
+  const reloadAnnots = useCallback(async () => {
+    if (doc) setAnnots(await listAnnots(doc.id))
+  }, [doc?.id])
+
+  useEffect(() => {
+    if (!hint) return
+    const t = setTimeout(() => setHint(''), 3500)
+    return () => clearTimeout(t)
+  }, [hint])
 
   useEffect(() => {
     let alive = true
@@ -225,6 +256,12 @@ export function useDocViewer(doc: MargeDoc | null) {
         stepMatch(e.shiftKey ? -1 : 1)
         return
       }
+      const toolKey = TOOLS.find((t) => t.key === e.key)
+      if (toolKey && !present) {
+        e.preventDefault()
+        setTool(toolKey.id)
+        return
+      }
       if (present) {
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
           e.preventDefault()
@@ -290,7 +327,20 @@ export function useDocViewer(doc: MargeDoc | null) {
     mIdx,
     stepMatch,
     closeSearch,
-    getTextCache: (p: number) => textCacheRef.current.get(p)
+    getTextCache: (p: number) => textCacheRef.current.get(p),
+    tool,
+    setTool,
+    color,
+    setColor,
+    stampIdx,
+    setStampIdx,
+    textSize,
+    setTextSize,
+    signatures,
+    activeSign,
+    reloadAnnots,
+    hint,
+    setHint
   }
 }
 

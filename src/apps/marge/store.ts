@@ -109,6 +109,19 @@ export async function restoreDoc(doc: MargeDoc, annots: MargeAnnot[], notes: Mar
   await pageNotesT.bulkPut(notes)
 }
 
+export async function putAnnot(a: MargeAnnot): Promise<void> {
+  await annotsT.put(a)
+}
+
+export async function deleteAnnot(id: string): Promise<void> {
+  await annotsT.delete(id)
+}
+
+export async function listSignatures(): Promise<MargeSignature[]> {
+  const all = await signaturesT.toArray()
+  return all.sort((a, b) => a.at - b.at)
+}
+
 export async function deleteDoc(id: string): Promise<void> {
   await annotsT.where('docId').equals(id).delete()
   await pageNotesT.where('docId').equals(id).delete()
