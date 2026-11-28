@@ -245,3 +245,169 @@
 .fi-swatch.on {
   border-color: var(--text);
 }
+
+/* ---------- Fichorama : fiches (S3) ---------- */
+
+.fi-cat-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.fi-cat-count {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.fi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fi-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.fi-row:hover {
+  border-color: var(--accent);
+}
+
+.fi-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: none;
+}
+
+.fi-thumb-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.fi-row-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fi-fav {
+  color: #eab308;
+}
+
+.fi-mini {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  opacity: 0.7;
+}
+
+.fi-mini:hover {
+  opacity: 1;
+}
+
+.fi-stars {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.fi-star {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.fi-star:disabled {
+  cursor: default;
+}
+
+.fi-star-bg {
+  color: var(--border);
+}
+
+.fi-star-fg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  color: #eab308;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.fi-form {
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.fi-form-image {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fi-form-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.fi-file-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fi-field-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fi-textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.fi-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.fi-note-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

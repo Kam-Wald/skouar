@@ -39,3 +39,46 @@ describe('Fichorama (smoke jsdom)', () => {
     div.remove()
   })
 })
+
+describe('Fichorama (smoke jsdom) — création de fiche', () => {
+  it('catégorie → nouvelle fiche → enregistrer → la fiche apparaît', async () => {
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { MemoryRouter } = await import('react-router-dom')
+    const FichoramaApp = (await import('../src/apps/fichorama/FichoramaApp')).default
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    const root = createRoot(div)
+    await React.act(async () => {
+      root.render(React.createElement(MemoryRouter, null, React.createElement(FichoramaApp)))
+    })
+    await React.act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    await React.act(async () => {
+      ;(div.querySelector('.fi-card') as HTMLButtonElement).click()
+    })
+    expect(div.textContent).toContain('Films')
+    await React.act(async () => {
+      const btns = Array.from(div.querySelectorAll('button'))
+      ;(btns.find((b) => b.textContent?.includes('Nouvelle fiche')) as HTMLButtonElement).click()
+    })
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+    const titleInput = div.querySelector('.fi-form .fi-input') as HTMLInputElement
+    await React.act(async () => {
+      setVal.call(titleInput, 'Le Grand Bleu')
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await React.act(async () => {
+      const btns = Array.from(div.querySelectorAll('.fi-modal-actions button'))
+      ;(btns.find((b) => b.textContent?.includes('Enregistrer')) as HTMLButtonElement).click()
+    })
+    await React.act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(div.textContent).toContain('Le Grand Bleu')
+    expect(div.querySelectorAll('.fi-row').length).toBe(1)
+    root.unmount()
+    div.remove()
+  })
+})

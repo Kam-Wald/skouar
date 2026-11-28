@@ -151,3 +151,52 @@ export function validateData(v: unknown): v is FichoramaData {
     d.fiches.every((f) => f && typeof f.id === 'string' && typeof f.categoryId === 'string' && typeof f.title === 'string' && Array.isArray(f.ratings))
   )
 }
+
+// ---------- Saisie fiche (S3) ----------
+
+export function fmtDateIso(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  return `${m[3]}/${m[2]}/${m[1]}`
+}
+
+export function fmtFieldValue(v: FieldValue | undefined): string {
+  if (v === undefined || v === null || v === '') return '—'
+  if (Array.isArray(v)) return v.join(', ')
+  if (typeof v === 'boolean') return v ? 'Oui' : 'Non'
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return fmtDateIso(v)
+  return String(v)
+}
+
+export function validateDraft(cat: Category, d: { title: string; values: Record<string, FieldValue> }): string | null {
+  if (!d.title.trim()) return 'Titre requis'
+  for (const f of cat.fields) {
+    if (!f.required) continue
+    const v = d.values[f.id]
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return `Champ « ${f.label} » obligatoire`
+  }
+  return null
+}
+
+export function fileToDataUrl(file: File, maxW = 400, maxH = 400): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width, maxH / img.height)
+      const w = Math.max(1, Math.round(img.width * scale))
+      const h = Math.max(1, Math.round(img.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.82))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image illisible'))
+    }
+    img.src = url
+  })
+}
