@@ -8,6 +8,8 @@ import {
   seedProfil,
   seedRefs,
   type Attachment,
+  type ImportMode,
+  type ImportPayload,
   type ProfilSante,
   type SalvetoConfig,
   type SalvetoEvent,
@@ -141,4 +143,18 @@ export async function deleteAttachment(id: string): Promise<void> {
   } catch {
     /* idem */
   }
+}
+
+export async function importBackupData(payload: ImportPayload, mode: ImportMode): Promise<void> {
+  await db.transaction('rw', [db.table('kv'), eventsT(), attT()], async () => {
+    if (mode === 'replace') {
+      await eventsT().clear()
+      await attT().clear()
+    }
+    await kv.saveKV(CONFIG_KEY, payload.config)
+    await kv.saveKV(REFS_KEY, payload.refs)
+    await kv.saveKV(PROFIL_KEY, payload.profil)
+    if (payload.events.length) await eventsT().bulkPut(payload.events)
+    if (payload.attachments.length) await attT().bulkPut(payload.attachments)
+  })
 }
