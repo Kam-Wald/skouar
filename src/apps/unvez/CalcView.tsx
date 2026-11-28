@@ -7,9 +7,11 @@ import type { TapeEntry, UnvezSettings } from './store'
 interface Props {
   settings: UnvezSettings
   onSettings: (patch: Partial<UnvezSettings>) => void
+  seed: { expr: string; raw: number } | null
+  onSaveMemo: (p: { expr: string; result: string }) => void
 }
 
-export default function CalcView({ settings, onSettings }: Props) {
+export default function CalcView({ settings, onSettings, seed, onSaveMemo }: Props) {
   const [expr, setExprState] = useState('')
   const exprRef = useRef('')
   const setExpr = (u: string | ((e: string) => string)): void => {
@@ -174,6 +176,14 @@ export default function CalcView({ settings, onSettings }: Props) {
   }
 
   useEffect(() => {
+    if (seed) {
+      setExpr(seed.expr)
+      setRaw(seed.raw)
+      setJustEval(true)
+    }
+  }, [seed])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target
       if (t instanceof HTMLElement && t.closest('input, textarea, select, [contenteditable="true"]')) return
@@ -231,6 +241,9 @@ export default function CalcView({ settings, onSettings }: Props) {
         <div className="calc-out" aria-live="polite">{display}</div>
         <button type="button" className="calc-copy" aria-label="Copier le résultat" onClick={copy}>
           ⧉ Copier
+        </button>
+        <button type="button" className="calc-save" onClick={() => onSaveMemo({ expr, result: display })}>
+          ★ Enregistrer un mémo
         </button>
       </div>
       <div className="calc-pct" role="group" aria-label="Variations en chaîne">

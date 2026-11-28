@@ -46,6 +46,7 @@ export interface Memo {
   bg: string | null
   kind: 'calc' | 'conv'
   expr: string
+  familyId: string | null
   fromUnit: string | null
   toUnit: string | null
   input: string

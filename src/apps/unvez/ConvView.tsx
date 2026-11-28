@@ -6,9 +6,11 @@ import type { UnvezSettings } from './store'
 interface Props {
   settings: UnvezSettings
   onSettings: (patch: Partial<UnvezSettings>) => void
+  seed: { family: string; from: string; to: string; value: string } | null
+  onSaveMemo: (p: { familyId: string; fromUnit: string; toUnit: string; input: string; result: string }) => void
 }
 
-export default function ConvView({ settings, onSettings }: Props) {
+export default function ConvView({ settings, onSettings, seed, onSaveMemo }: Props) {
   const fams = useMemo(() => families(settings.cook), [settings.cook])
   const [familyId, setFamilyId] = useState(() => settings.lastFamily ?? 'distance')
   const fam = findFamily(familyId, settings.cook) ?? fams[0]
@@ -34,6 +36,22 @@ export default function ConvView({ settings, onSettings }: Props) {
       recentPairs: [pairKey, ...settings.recentPairs.filter((p) => p !== pairKey)].slice(0, 8)
     })
   }, [fam.id, from.id, to.id, pairKey])
+
+  useEffect(() => {
+    if (!seed) return
+    const sf = findFamily(seed.family, settings.cook)
+    if (!sf) return
+    const su = findUnit(sf, seed.from)
+    if (!su) return
+    setFamilyId(sf.id)
+    setFromId(su.id)
+    setToId(findUnit(sf, seed.to)?.id ?? sf.units.find((u) => u.id !== su.id)?.id ?? su.id)
+    setAText(seed.value)
+    const b = computeBase(seed.value, su)
+    setBase(b)
+    const stu = findUnit(sf, seed.to) ?? sf.units[0]
+    setBText(fmt(b === null ? null : fromBase(sf, stu, b)))
+  }, [seed])
 
   useEffect(() => {
     setBText(fmt(base === null ? null : fromBase(fam, to, base)))
@@ -169,8 +187,12 @@ export default function ConvView({ settings, onSettings }: Props) {
         <button type="button" className="unvez-btn" aria-expanded={showAll} onClick={() => setShowAll((s) => !s)}>
           {showAll ? 'Masquer les unités' : 'Toutes les unités'}
         </button>
-        <button type="button" className="unvez-btn" disabled title="Enregistrer un mémo — étape 3.4">
-          Enregistrer un mémo
+        <button
+          type="button"
+          className="unvez-btn"
+          onClick={() => onSaveMemo({ familyId: fam.id, fromUnit: from.id, toUnit: to.id, input: aText, result: bText })}
+        >
+          ★ Enregistrer un mémo
         </button>
       </div>
       {showAll && (

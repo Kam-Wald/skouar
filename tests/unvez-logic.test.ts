@@ -29,6 +29,7 @@ describe('unvez — règles de données (CDC 2.A / 8)', () => {
       bg: null,
       kind: 'calc',
       expr: '2+2',
+      familyId: null,
       fromUnit: null,
       toUnit: null,
       input: '2+2',
