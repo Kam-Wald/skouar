@@ -83,6 +83,9 @@ export default function DocSidebar({ doc, v, onClose }: Props) {
           <button className="db-btn" title="Mode présentation (plein écran, Échap pour sortir)" onClick={() => v.setPresent(true)}>
             ⛶ présenter
           </button>
+          <button className="db-btn" title="Rechercher (Ctrl+F)" onClick={() => v.setSearchOpen(true)}>
+            🔍 rechercher
+          </button>
         </div>
         {v.outline.length > 0 && (
           <>
