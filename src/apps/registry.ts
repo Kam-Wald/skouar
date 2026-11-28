@@ -81,10 +81,11 @@ export const apps: AppMeta[] = [
   {
     id: 'fichorama',
     name: 'Fichorama',
-    description: 'Fiches de notation personnalisables (films, livres, restos…) : note /10, champs libres, image, historique de re-notes.',
+    description: 'Fiches de notation personnalisables pour tout ce que tu aimes : films, livres, restos, jeux…',
     tag: 'fiches & notation',
     icon: '👢',
-    logo: `${import.meta.env.BASE_URL}app-icons/fichorama.svg`
+    logo: `${import.meta.env.BASE_URL}app-icons/fichorama.svg`,
+    component: lazy(() => import('./fichorama/FichoramaApp'))
   },
   {
     id: 'salveto',

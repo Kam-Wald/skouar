@@ -38,12 +38,15 @@ describe('Launcher (smoke jsdom)', () => {
     const soon = div.querySelectorAll('.app-tile.soon').length
     expect(soon).toBe(4)
     const wip = div.querySelectorAll('.app-tile.wip').length
-    expect(wip).toBe(9)
+    expect(wip).toBe(8)
     expect(div.textContent).toContain('En chantier')
     const unvezTile = div.querySelector('.app-tile[data-app-id="unvez"]') as HTMLElement
     expect(unvezTile.classList.contains('wip')).toBe(false)
     expect(unvezTile.classList.contains('soon')).toBe(false)
     expect(unvezTile.getAttribute('aria-disabled')).toBeNull()
+    const fichoramaTile = div.querySelector('.app-tile[data-app-id="fichorama"]') as HTMLAnchorElement
+    expect(fichoramaTile.classList.contains('wip')).toBe(false)
+    expect(fichoramaTile.getAttribute('href')).toBe('/app/fichorama')
     const text = div.textContent ?? ''
     for (const tag of ['notes & bdd', 'écriture', 'pdf', 'photos', 'éditeur de code', 'productivité & focus', 'tableur', 'dessin & vectoriel', 'fichiers & zip', 'audio', 'budget', 'unités & calcul', 'fiches & notation', 'santé & humeur']) {
       expect(text).toContain(tag)
