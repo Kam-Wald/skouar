@@ -20,7 +20,7 @@ Tes données restent sur ton appareil (IndexedDB + localStorage).
 | Cockpit 🎛️ | · productivité & focus | en reconstruction |
 | Unvez 📐 | · unités & calcul | convertisseur en place, calculatrices/mémos à venir (`docs/cdc-unvez.md`) |
 | Taol 🧮 | · tableur | en reconstruction |
-| Fichorama 👢 | · fiches & notation | en reconstruction |
+| Fichorama 👢 | · fiches & notation | squelette en place (CDC : `docs/cdc-fichorama.md`) |
 | Salveto 🩺 | · santé & humeur (desktop-only) | en reconstruction |
 | Tres ✏️ | · dessin & vectoriel | bientôt |
 | Kemm 🔀 | · fichiers & zip | bientôt |
