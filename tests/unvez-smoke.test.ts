@@ -58,7 +58,7 @@ describe('Unvez — squelette (smoke jsdom)', () => {
     await React.act(async () => {
       btnByText(div, 'Calculatrice').click()
     })
-    expect(div.querySelector('.unvez-view')?.textContent).toContain('Calculatrice')
+    expect(div.querySelector('.unvez-calc')).toBeTruthy()
     await React.act(async () => {
       btnByText(div, 'Sans dossier').click()
     })

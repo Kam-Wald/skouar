@@ -6,22 +6,30 @@ export const db = createAppDb('skouar-unvez', [
 
 export const kv = kvOf(db)
 
+export interface TapeEntry {
+  expr: string
+  result: string
+  raw: string
+}
+
 export interface UnvezSettings {
   decimals: number
   sci: boolean
   cook: 'us' | 'metric'
+  angle: 'DEG' | 'RAD' | 'GRAD'
   lastFamily: string | null
   lastFrom: string | null
   lastTo: string | null
   recentPairs: string[]
   favPairs: string[]
-  tape: string[]
+  tape: TapeEntry[]
 }
 
 export const DEFAULT_SETTINGS: UnvezSettings = {
   decimals: 6,
   sci: true,
   cook: 'metric',
+  angle: 'DEG',
   lastFamily: null,
   lastFrom: null,
   lastTo: null,
