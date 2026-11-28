@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { loadDoc } from './pdf'
 import type { MargeDoc } from './store'
 
-export default function DocThumb({ doc, width = 120 }: { doc: MargeDoc; width?: number }) {
+export default function DocThumb({ doc, page = 1, width = 120 }: { doc: MargeDoc; page?: number; width?: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     let alive = true
@@ -11,7 +11,7 @@ export default function DocThumb({ doc, width = 120 }: { doc: MargeDoc; width?: 
       .then(async (buf) => {
         try {
           const d = await loadDoc(buf)
-          const p = await d.getPage(1)
+          const p = await d.getPage(page)
           const base = p.getViewport({ scale: 1 }).width
           const vp = p.getViewport({ scale: width / base })
           const c = ref.current
@@ -27,6 +27,6 @@ export default function DocThumb({ doc, width = 120 }: { doc: MargeDoc; width?: 
     return () => {
       alive = false
     }
-  }, [doc.id, width])
+  }, [doc.id, page, width])
   return <canvas ref={ref} className="marge-thumb-cv" />
 }

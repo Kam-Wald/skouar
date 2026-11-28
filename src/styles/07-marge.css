@@ -303,3 +303,151 @@
   color: #ff6b6b !important;
   border-color: #ff6b6b !important;
 }
+
+.marge-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 16px 60px;
+}
+
+.marge-pages.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+
+.marge-page {
+  position: relative;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.marge-cv {
+  display: block;
+}
+
+.marge-tl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.marge-tl span {
+  position: absolute;
+  white-space: pre;
+  color: transparent;
+  transform-origin: 0 0;
+  cursor: text;
+}
+
+.marge-pages.night .marge-cv {
+  filter: invert(0.92) hue-rotate(180deg);
+}
+
+.marge-pages.night .marge-page {
+  background: #111;
+}
+
+.marge-present {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  display: grid;
+  place-items: center;
+  cursor: zoom-out;
+}
+
+.marge-present-cv {
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+.marge-present-hud {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+
+.marge-viewopts {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.marge-page-in {
+  width: 64px;
+}
+
+.marge-muted {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.marge-side-scroll {
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.marge-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.marge-thumb {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 4px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.marge-thumb.on {
+  border-color: var(--accent);
+}
+
+.marge-thumb canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.marge-outline {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.marge-outline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.marge-outline-item:hover {
+  background: var(--panel-2);
+}
