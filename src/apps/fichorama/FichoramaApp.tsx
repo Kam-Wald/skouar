@@ -5,17 +5,21 @@ import {
   CAT_COLORS,
   CAT_ICONS,
   addRating,
+  avg,
   catStats,
   categoryOf,
   clampNote,
   fileToDataUrl,
+  filterFiches,
   fmtDateIso,
   fmtFieldValue,
   fmtNote,
   globalStats,
   noteOf,
   searchFiches,
+  sortFiches,
   validateDraft,
+  type SortKey,
   type Category,
   type Fiche,
   type FieldDef,
@@ -24,7 +28,7 @@ import {
 } from './logic'
 import { loadData, saveData, uid } from './store'
 
-type View = { kind: 'home' } | { kind: 'cat'; id: string } | { kind: 'fiche'; id: string }
+type View = { kind: 'home' } | { kind: 'all' } | { kind: 'cat'; id: string } | { kind: 'fiche'; id: string }
 
 interface Draft {
   title: string
@@ -120,6 +124,11 @@ export default function FichoramaApp(): JSX.Element {
   const [form, setForm] = useState<FormState | null>(null)
   const [renote, setRenote] = useState<string | null>(null)
   const [renoteVal, setRenoteVal] = useState(5)
+  const [sort, setSort] = useState<SortKey>('note-desc')
+  const [favOnly, setFavOnly] = useState(false)
+  const [minN, setMinN] = useState<number | undefined>(undefined)
+  const [maxN, setMaxN] = useState<number | undefined>(undefined)
+  const [viewQ, setViewQ] = useState('')
 
   useEffect(() => {
     void loadData().then(setData)
@@ -142,6 +151,12 @@ export default function FichoramaApp(): JSX.Element {
   const fiche = view.kind === 'fiche' && data ? data.fiches.find((f) => f.id === view.id) : undefined
   const ficheCat = fiche && data ? categoryOf(data, fiche.categoryId) : undefined
   const ficheForRenote = renote && data ? data.fiches.find((f) => f.id === renote) : undefined
+  const scopeFiches = !data ? [] : view.kind === 'cat' && cat ? catFiches : view.kind === 'all' ? data.fiches : []
+  const shown = useMemo(
+    () => sortFiches(filterFiches(scopeFiches, { favOnly, min: minN, max: maxN, q: viewQ }), sort),
+    [scopeFiches, favOnly, minN, maxN, viewQ, sort]
+  )
+  const scopeStats = useMemo(() => ({ nb: scopeFiches.length, moyenne: avg(scopeFiches.map(noteOf)) }), [scopeFiches])
 
   const addCategory = (): void => {
     const name = catName.trim()
@@ -235,6 +250,9 @@ export default function FichoramaApp(): JSX.Element {
           <button type="button" className={`fi-side-row${view.kind === 'home' ? ' active' : ''}`} onClick={() => setView({ kind: 'home' })}>
             <span>🏠</span> Accueil
           </button>
+          <button type="button" className={`fi-side-row${view.kind === 'all' ? ' active' : ''}`} onClick={() => setView({ kind: 'all' })}>
+            <span>🗂</span> Toutes les fiches
+          </button>
           {data.categories.map((c) => (
             <button
               key={c.id}
@@ -254,7 +272,15 @@ export default function FichoramaApp(): JSX.Element {
       <div className="fichorama-main">
         <div className="fi-topbar">
           <h1 className="fi-h1">
-            {view.kind === 'home' ? 'Fichorama' : view.kind === 'fiche' && fiche ? fiche.title : cat ? `${cat.icon} ${cat.name}` : 'Catégorie'}
+            {view.kind === 'home'
+              ? 'Fichorama'
+              : view.kind === 'all'
+                ? '🗂 Toutes les fiches'
+                : view.kind === 'fiche' && fiche
+                  ? fiche.title
+                  : cat
+                    ? `${cat.icon} ${cat.name}`
+                    : 'Catégorie'}
           </h1>
           <input
             className="fi-search"
@@ -308,49 +334,80 @@ export default function FichoramaApp(): JSX.Element {
             })}
           </div>
         )}
-        {view.kind === 'cat' && cat && (
+        {(view.kind === 'cat' || view.kind === 'all') && data && (
           <div className="fi-cat">
-            <div className="fi-cat-head">
-              <button type="button" className="db-btn" onClick={() => setForm({ id: null, catId: cat.id, draft: emptyDraft() })}>
-                + Nouvelle fiche
-              </button>
+            <div className="fi-cat-head fi-controls">
+              {view.kind === 'cat' && cat && (
+                <button type="button" className="db-btn" onClick={() => setForm({ id: null, catId: cat.id, draft: emptyDraft() })}>
+                  + Nouvelle fiche
+                </button>
+              )}
+              <input className="fi-search fi-search-sm" placeholder="Filtrer (titre, commentaire)…" value={viewQ} onChange={(e) => setViewQ(e.target.value)} />
+              <select className="fi-input fi-sort" value={sort} title="Trier par" onChange={(e) => setSort(e.target.value as SortKey)}>
+                <option value="note-desc">Note ↓</option>
+                <option value="note-asc">Note ↑</option>
+                <option value="date-desc">Ajoutées récemment</option>
+                <option value="date-asc">Ajoutées en premier</option>
+                <option value="titre">Titre A→Z</option>
+                <option value="fav">★ Favoris d'abord</option>
+              </select>
+              <label className="fi-check">
+                <input type="checkbox" checked={favOnly} onChange={(e) => setFavOnly(e.target.checked)} /> Favoris
+              </label>
+              <label className="fi-check fi-note-range">
+                Note
+                <input
+                  type="number"
+                  className="fi-input fi-note-in"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  placeholder="min"
+                  value={minN ?? ''}
+                  onChange={(e) => setMinN(e.target.value === '' ? undefined : Number(e.target.value))}
+                />
+                –
+                <input
+                  type="number"
+                  className="fi-input fi-note-in"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  placeholder="max"
+                  value={maxN ?? ''}
+                  onChange={(e) => setMaxN(e.target.value === '' ? undefined : Number(e.target.value))}
+                />
+              </label>
               <span className="fi-cat-count">
-                {catFiches.length} fiche{catFiches.length > 1 ? 's' : ''} · moyenne{' '}
-                {(() => {
-                  const st = catStats(data, cat.id)
-                  return st.moyenne === null ? '—' : `${fmtNote(Math.round(st.moyenne * 10) / 10)}/10`
-                })()}
+                {shown.length}/{scopeStats.nb} · moyenne {scopeStats.moyenne === null ? '—' : `${fmtNote(Math.round(scopeStats.moyenne * 10) / 10)}/10`}
               </span>
             </div>
-            <div className="fi-list">
-              {catFiches.map((f) => (
-                <div key={f.id} className="fi-row" onClick={() => setView({ kind: 'fiche', id: f.id })}>
-                  {f.image ? (
-                    <img className="fi-thumb" src={f.image} alt="" />
-                  ) : (
-                    <span className="fi-thumb fi-thumb-empty" style={{ background: cat.color }}>
-                      {cat.icon}
+            <div className="fi-grid">
+              {shown.map((f) => {
+                const c = categoryOf(data, f.categoryId)
+                return (
+                  <button key={f.id} type="button" className="fi-vignette" onClick={() => setView({ kind: 'fiche', id: f.id })}>
+                    {f.image ? (
+                      <img className="fi-vignette-img" src={f.image} alt="" />
+                    ) : (
+                      <span className="fi-vignette-img fi-thumb-empty" style={{ background: c?.color ?? '#64748b' }}>
+                        {c?.icon ?? '🗂️'}
+                      </span>
+                    )}
+                    <span className="fi-vignette-body">
+                      <span className="fi-row-title">
+                        {f.favori && <span className="fi-fav">★ </span>}
+                        {f.title}
+                      </span>
+                      <span className="fi-note-row">
+                        <Stars value={noteOf(f)} readOnly />
+                        <span className="fi-note">{fmtNote(noteOf(f))}/10</span>
+                      </span>
                     </span>
-                  )}
-                  <span className="fi-row-title">
-                    {f.favori && <span className="fi-fav">★</span>} {f.title}
-                  </span>
-                  <Stars value={noteOf(f)} readOnly />
-                  <span className="fi-note">{fmtNote(noteOf(f))}/10</span>
-                  <button
-                    type="button"
-                    className="fi-mini"
-                    title="Supprimer"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteFiche(f)
-                    }}
-                  >
-                    🗑
                   </button>
-                </div>
-              ))}
-              {catFiches.length === 0 && <p className="fi-empty">Aucune fiche dans « {cat.name} » — cliquez « + Nouvelle fiche ».</p>}
+                )
+              })}
+              {shown.length === 0 && <p className="fi-empty">Aucune fiche{view.kind === 'cat' && cat ? ` dans « ${cat.name} »` : ''}.</p>}
             </div>
           </div>
         )}

@@ -77,7 +77,7 @@ describe('Fichorama (smoke jsdom) — création de fiche', () => {
       await new Promise((r) => setTimeout(r, 20))
     })
     expect(div.textContent).toContain('Le Grand Bleu')
-    expect(div.querySelectorAll('.fi-row').length).toBe(1)
+    expect(div.querySelectorAll('.fi-vignette').length).toBe(1)
     root.unmount()
     div.remove()
   })
@@ -119,7 +119,7 @@ describe('Fichorama (smoke jsdom) — détail + re-notation', () => {
       await new Promise((r) => setTimeout(r, 20))
     })
     await React.act(async () => {
-      ;(div.querySelector('.fi-row') as HTMLElement).click()
+      ;(div.querySelector('.fi-vignette') as HTMLElement).click()
     })
     expect(div.textContent).toContain('Historique des notes (1)')
     await React.act(async () => {

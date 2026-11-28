@@ -206,3 +206,44 @@ export function fileToDataUrl(file: File, maxW = 400, maxH = 400): Promise<strin
 export function addRating(f: Fiche, value: number, date: string): void {
   f.ratings.push({ value: clampNote(value), date })
 }
+
+// ---------- Tri / filtres (S5) ----------
+
+export type SortKey = 'note-desc' | 'note-asc' | 'date-desc' | 'date-asc' | 'titre' | 'fav'
+
+export function sortFiches(fs: Fiche[], key: SortKey): Fiche[] {
+  const arr = [...fs]
+  switch (key) {
+    case 'note-desc':
+      return arr.sort((a, b) => noteOf(b) - noteOf(a))
+    case 'note-asc':
+      return arr.sort((a, b) => noteOf(a) - noteOf(b))
+    case 'date-desc':
+      return arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    case 'date-asc':
+      return arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    case 'titre':
+      return arr.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
+    case 'fav':
+      return arr.sort((a, b) => (b.favori ? 1 : 0) - (a.favori ? 1 : 0) || noteOf(b) - noteOf(a))
+  }
+}
+
+export interface FicheFilter {
+  favOnly?: boolean
+  min?: number
+  max?: number
+  q?: string
+}
+
+export function filterFiches(fs: Fiche[], f: FicheFilter): Fiche[] {
+  let out = fs
+  if (f.favOnly) out = out.filter((x) => x.favori)
+  if (f.min !== undefined) out = out.filter((x) => noteOf(x) >= f.min!)
+  if (f.max !== undefined) out = out.filter((x) => noteOf(x) <= f.max!)
+  if (f.q && f.q.trim()) {
+    const t = f.q.trim().toLowerCase()
+    out = out.filter((x) => x.title.toLowerCase().includes(t) || x.comment.toLowerCase().includes(t))
+  }
+  return out
+}

@@ -114,3 +114,35 @@ describe('Fichorama — re-notation (S4)', () => {
     expect(noteOf(f)).toBe(10)
   })
 })
+
+describe('Fichorama — tri / filtres (S5)', () => {
+  it('sortFiches : toutes les clés', async () => {
+    const { sortFiches } = await import('../src/apps/fichorama/logic')
+    const fs = [
+      fiche('a', 'cat-films', 'Beta', [5], { favori: false, createdAt: '2026-01-02T00:00:00.000Z' }),
+      fiche('b', 'cat-films', 'Alpha', [9], { favori: true, createdAt: '2026-01-01T00:00:00.000Z' }),
+      fiche('c', 'cat-films', 'Gamma', [7], { favori: false, createdAt: '2026-01-03T00:00:00.000Z' })
+    ]
+    expect(sortFiches(fs, 'note-desc').map((f) => f.id)).toEqual(['b', 'c', 'a'])
+    expect(sortFiches(fs, 'note-asc').map((f) => f.id)).toEqual(['a', 'c', 'b'])
+    expect(sortFiches(fs, 'titre').map((f) => f.id)).toEqual(['b', 'a', 'c'])
+    expect(sortFiches(fs, 'date-desc').map((f) => f.id)).toEqual(['c', 'a', 'b'])
+    expect(sortFiches(fs, 'date-asc').map((f) => f.id)).toEqual(['b', 'a', 'c'])
+    expect(sortFiches(fs, 'fav').map((f) => f.id)[0]).toBe('b')
+  })
+
+  it('filterFiches : favoris, plage de notes, texte', async () => {
+    const { filterFiches } = await import('../src/apps/fichorama/logic')
+    const fs = [
+      fiche('a', 'cat-films', 'Beta', [5], { favori: true }),
+      fiche('b', 'cat-films', 'Alpha', [9], { comment: 'chef-d’œuvre' }),
+      fiche('c', 'cat-films', 'Gamma', [7])
+    ]
+    expect(filterFiches(fs, { favOnly: true }).map((f) => f.id)).toEqual(['a'])
+    expect(filterFiches(fs, { min: 7 }).map((f) => f.id)).toEqual(['b', 'c'])
+    expect(filterFiches(fs, { max: 7 }).map((f) => f.id)).toEqual(['a', 'c'])
+    expect(filterFiches(fs, { min: 6, max: 9 }).map((f) => f.id)).toEqual(['b', 'c'])
+    expect(filterFiches(fs, { q: 'chef' }).map((f) => f.id)).toEqual(['b'])
+    expect(filterFiches(fs, {}).length).toBe(3)
+  })
+})
