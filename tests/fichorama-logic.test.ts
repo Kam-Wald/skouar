@@ -102,3 +102,15 @@ describe('Fichorama — saisie (S3)', () => {
     expect(fmtDateIso('2026-12-31T23:00:00.000Z')).toBe('31/12/2026')
   })
 })
+
+describe('Fichorama — re-notation (S4)', () => {
+  it('addRating : ajoute à l’historique, borne, noteOf suit', async () => {
+    const { addRating, noteOf } = await import('../src/apps/fichorama/logic')
+    const f = fiche('f1', 'cat-films', 'A', [6])
+    addRating(f, 8.5, '2026-02-01T10:00:00.000Z')
+    expect(f.ratings).toHaveLength(2)
+    expect(noteOf(f)).toBe(8.5)
+    addRating(f, 99, '2026-03-01T10:00:00.000Z')
+    expect(noteOf(f)).toBe(10)
+  })
+})

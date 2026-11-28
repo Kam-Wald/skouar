@@ -4,10 +4,12 @@ import { notify } from '../../shared/notify'
 import {
   CAT_COLORS,
   CAT_ICONS,
+  addRating,
   catStats,
   categoryOf,
   clampNote,
   fileToDataUrl,
+  fmtDateIso,
   fmtFieldValue,
   fmtNote,
   globalStats,
@@ -22,7 +24,7 @@ import {
 } from './logic'
 import { loadData, saveData, uid } from './store'
 
-type View = { kind: 'home' } | { kind: 'cat'; id: string }
+type View = { kind: 'home' } | { kind: 'cat'; id: string } | { kind: 'fiche'; id: string }
 
 interface Draft {
   title: string
@@ -116,6 +118,8 @@ export default function FichoramaApp(): JSX.Element {
   const [catIcon, setCatIcon] = useState('🗂️')
   const [catColor, setCatColor] = useState(CAT_COLORS[0])
   const [form, setForm] = useState<FormState | null>(null)
+  const [renote, setRenote] = useState<string | null>(null)
+  const [renoteVal, setRenoteVal] = useState(5)
 
   useEffect(() => {
     void loadData().then(setData)
@@ -135,6 +139,9 @@ export default function FichoramaApp(): JSX.Element {
   const results = useMemo(() => (data && query.trim() ? searchFiches(data, query) : []), [data, query])
   const cat = view.kind === 'cat' && data ? categoryOf(data, view.id) : undefined
   const catFiches = useMemo(() => (data && cat ? data.fiches.filter((f) => f.categoryId === cat.id) : []), [data, cat])
+  const fiche = view.kind === 'fiche' && data ? data.fiches.find((f) => f.id === view.id) : undefined
+  const ficheCat = fiche && data ? categoryOf(data, fiche.categoryId) : undefined
+  const ficheForRenote = renote && data ? data.fiches.find((f) => f.id === renote) : undefined
 
   const addCategory = (): void => {
     const name = catName.trim()
@@ -199,6 +206,20 @@ export default function FichoramaApp(): JSX.Element {
     notify('Fiche supprimée')
   }
 
+  const saveRenote = (): void => {
+    if (!renote || !data) return
+    const v = clampNote(renoteVal)
+    mutate((d) => {
+      const f = d.fiches.find((x) => x.id === renote)
+      if (f) {
+        addRating(f, v, new Date().toISOString())
+        f.updatedAt = new Date().toISOString()
+      }
+    })
+    setRenote(null)
+    notify(`Nouvelle note : ${fmtNote(v)}/10`)
+  }
+
   const formCat = form && data ? categoryOf(data, form.catId) : undefined
 
   if (!data) return <AppShell appId="fichorama" appName="Fichorama" logo={`${import.meta.env.BASE_URL}app-icons/fichorama.svg`}><div className="fichorama-main" /></AppShell>
@@ -232,7 +253,9 @@ export default function FichoramaApp(): JSX.Element {
     >
       <div className="fichorama-main">
         <div className="fi-topbar">
-          <h1 className="fi-h1">{view.kind === 'home' ? 'Fichorama' : cat ? `${cat.icon} ${cat.name}` : 'Catégorie'}</h1>
+          <h1 className="fi-h1">
+            {view.kind === 'home' ? 'Fichorama' : view.kind === 'fiche' && fiche ? fiche.title : cat ? `${cat.icon} ${cat.name}` : 'Catégorie'}
+          </h1>
           <input
             className="fi-search"
             placeholder="Rechercher une fiche (titre, commentaire)…"
@@ -256,8 +279,7 @@ export default function FichoramaApp(): JSX.Element {
                   className="fi-result-row"
                   onClick={() => {
                     setQuery('')
-                    setView({ kind: 'cat', id: f.categoryId })
-                    setForm({ id: f.id, catId: f.categoryId, draft: draftOf(f) })
+                    setView({ kind: 'fiche', id: f.id })
                   }}
                 >
                   <span style={{ color: c?.color }}>{c?.icon ?? '🗂️'}</span>
@@ -302,7 +324,7 @@ export default function FichoramaApp(): JSX.Element {
             </div>
             <div className="fi-list">
               {catFiches.map((f) => (
-                <div key={f.id} className="fi-row" onClick={() => setForm({ id: f.id, catId: cat.id, draft: draftOf(f) })}>
+                <div key={f.id} className="fi-row" onClick={() => setView({ kind: 'fiche', id: f.id })}>
                   {f.image ? (
                     <img className="fi-thumb" src={f.image} alt="" />
                   ) : (
@@ -332,6 +354,113 @@ export default function FichoramaApp(): JSX.Element {
             </div>
           </div>
         )}
+        {view.kind === 'fiche' && fiche && ficheCat && (
+          <div className="fi-detail">
+            <button type="button" className="db-btn" onClick={() => setView({ kind: 'cat', id: fiche.categoryId })}>
+              ← {ficheCat.icon} {ficheCat.name}
+            </button>
+            <div className="fi-detail-head">
+              {fiche.image ? (
+                <img className="fi-detail-img" src={fiche.image} alt="" />
+              ) : (
+                <span className="fi-detail-img fi-thumb-empty" style={{ background: ficheCat.color }}>
+                  {ficheCat.icon}
+                </span>
+              )}
+              <div className="fi-detail-info">
+                <h2 className="fi-detail-title">
+                  {fiche.favori && <span className="fi-fav">★ </span>}
+                  {fiche.title}
+                </h2>
+                <div className="fi-note-row">
+                  <Stars value={noteOf(fiche)} readOnly />
+                  <span className="fi-note fi-note-big">{fmtNote(noteOf(fiche))}/10</span>
+                </div>
+                <p className="fi-detail-meta">
+                  Ajoutée le {fmtDateIso(fiche.createdAt)} · {ficheCat.icon} {ficheCat.name}
+                </p>
+                <div className="fi-detail-actions">
+                  <button type="button" className="db-btn" onClick={() => setForm({ id: fiche.id, catId: fiche.categoryId, draft: draftOf(fiche) })}>
+                    ✎ Modifier
+                  </button>
+                  <button
+                    type="button"
+                    className="db-btn"
+                    onClick={() => {
+                      setRenote(fiche.id)
+                      setRenoteVal(noteOf(fiche))
+                    }}
+                  >
+                    🔁 Re-noter
+                  </button>
+                  <button
+                    type="button"
+                    className="db-btn"
+                    onClick={() =>
+                      mutate((d) => {
+                        const f = d.fiches.find((x) => x.id === fiche.id)
+                        if (f) {
+                          f.favori = !f.favori
+                          f.updatedAt = new Date().toISOString()
+                        }
+                      })
+                    }
+                  >
+                    {fiche.favori ? '★ Retirer des favoris' : '☆ Favori'}
+                  </button>
+                  <button
+                    type="button"
+                    className="db-btn"
+                    onClick={() => {
+                      if (window.confirm(`Supprimer « ${fiche.title} » ?`)) {
+                        mutate((d) => {
+                          d.fiches = d.fiches.filter((x) => x.id !== fiche.id)
+                        })
+                        setView({ kind: 'cat', id: fiche.categoryId })
+                        notify('Fiche supprimée')
+                      }
+                    }}
+                  >
+                    🗑 Supprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+            {ficheCat.fields.length > 0 && (
+              <div className="fi-detail-fields">
+                <p className="fi-section-title">Détails</p>
+                {ficheCat.fields.map((fd) => (
+                  <div key={fd.id} className="fi-detail-field">
+                    <span className="fi-field-label">{fd.label}</span>
+                    <span>{fmtFieldValue(fiche.values[fd.id])}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {fiche.comment && (
+              <div className="fi-detail-comment">
+                <p className="fi-section-title">Commentaire</p>
+                <p className="fi-comment-text">{fiche.comment}</p>
+              </div>
+            )}
+            <div className="fi-detail-history">
+              <p className="fi-section-title">Historique des notes ({fiche.ratings.length})</p>
+              <div className="fi-frise">
+                {fiche.ratings.map((r, i) => (
+                  <div
+                    key={i}
+                    className={`fi-frise-item${i === fiche.ratings.length - 1 ? ' current' : ''}`}
+                    title={`${fmtNote(r.value)}/10 — ${fmtDateIso(r.date)}`}
+                  >
+                    <span className="fi-frise-dot" />
+                    <span className="fi-frise-val">{fmtNote(r.value)}</span>
+                    <span className="fi-frise-date">{fmtDateIso(r.date)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       {newCat && (
         <div className="fi-overlay" onClick={() => setNewCat(false)}>
@@ -356,6 +485,28 @@ export default function FichoramaApp(): JSX.Element {
               </button>
               <button type="button" className="db-btn" onClick={addCategory}>
                 Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {renote && ficheForRenote && (
+        <div className="fi-overlay" onClick={() => setRenote(null)}>
+          <div className="fi-modal" onClick={(e) => e.stopPropagation()}>
+            <p className="fi-modal-title">Re-noter « {ficheForRenote.title} »</p>
+            <p className="fi-detail-meta">
+              Note actuelle : <strong>{fmtNote(noteOf(ficheForRenote))}/10</strong> — l'ancienne note reste dans l'historique.
+            </p>
+            <div className="fi-note-row">
+              <Stars value={renoteVal} onChange={setRenoteVal} />
+              <span className="fi-note">{fmtNote(clampNote(renoteVal))}/10</span>
+            </div>
+            <div className="fi-modal-actions">
+              <button type="button" className="db-btn" onClick={() => setRenote(null)}>
+                Annuler
+              </button>
+              <button type="button" className="db-btn" onClick={saveRenote}>
+                Enregistrer la note
               </button>
             </div>
           </div>

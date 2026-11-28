@@ -200,3 +200,9 @@ export function fileToDataUrl(file: File, maxW = 400, maxH = 400): Promise<strin
     img.src = url
   })
 }
+
+// ---------- Re-notation (S4) ----------
+
+export function addRating(f: Fiche, value: number, date: string): void {
+  f.ratings.push({ value: clampNote(value), date })
+}
