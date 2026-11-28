@@ -316,3 +316,44 @@
 .ra-entry select:focus-visible {
   border-color: var(--accent);
 }
+
+.ra-cycle-stats {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 12px 0;
+  background: var(--panel-2);
+}
+
+.ra-cycle-stats p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.ra-predict {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.ra-cycle-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.ra-cycle-list li {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 14px;
+}
+
+.ra-constantes h3 {
+  margin: 16px 0 4px;
+  font-size: 15px;
+}
+
+.ra-view h3 {
+  margin: 16px 0 4px;
+  font-size: 15px;
+}

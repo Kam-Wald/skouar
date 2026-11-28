@@ -3,6 +3,7 @@ import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../shared/Settings'
 import { apps } from '../registry'
+import CycleView from './CycleView'
 import HomeView from './HomeView'
 import Onboarding from './Onboarding'
 import TraitementsView from './TraitementsView'
@@ -119,6 +120,8 @@ export default function RacineApp() {
         <HomeView activeTrackers={activeTrackers} events={events} refs={refs} onChanged={reload} />
       ) : view === 'traitements' ? (
         <TraitementsView events={events} refs={refs} onChanged={reload} />
+      ) : view === 'cycle' ? (
+        <CycleView events={events} onChanged={reload} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
