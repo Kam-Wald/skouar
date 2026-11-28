@@ -169,3 +169,169 @@ button.sa-side-row:hover {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ---------- Salveto : saisie rapide (S2) ---------- */
+
+.sa-h2 {
+  font-size: 1.1rem;
+  margin: 24px 0 8px;
+}
+
+.sa-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.sa-quick-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.sa-quick-btn:hover,
+.sa-quick-btn.active {
+  border-color: var(--accent);
+}
+
+.sa-quick-crise {
+  background: #e5484d22;
+  border-color: #e5484d66;
+  font-weight: 600;
+}
+
+.sa-quick-crise:hover,
+.sa-quick-crise.active {
+  border-color: #e5484d;
+}
+
+.sa-panel {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 4px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.sa-panel-crise {
+  border-color: #e5484d66;
+}
+
+.sa-panel-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sa-panel-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.sa-panel-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.sa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.sa-scale {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sa-scale-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.sa-scale-btn:hover {
+  border-color: var(--accent);
+}
+
+.sa-scale-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.sa-poids-input {
+  width: 110px;
+}
+
+.sa-note-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.sa-panel-save {
+  align-self: flex-start;
+  padding: 0.45rem 0.9rem;
+}
+
+.sa-panel-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sa-panel-close {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
+.sa-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 640px;
+}
+
+.sa-day-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 12px;
+  background: var(--panel-2);
+  font-size: 0.9rem;
+}
+
+.sa-day-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}

@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
 import AppShell from '../../shared/AppShell'
-import { ALL_SUIVIS, seedConfig, type SalvetoConfig, type SuiviId } from './logic'
-import { loadConfig, saveConfig } from './store'
+import { notify } from '../../shared/notify'
+import QuickSaisie from './QuickSaisie'
+import {
+  ALL_SUIVIS,
+  eventsOnDay,
+  labelOfEvent,
+  makeEvent,
+  seedConfig,
+  sortEventsDesc,
+  timeOf,
+  todayDay,
+  type SalvetoConfig,
+  type SalvetoEvent,
+  type SuiviId
+} from './logic'
+import { loadConfig, loadEvents, saveConfig, saveEvent } from './store'
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
@@ -19,12 +33,19 @@ const NAV: { label: string; icon: string; soon?: boolean }[] = [
   { label: 'Paramètres', icon: '⚙️', soon: true }
 ]
 
+const QUICK_SUIVIS: SuiviId[] = ['moral', 'energie', 'poids', 'crise', 'sommeil', 'symptome', 'habitude', 'note']
+
 export default function SalvetoApp() {
   const [config, setConfig] = useState<SalvetoConfig | null>(null)
+  const [events, setEvents] = useState<SalvetoEvent[]>([])
   const [checked, setChecked] = useState<Set<SuiviId>>(() => new Set(ALL_SUIVIS.map((s) => s.id)))
+  const [panel, setPanel] = useState<SuiviId | null>(null)
 
   useEffect(() => {
-    void loadConfig().then(setConfig)
+    void Promise.all([loadConfig(), loadEvents()]).then(([c, evs]) => {
+      setConfig(c)
+      setEvents(sortEventsDesc(evs))
+    })
   }, [])
 
   if (!config) {
@@ -88,7 +109,16 @@ export default function SalvetoApp() {
     )
   }
 
-  const active = ALL_SUIVIS.filter((s) => config.activeSuivis.includes(s.id))
+  const quick = ALL_SUIVIS.filter((s) => QUICK_SUIVIS.includes(s.id) && config.activeSuivis.includes(s.id))
+  const today = eventsOnDay(events, todayDay())
+
+  const onSaveEvent = (e: SalvetoEvent): void => {
+    void saveEvent(e)
+    setEvents((prev) => sortEventsDesc([...prev, e]))
+    setPanel(null)
+    notify(`${labelOfEvent(e)} — enregistré`)
+  }
+
   return (
     <AppShell
       appId="salveto"
@@ -113,16 +143,38 @@ export default function SalvetoApp() {
     >
       <div className="salveto-main">
         <h1 className="sa-h1">Accueil</h1>
-        <p className="sa-muted">Tes suivis actifs :</p>
-        <div className="sa-chips">
-          {active.map((s) => (
-            <span key={s.id} className="sa-chip">
-              {s.icon} {s.label}
-            </span>
+        <p className="sa-muted">Saisie rapide — {quick.length} suivis actifs.</p>
+        <div className="sa-quick">
+          {quick.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`sa-quick-btn${s.id === 'crise' ? ' sa-quick-crise' : ''}${panel === s.id ? ' active' : ''}`}
+              data-quick={s.id}
+              onClick={() => setPanel(panel === s.id ? null : s.id)}
+            >
+              {s.icon} + {s.label}
+            </button>
           ))}
         </div>
-        <p className="sa-empty">Aucun événement pour l’instant — la saisie rapide arrive à l’étape suivante.</p>
+        {panel && <QuickSaisie suivi={panel} onSave={onSaveEvent} onClose={() => setPanel(null)} />}
+        <h2 className="sa-h2">Aujourd’hui ({today.length})</h2>
+        {today.length === 0 ? (
+          <p className="sa-empty">Aucune saisie aujourd’hui pour l’instant.</p>
+        ) : (
+          <ul className="sa-day-list">
+            {today.map((e) => (
+              <li key={e.id} className="sa-day-row" data-event={e.id} data-type={e.type}>
+                <span className="sa-day-time">{timeOf(e.date)}</span>
+                <span>{labelOfEvent(e)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </AppShell>
   )
 }
+
+// makeEvent réexporté pour les futurs écrans (journal, édition)
+export { makeEvent }
