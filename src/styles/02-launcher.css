@@ -94,3 +94,97 @@
   font-size: 0.9rem;
 }
 
+
+/* ---------- Launcher : réorganisation des tuiles (drag'n'drop) ---------- */
+
+.launcher-edit-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.launcher-edit-btn:hover {
+  border-color: var(--accent);
+}
+
+.launcher-edit-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.launcher-editbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 980px;
+  margin: 0 auto 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.launcher-reset {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.launcher-status {
+  max-width: 980px;
+  margin: 0 auto 8px;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.app-tile-grip {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  cursor: grab;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: -2px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.app-tile-grip:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.launcher-grid.editing .app-tile {
+  position: relative;
+}
+
+.app-tile.dragging {
+  opacity: 0.35;
+}
+
+.launcher-grid.editing .app-tile:not(.dragging):hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.app-tile.drop-before {
+  box-shadow: -4px 0 0 0 var(--accent);
+}
+
+.launcher-grid.drop-end::after {
+  content: '';
+  flex: 0 0 100%;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
