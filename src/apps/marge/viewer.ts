@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadDoc } from './pdf'
 import { clampPage, clampScale, fitWidthScale } from './logic'
-import { updateDoc, type MargeDoc } from './store'
+import { annotsMatching, cacheFromItems, findMatches, type SearchMatch, type TItem, type TextCache } from './search'
+import { listAnnots, updateDoc, type MargeAnnot, type MargeDoc } from './store'
 
 export const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 
@@ -20,6 +21,13 @@ export function useDocViewer(doc: MargeDoc | null) {
   const [night, setNight] = useState(() => localStorage.getItem('skouar:marge:night') === '1')
   const [present, setPresent] = useState(false)
   const [outline, setOutline] = useState<OutlineItem[]>([])
+  const [annots, setAnnots] = useState<MargeAnnot[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const [searchFilter, setSearchFilter] = useState<'doc' | 'annots' | 'all'>('all')
+  const [matches, setMatches] = useState<SearchMatch[]>([])
+  const [mIdx, setMIdx] = useState(0)
+  const textCacheRef = useRef(new Map<number, TextCache>())
   const docRef = useRef<PDFDocumentProxy | null>(null)
 
   useEffect(() => {
@@ -28,6 +36,9 @@ export function useDocViewer(doc: MargeDoc | null) {
       docRef.current = null
       setNumPages(0)
       setOutline([])
+      setAnnots([])
+      setMatches([])
+      setSearchOpen(false)
       return
     }
     void doc.data.arrayBuffer().then(async (buf) => {
@@ -42,6 +53,8 @@ export function useDocViewer(doc: MargeDoc | null) {
       setRotation(doc.rotation ?? 0)
       setPage(clampPage(doc.lastPage ?? 1, d.numPages))
       setOutline([])
+      textCacheRef.current.clear()
+      setAnnots(await listAnnots(doc.id))
       try {
         const ol = await d.getOutline()
         if (ol) {
@@ -130,16 +143,86 @@ export function useDocViewer(doc: MargeDoc | null) {
     })
   }, [])
 
+  const runSearch = useCallback(async () => {
+    const d = docRef.current
+    const q = searchQ.trim()
+    if (!d || !q) {
+      setMatches([])
+      setMIdx(0)
+      return
+    }
+    const out: SearchMatch[] = []
+    if (searchFilter !== 'annots') {
+      for (let p = 1; p <= d.numPages; p++) {
+        let cache = textCacheRef.current.get(p)
+        if (!cache) {
+          const pg = await d.getPage(p)
+          const tc = await pg.getTextContent()
+          cache = cacheFromItems(tc.items as unknown as TItem[])
+          textCacheRef.current.set(p, cache)
+        }
+        for (const m of findMatches(cache, q)) out.push({ page: p, items: m.items })
+      }
+    }
+    if (searchFilter !== 'doc') {
+      for (const a of annotsMatching(annots, q)) out.push({ page: a.page, annotId: a.id })
+    }
+    out.sort((a, b) => a.page - b.page)
+    setMatches(out)
+    setMIdx(0)
+    if (out.length) gotoPage(out[0].page)
+  }, [searchQ, searchFilter, annots, gotoPage])
+
+  useEffect(() => {
+    if (!searchOpen || !doc) return
+    const t = setTimeout(() => void runSearch(), 250)
+    return () => clearTimeout(t)
+  }, [searchQ, searchOpen, searchFilter, runSearch, doc?.id])
+
+  const stepMatch = useCallback(
+    (dir: -1 | 1) => {
+      setMatches((ms) => {
+        if (!ms.length) return ms
+        const idx = (mIdx + dir + ms.length) % ms.length
+        setMIdx(idx)
+        gotoPage(ms[idx].page)
+        return ms
+      })
+    },
+    [mIdx, gotoPage]
+  )
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false)
+    setMatches([])
+    setMIdx(0)
+  }, [])
+
   useEffect(() => {
     if (!doc) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setSearchOpen(true)
+        return
+      }
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (e.key === 'Escape') {
+        if (searchOpen) {
+          e.preventDefault()
+          closeSearch()
+          return
+        }
         if (present) {
           e.preventDefault()
           setPresent(false)
         }
+        return
+      }
+      if (searchOpen && e.key === 'Enter') {
+        e.preventDefault()
+        stepMatch(e.shiftKey ? -1 : 1)
         return
       }
       if (present) {
@@ -174,7 +257,7 @@ export function useDocViewer(doc: MargeDoc | null) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [doc, page, numPages, present, gotoPage, zoomStep])
+  }, [doc, page, numPages, present, searchOpen, gotoPage, zoomStep, stepMatch, closeSearch])
 
   return {
     docRef,
@@ -195,7 +278,19 @@ export function useDocViewer(doc: MargeDoc | null) {
     toggleNight,
     present,
     setPresent,
-    outline
+    outline,
+    annots,
+    searchOpen,
+    setSearchOpen,
+    searchQ,
+    setSearchQ,
+    searchFilter,
+    setSearchFilter,
+    matches,
+    mIdx,
+    stepMatch,
+    closeSearch,
+    getTextCache: (p: number) => textCacheRef.current.get(p)
   }
 }
 

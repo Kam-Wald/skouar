@@ -16,6 +16,13 @@ export async function loadDoc(buf: ArrayBuffer): Promise<pdfjsLib.PDFDocumentPro
   }).promise
 }
 
+export function matchRect(vp: pdfjsLib.PageViewport, item: { transform: number[]; width: number }): [number, number, number, number] {
+  const m = pdfjsLib.Util.transform(vp.transform, item.transform)
+  const fh = Math.hypot(m[2], m[3])
+  const w = (item.width * Math.abs(m[0])) / Math.max(1e-6, Math.abs(item.transform[0])) || item.width
+  return [m[4], m[5] - fh, w, fh]
+}
+
 export async function renderTextLayer(
   page: pdfjsLib.PDFPageProxy,
   container: HTMLElement,

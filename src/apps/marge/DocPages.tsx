@@ -1,5 +1,7 @@
 import { useEffect, useRef, type RefObject, type WheelEvent } from 'react'
-import { renderTextLayer } from './pdf'
+import type { PageViewport } from 'pdfjs-dist'
+import { matchRect, renderTextLayer } from './pdf'
+import SearchBar from './SearchBar'
 import type { MargeDoc } from './store'
 import type { DocViewer } from './viewer'
 
@@ -13,7 +15,8 @@ export default function DocPages({ doc, v, mainRef }: Props) {
   const canvasRefs = useRef(new Map<number, HTMLCanvasElement>())
   const tlRefs = useRef(new Map<number, HTMLDivElement>())
   const pageRefs = useRef(new Map<number, HTMLDivElement>())
-  const viewportsRef = useRef(new Map<number, unknown>())
+  const viewportsRef = useRef(new Map<number, PageViewport>())
+  const overlayRefs = useRef(new Map<number, HTMLCanvasElement>())
   const renderedRef = useRef(new Map<number, string>())
   const presentRef = useRef<HTMLCanvasElement>(null)
 
@@ -23,6 +26,11 @@ export default function DocPages({ doc, v, mainRef }: Props) {
     const pg = await d.getPage(p)
     const vp = pg.getViewport({ scale: v.scale, rotation: v.rotation })
     viewportsRef.current.set(p, vp)
+    const ov = overlayRefs.current.get(p)
+    if (ov) {
+      ov.width = vp.width
+      ov.height = vp.height
+    }
     const cv = canvasRefs.current.get(p)
     const tl = tlRefs.current.get(p)
     if (!cv) return
@@ -39,7 +47,35 @@ export default function DocPages({ doc, v, mainRef }: Props) {
         // couche texte indisponible (test) : on laisse vide
       }
     }
+    drawSearch(p)
   }
+
+  const drawSearch = (p: number) => {
+    const ov = overlayRefs.current.get(p)
+    const vp = viewportsRef.current.get(p)
+    if (!ov || !vp) return
+    const ctx = ov.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, ov.width, ov.height)
+    const cache = v.getTextCache(p)
+    if (!cache) return
+    v.matches.forEach((m, i) => {
+      if (m.page !== p || !m.items) return
+      ctx.globalAlpha = i === v.mIdx ? 0.6 : 0.3
+      ctx.fillStyle = i === v.mIdx ? '#ff9f43' : '#ffc46b'
+      for (const idx of m.items) {
+        const item = cache.items[idx]
+        if (!item) continue
+        const [x, y, w, h] = matchRect(vp, item)
+        ctx.fillRect(x, y, w, h)
+      }
+    })
+    ctx.globalAlpha = 1
+  }
+
+  useEffect(() => {
+    renderedRef.current.forEach((_, p) => drawSearch(p))
+  }, [v.matches, v.mIdx])
 
   useEffect(() => {
     const root = mainRef.current
@@ -142,8 +178,16 @@ export default function DocPages({ doc, v, mainRef }: Props) {
               else tlRefs.current.delete(p)
             }}
           />
+          <canvas
+            className="marge-overlay"
+            ref={(el) => {
+              if (el) overlayRefs.current.set(p, el)
+              else overlayRefs.current.delete(p)
+            }}
+          />
         </div>
       ))}
+      {v.searchOpen && <SearchBar v={v} />}
       {v.present && (
         <div className="marge-present" onClick={() => v.setPresent(false)}>
           <canvas ref={presentRef} className="marge-present-cv" />
