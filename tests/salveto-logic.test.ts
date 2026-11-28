@@ -1,14 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
+  BODY_ZONES,
   clampInt,
+  cooccurrences,
   dayOf,
   eventsOfType,
   eventsOnDay,
   fmtDuree,
+  fmtPct,
   labelOfEvent,
   makeEvent,
   migrateConfig,
   migrateEvents,
+  normalizeTrigger,
   seedConfig,
   sortEventsDesc,
   timeOf,
@@ -120,5 +124,48 @@ describe('Salveto logic — config', () => {
     expect((c as unknown as Record<string, unknown>).extra).toBe('ok')
     expect(migrateConfig({ version: 99 })).toBeUndefined()
     expect(seedConfig().activeSuivis.length).toBe(13)
+  })
+})
+
+describe('Salveto logic — co-occurrences (4.I)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+  it('calcule les co-occurrences déclencheurs × crises, normalisées et triées', () => {
+    const evs = [
+      mk('1', 'crise', '2025-01-01T10:00:00', { declencheurs: ['Stress'] }),
+      mk('2', 'crise', '2025-01-02T10:00:00', { declencheurs: [' stress '] }),
+      mk('3', 'crise', '2025-01-03T10:00:00', {}),
+      mk('4', 'habitude', '2025-01-01T09:00:00', { label: 'Sport' })
+    ]
+    const co = cooccurrences(evs)
+    expect(co.length).toBe(2)
+    expect(co[0].trigger.toLowerCase()).toBe('stress')
+    expect(co[0].crises).toBe(2)
+    expect(co[0].total).toBe(3)
+    expect(co[0].ratio).toBeCloseTo(2 / 3)
+    const sport = co.find((c) => c.trigger === 'Sport')!
+    expect(sport.crises).toBe(1)
+  })
+  it('habitude sans crise le même jour ne compte pas', () => {
+    const evs = [
+      mk('1', 'crise', '2025-01-01T10:00:00', {}),
+      mk('2', 'habitude', '2025-01-05T09:00:00', { label: 'Sport' })
+    ]
+    expect(cooccurrences(evs)).toEqual([])
+  })
+  it('vide sans crise', () => {
+    expect(cooccurrences([mk('1', 'note', '2025-01-01T10:00:00', { notes: 'x' })])).toEqual([])
+  })
+  it('normalizeTrigger + fmtPct + BODY_ZONES', () => {
+    expect(normalizeTrigger('  Manque   de Sommeil ')).toBe('manque de sommeil')
+    expect(fmtPct(2 / 3)).toBe('67 %')
+    expect(BODY_ZONES.some((z) => z.id === 'dos')).toBe(true)
+    expect(BODY_ZONES.length).toBe(13)
   })
 })

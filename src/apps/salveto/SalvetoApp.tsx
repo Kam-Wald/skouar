@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import QuickSaisie from './QuickSaisie'
 import {
   ALL_SUIVIS,
+  cooccurrences,
   eventsOnDay,
+  fmtPct,
+  isSuiviActive,
   labelOfEvent,
   makeEvent,
   seedConfig,
@@ -40,6 +43,7 @@ export default function SalvetoApp() {
   const [events, setEvents] = useState<SalvetoEvent[]>([])
   const [checked, setChecked] = useState<Set<SuiviId>>(() => new Set(ALL_SUIVIS.map((s) => s.id)))
   const [panel, setPanel] = useState<SuiviId | null>(null)
+  const coocs = useMemo(() => cooccurrences(events), [events])
 
   useEffect(() => {
     void Promise.all([loadConfig(), loadEvents()]).then(([c, evs]) => {
@@ -170,6 +174,22 @@ export default function SalvetoApp() {
               </li>
             ))}
           </ul>
+        )}
+        {isSuiviActive(config, 'crise') && coocs.length > 0 && (
+          <section className="sa-cooc">
+            <h2 className="sa-h2">Co-occurrences observées avec les crises</h2>
+            <p className="sa-cooc-note">
+              Observation statistique uniquement — Salveto n’interprète jamais médicalement.
+            </p>
+            <ul className="sa-cooc-list">
+              {coocs.slice(0, 6).map((c) => (
+                <li key={c.trigger}>
+                  <strong>« {c.trigger} »</strong> — {c.crises} crise{c.crises > 1 ? 's' : ''} sur {c.total} (
+                  {fmtPct(c.ratio)})
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </AppShell>
