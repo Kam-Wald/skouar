@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject, type WheelEvent, type Mous
 import type { PageViewport } from 'pdfjs-dist'
 import { matchRect, renderTextLayer } from './pdf'
 import SearchBar from './SearchBar'
-import { hitAnnotPdf, mergeRectsByLine, normRect, shiftAnnot, STAMPS, TEXT_SIZES, type Tool } from './annot'
+import { hitAnnotPdf, mergeRectsByLine, normRect, shiftAnnot, SIGN_SIZES, STAMPS, TEXT_SIZES, type Tool } from './annot'
 import { useDismiss } from '../../shared/useDismiss'
 import { putAnnot, uid, type MargeAnnot } from './store'
 import type { MargeDoc } from './store'
@@ -290,11 +290,12 @@ export default function DocPages({ doc, v, mainRef }: Props) {
     if (v.tool === 'sign') {
       const s = v.activeSign()
       if (!s) {
-        v.setHint('Crée d’abord ta signature ✍️ (carnet de signatures, étape suivante)')
+        v.setHint('Crée d’abord ta signature ✍️ (section Signatures, sidebar)')
         return
       }
+      const sz = SIGN_SIZES[v.signSize] ?? SIGN_SIZES[1]
       const [px, py] = vp.convertToPdfPoint(x, y)
-      void mk({ id: uid(), docId: doc.id, page: p, type: 'sign', x: px, y: py, w: 160, h: 64, color: '#000000', dataUrl: s.dataUrl, at: Date.now() })
+      void mk({ id: uid(), docId: doc.id, page: p, type: 'sign', x: px, y: py, w: sz.w, h: sz.h, color: '#000000', dataUrl: s.dataUrl, at: Date.now() })
       return
     }
     if (v.tool === 'select') return

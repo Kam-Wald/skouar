@@ -3,15 +3,17 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadDoc } from './pdf'
 import { clampPage, clampScale, fitWidthScale } from './logic'
 import { annotsMatching, cacheFromItems, findMatches, notesMatching, type SearchMatch, type TItem, type TextCache } from './search'
-import { COLORS, TOOLS, type HistAction, type Tool } from './annot'
+import { COLORS, SIGN_SIZES, TOOLS, type HistAction, type Tool } from './annot'
 import {
   deleteAnnot,
   deletePageNote,
+  deleteSignature,
   listAnnots,
   listPageNotes,
   listSignatures,
   putAnnot,
   putPageNote,
+  putSignature,
   uid,
   updateDoc,
   type MargeAnnot,
@@ -49,6 +51,7 @@ export function useDocViewer(doc: MargeDoc | null) {
   const [stampIdx, setStampIdx] = useState(0)
   const [textSize, setTextSize] = useState(16)
   const [signatures, setSignatures] = useState<MargeSignature[]>([])
+  const [signId, setSignId] = useState<string | null>(() => localStorage.getItem('skouar:marge:sign'))
   const [hint, setHint] = useState('')
   const [pageNotes, setPageNotes] = useState<MargePageNote[]>([])
   const histRef = useRef<HistAction[]>([])
@@ -56,8 +59,47 @@ export function useDocViewer(doc: MargeDoc | null) {
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
 
+  const reloadSignatures = useCallback(async () => {
+    setSignatures(await listSignatures())
+  }, [])
+
   useEffect(() => {
-    void listSignatures().then(setSignatures)
+    void reloadSignatures()
+  }, [reloadSignatures])
+
+  const setActiveSign = useCallback((id: string): void => {
+    localStorage.setItem('skouar:marge:sign', id)
+    setSignId(id)
+  }, [])
+
+  const addSignature = useCallback(
+    async (name: string, dataUrl: string) => {
+      await putSignature({ id: uid(), name, dataUrl, at: Date.now() })
+      await reloadSignatures()
+    },
+    [reloadSignatures]
+  )
+
+  const removeSignature = useCallback(
+    async (id: string) => {
+      await deleteSignature(id)
+      if (signId === id) {
+        localStorage.removeItem('skouar:marge:sign')
+        setSignId(null)
+      }
+      await reloadSignatures()
+    },
+    [signId, reloadSignatures]
+  )
+
+  const [signSize, setSignSizeState] = useState(() => {
+    const i = Number(localStorage.getItem('skouar:marge:signsize') ?? '1')
+    return Math.min(SIGN_SIZES.length - 1, Math.max(0, Number.isFinite(i) ? i : 1))
+  })
+
+  const setSignSize = useCallback((i: number): void => {
+    localStorage.setItem('skouar:marge:signsize', String(i))
+    setSignSizeState(i)
   }, [])
 
   const setColor = useCallback((c: string) => {
@@ -66,9 +108,8 @@ export function useDocViewer(doc: MargeDoc | null) {
   }, [])
 
   const activeSign = useCallback((): MargeSignature | undefined => {
-    const id = localStorage.getItem('skouar:marge:sign')
-    return signatures.find((s) => s.id === id) ?? signatures[0]
-  }, [signatures])
+    return signatures.find((s) => s.id === signId) ?? signatures[0]
+  }, [signatures, signId])
 
   const reloadAnnots = useCallback(async () => {
     if (doc) setAnnots(await listAnnots(doc.id))
@@ -454,6 +495,12 @@ export function useDocViewer(doc: MargeDoc | null) {
     setTextSize,
     signatures,
     activeSign,
+    reloadSignatures,
+    setActiveSign,
+    addSignature,
+    removeSignature,
+    signSize,
+    setSignSize,
     reloadAnnots,
     pageNotes,
     reloadPageNotes,

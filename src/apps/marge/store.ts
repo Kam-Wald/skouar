@@ -130,6 +130,14 @@ export async function listSignatures(): Promise<MargeSignature[]> {
   return all.sort((a, b) => a.at - b.at)
 }
 
+export async function putSignature(s: MargeSignature): Promise<void> {
+  await signaturesT.put(s)
+}
+
+export async function deleteSignature(id: string): Promise<void> {
+  await signaturesT.delete(id)
+}
+
 export async function deleteDoc(id: string): Promise<void> {
   await annotsT.where('docId').equals(id).delete()
   await pageNotesT.where('docId').equals(id).delete()
