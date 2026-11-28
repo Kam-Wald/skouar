@@ -5,7 +5,10 @@ import { EMBEDDED_FONTS, SYSTEM_FONTS } from '../../shared/fonts'
 import { notify } from '../../shared/notify'
 import { loadWorkbook, saveWorkbook, uid } from './store'
 import {
+  applyBorders,
   applyStyle,
+  boxMax,
+  cfBoxOf,
   cfMatch,
   colSparkMax,
   columnValues,
@@ -39,9 +42,11 @@ import {
   unmergeAt,
   usedRange,
   viewRows,
+  type BorderSpec,
   type Box,
   type Cell,
   type CellValue,
+  type CfOp,
   type CfRule,
   type NumFmt,
   type Sheet,
@@ -98,7 +103,9 @@ export default function TaolApp(): JSX.Element {
   const [valFor, setValFor] = useState<number | null>(null)
   const [valDraft, setValDraft] = useState('')
   const [cfFor, setCfFor] = useState<number | null>(null)
-  const [cfDraft, setCfDraft] = useState<{ op: '>' | '<'; value: string; bg: string }>({ op: '>', value: '', bg: '#fee2e2' })
+  const [cfBox, setCfBox] = useState<Box | null>(null)
+  const [cfDraft, setCfDraft] = useState<{ op: CfOp; value: string; value2: string; bg: string; kind: 'bg' | 'databar' }>({ op: '>', value: '', value2: '', bg: '#fee2e2', kind: 'bg' })
+  const [borderCfg, setBorderCfg] = useState<BorderSpec>({ w: 1, style: 'solid' })
   const [widthInput, setWidthInput] = useState('')
   const [widthDraft, setWidthDraft] = useState('')
   const past = useRef<Workbook[]>([])
@@ -541,19 +548,37 @@ export default function TaolApp(): JSX.Element {
   }
 
   const saveCf = (): void => {
-    if (cfFor === null) return
-    const v = Number(cfDraft.value)
-    if (cfDraft.value.trim() === '' || Number.isNaN(v)) {
+    if (cfFor === null && !cfBox) return
+    if (cfDraft.value.trim() === '') {
       setCfFor(null)
+      setCfBox(null)
       return
     }
-    const c = cfFor
+    const raw = cfDraft.value.trim()
+    const num = Number(raw)
+    const value: number | string = /^\s*[+-]?[0-9]+([.,][0-9]+)?\s*$/.test(raw) && !Number.isNaN(num) ? num : raw
+    const box = cfBox
+    const col = cfFor
     mutate((w) => {
       const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
-      const rule: CfRule = { col: c, op: cfDraft.op, value: v, bg: cfDraft.bg }
-      sh.cf = [...(sh.cf ?? []).filter((r) => !(r.col === c && r.op === rule.op)), rule]
+      const rule: CfRule = {
+        ...(box ? { box } : { col: col! }),
+        op: cfDraft.op,
+        value,
+        ...(cfDraft.op === 'between' && cfDraft.value2.trim() !== '' && !Number.isNaN(Number(cfDraft.value2)) ? { value2: Number(cfDraft.value2) } : {}),
+        bg: cfDraft.bg,
+        kind: cfDraft.kind
+      }
+      sh.cf = [
+        ...(sh.cf ?? []).filter((r) => {
+          const sameTarget = box ? !!r.box && r.box.c1 === box.c1 && r.box.r1 === box.r1 && r.box.c2 === box.c2 && r.box.r2 === box.r2 : r.col === col && !r.box
+          return !(sameTarget && r.op === rule.op)
+        }),
+        rule
+      ]
     })
     setCfFor(null)
+    setCfBox(null)
   }
 
   const openColMenu = (c: number): void => {
@@ -684,6 +709,7 @@ export default function TaolApp(): JSX.Element {
       setCommentFor(null)
       setValFor(null)
       setCfFor(null)
+      setCfBox(null)
       return
     }
     if (k.startsWith('Arrow')) {
@@ -790,7 +816,7 @@ export default function TaolApp(): JSX.Element {
           <p className="taol-hint">
             « = » = formule (SOMME, MOYENNE, MIN, MAX, NB, NBVAL, SI, ET, OU, NON, SI.CONDITIONS, RECHERCHEV, SOMME.SI/NB.SI/MOYENNE.SI (+.SI.ET), TEXTE, AUJOURDHUI, DATE, JOUR, MOIS, ANNEE, ARRONDI/ARRONDI.SUP/ARRONDI.INF, ENT, MOD, ABS, PUISSANCE, ESTNUM, ESTVIDE, ESTTEXTE, ESTERREUR, JOINDRE, CONCAT, NBCAR, GAUCHE, DROITE, STXT ; plages A1:B9 ; $A$1 ; 'Feuil 2'!A1 ; % en suffixe).
             Flèches/Entrée/Tab, Shift pour sélectionner une plage, F2 édite, Ctrl+C/V copie-colle (TSV), Ctrl+F recherche,
-            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), mise en forme conditionnelle. Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme. Ctrl+H : rechercher-remplacer · Ctrl+G / F5 : atteindre · Ctrl+; : date du jour · Ctrl+Maj+; : heure · zoom −/+ en haut · volets : figer ici / libérer · masquer lignes/colonnes via les menus ▼ · auto-complétion sur la colonne (validation bloquante si liste définie).
+            Ctrl+Z/Y annuler/rétablir. ▼ en tête de colonne : trier / filtrer. Poignée ⬊ en bas à droite de la cellule active : recopier. Barre de mise en forme : polices, taille, gras/italique/souligné, couleurs, alignements, formats de nombre (+ décimales, entier, heure), bordures, sparklines, fusion, commentaires. Menu ▼ de colonne : largeur, validation (liste), conditionnelle (fond/barres, sur colonne ou plage). Clic sur une lettre de colonne / un numéro de ligne : sélectionne toute la colonne / ligne (▼ : insérer ou supprimer). Ctrl+D / Ctrl+R : remplir vers le bas / la droite. Le copier-coller interne transporte aussi la mise en forme. Ctrl+H : rechercher-remplacer · Ctrl+G / F5 : atteindre · Ctrl+; : date du jour · Ctrl+Maj+; : heure · zoom −/+ en haut · volets : figer ici / libérer · masquer lignes/colonnes via les menus ▼ · auto-complétion sur la colonne (validation bloquante si liste définie).
           </p>
         </div>
       }
@@ -919,10 +945,70 @@ export default function TaolApp(): JSX.Element {
           >
             <option value="general">Général</option>
             <option value="number">Nombre (1,50)</option>
+            <option value="integer">Entier</option>
             <option value="percent">Pourcentage (50 %)</option>
             <option value="euro">Euro (1,50 €)</option>
             <option value="date">Date (JJ/MM/AAAA)</option>
+            <option value="time">Heure (HH:MM)</option>
             <option value="text">Texte</option>
+          </select>
+          <input
+            type="number"
+            className="taol-size"
+            title="Nombre de décimales (nombre/pourcentage/euro)"
+            min={0}
+            max={10}
+            placeholder="2"
+            value={curStyle?.decimals ?? ''}
+            onChange={(e) => applyFmt({ decimals: e.target.value === '' ? null : Number(e.target.value) })}
+          />
+          <button
+            type="button"
+            className="taol-tgl"
+            title="Mise en forme conditionnelle sur la plage sélectionnée"
+            disabled={!range}
+            onClick={() => {
+              setCfBox(range)
+              setCfFor(null)
+              setCfDraft({ op: '>', value: '', value2: '', bg: '#fee2e2', kind: 'bg' })
+            }}
+          >
+            Conditionnelle
+          </button>
+          <span className="taol-sep" />
+          <select
+            className="taol-select"
+            title="Style de bordure"
+            value={`${borderCfg.w}|${borderCfg.style ?? 'solid'}`}
+            onChange={(e) => {
+              const [w, st] = e.target.value.split('|')
+              setBorderCfg((b) => ({ ...b, w: Number(w), style: st as BorderSpec['style'] }))
+            }}
+          >
+            <option value="1|solid">Bordure fine</option>
+            <option value="2|solid">Bordure moyenne</option>
+            <option value="3|solid">Bordure épaisse</option>
+            <option value="1|dashed">Pointillée</option>
+            <option value="1|dotted">Pointillée fine</option>
+          </select>
+          <ColorSwatches value={borderCfg.color ?? '#000000'} onChange={(c) => setBorderCfg((b) => ({ ...b, color: c }))} title="Couleur de bordure" />
+          <select
+            className="taol-select"
+            title="Appliquer des bordures à la sélection"
+            value=""
+            onChange={(e) => {
+              const m = e.target.value
+              if (!m) return
+              mutate((w) => {
+                const sh = w.sheets.find((s) => s.id === w.activeSheetId) ?? w.sheets[0]
+                applyBorders(sh, styleBox(), m as 'all' | 'outer' | 'none', borderCfg)
+              })
+            }}
+          >
+            <option value="">Bordures…</option>
+            <option value="all">Toutes les bordures</option>
+            <option value="outer">Contour extérieur</option>
+            <option value="none">Effacer les bordures</option>
           </select>
           <button
             type="button"
@@ -1163,11 +1249,12 @@ export default function TaolApp(): JSX.Element {
                           type="button"
                           onClick={() => {
                             setCfFor(c)
-                            setCfDraft({ op: '>', value: '', bg: '#fee2e2' })
+                            setCfBox(null)
+                            setCfDraft({ op: '>', value: '', value2: '', bg: '#fee2e2', kind: 'bg' })
                             setColMenu(null)
                           }}
                         >
-                          Mise en forme conditionnelle…{sheet.cf?.some((r) => r.col === c) ? ' •' : ''}
+                          Mise en forme conditionnelle…{sheet.cf?.some((r) => r.col === c && !r.box) ? ' •' : ''}
                         </button>
                         <button
                           type="button"
@@ -1292,7 +1379,11 @@ export default function TaolApp(): JSX.Element {
                     const cell = sheet.cells[key]
                     const active = c === sel.col && r === sel.row
                     const s = cell?.s
-                    const cfBg = sheet.cf?.find((rule) => rule.col === c && cfMatch(rule, cell?.v ?? null))?.bg
+                    const cfRule = sheet.cf?.find((rule) => {
+                      const box = cfBoxOf(sheet, rule)
+                      if (!box || c < box.c1 || c > box.c2 || r < box.r1 || r > box.r2) return false
+                      return cfMatch(rule, cell?.v ?? null)
+                    })
                     const style: React.CSSProperties = {}
                     if (s?.bold) style.fontWeight = 'bold'
                     if (s?.italic) style.fontStyle = 'italic'
@@ -1300,8 +1391,21 @@ export default function TaolApp(): JSX.Element {
                     if (s?.fontFamily) style.fontFamily = s.fontFamily
                     if (s?.fontSize) style.fontSize = `${s.fontSize}px`
                     if (s?.color) style.color = s.color
-                    const bg = s?.bg ?? cfBg
-                    if (bg) style.backgroundColor = bg
+                    if (s?.borders?.t) style.borderTop = `${s.borders.t.w}px ${s.borders.t.style ?? 'solid'}${s.borders.t.color ? ' ' + s.borders.t.color : ''}`
+                    if (s?.borders?.b) style.borderBottom = `${s.borders.b.w}px ${s.borders.b.style ?? 'solid'}${s.borders.b.color ? ' ' + s.borders.b.color : ''}`
+                    if (s?.borders?.l) style.borderLeft = `${s.borders.l.w}px ${s.borders.l.style ?? 'solid'}${s.borders.l.color ? ' ' + s.borders.l.color : ''}`
+                    if (s?.borders?.r) style.borderRight = `${s.borders.r.w}px ${s.borders.r.style ?? 'solid'}${s.borders.r.color ? ' ' + s.borders.r.color : ''}`
+                    if (cfRule && cfRule.kind === 'databar' && typeof cell?.v === 'number') {
+                      const box = cfBoxOf(sheet, cfRule)
+                      const mx = box ? boxMax(sheet, box) : 0
+                      if (mx > 0) {
+                        const p = Math.min(100, Math.round((Math.abs(cell.v) / mx) * 100))
+                        style.background = `linear-gradient(to right, ${cfRule.bg} 0%, ${cfRule.bg} ${p}%, transparent ${p}%)`
+                      }
+                    } else {
+                      const bg = s?.bg ?? cfRule?.bg
+                      if (bg) style.backgroundColor = bg
+                    }
                     if (s?.align) style.textAlign = s.align
                     const w = sheet.widths?.[c]
                     const sparkMax = s?.spark ? colSparkMax(sheet, c) : 0
@@ -1562,48 +1666,76 @@ export default function TaolApp(): JSX.Element {
             </div>
           </div>
         )}
-        {cfFor !== null && sheet && (
-          <div className="taol-modal-overlay" onClick={() => setCfFor(null)}>
+        {(cfFor !== null || cfBox) && sheet && (
+          <div className="taol-modal-overlay" onClick={() => { setCfFor(null); setCfBox(null) }}>
             <div className="taol-modal" onClick={(e) => e.stopPropagation()}>
-              <p className="taol-modal-title">Mise en forme conditionnelle — colonne {indexToCol(cfFor)}</p>
+              <p className="taol-modal-title">
+                Mise en forme conditionnelle — {cfBox ? `plage ${keyOf(cfBox.c1, cfBox.r1)}:${keyOf(cfBox.c2, cfBox.r2)}` : `colonne ${indexToCol(cfFor!)}`}
+              </p>
               <div className="taol-cf-row">
                 <select
                   className="taol-select"
                   value={cfDraft.op}
-                  onChange={(e) => setCfDraft((d) => ({ ...d, op: e.target.value as '>' | '<' }))}
+                  onChange={(e) => setCfDraft((d) => ({ ...d, op: e.target.value as CfOp }))}
                 >
                   <option value=">">supérieur à</option>
                   <option value="<">inférieur à</option>
+                  <option value="=">égal à</option>
+                  <option value="<>">différent de</option>
+                  <option value="between">entre</option>
+                  <option value="contains">contient le texte</option>
                 </select>
                 <input
-                  type="number"
                   className="taol-size taol-cf-val"
                   value={cfDraft.value}
                   onChange={(e) => setCfDraft((d) => ({ ...d, value: e.target.value }))}
                   placeholder="valeur"
                 />
-                <span className="taol-color-label">Fond :</span>
-                <ColorSwatches value={cfDraft.bg} onChange={(c) => setCfDraft((d) => ({ ...d, bg: c }))} title="Couleur de fond" />
+                {cfDraft.op === 'between' && (
+                  <>
+                    <span className="taol-color-label">et</span>
+                    <input
+                      className="taol-size taol-cf-val"
+                      value={cfDraft.value2}
+                      onChange={(e) => setCfDraft((d) => ({ ...d, value2: e.target.value }))}
+                      placeholder="valeur max"
+                    />
+                  </>
+                )}
+                <select
+                  className="taol-select"
+                  title="Type de règle"
+                  value={cfDraft.kind}
+                  onChange={(e) => setCfDraft((d) => ({ ...d, kind: e.target.value as 'bg' | 'databar' }))}
+                >
+                  <option value="bg">Fond coloré</option>
+                  <option value="databar">Barre de données</option>
+                </select>
+                <span className="taol-color-label">{cfDraft.kind === 'databar' ? 'Barre :' : 'Fond :'}</span>
+                <ColorSwatches value={cfDraft.bg} onChange={(c) => setCfDraft((d) => ({ ...d, bg: c }))} title="Couleur" />
               </div>
               <div className="taol-modal-actions">
-                <button type="button" className="db-btn" onClick={() => setCfFor(null)}>
+                <button type="button" className="db-btn" onClick={() => { setCfFor(null); setCfBox(null) }}>
                   Annuler
                 </button>
                 <button type="button" className="db-btn" onClick={saveCf}>
                   Ajouter la règle
                 </button>
               </div>
-              {sheet.cf && sheet.cf.some((r) => r.col === cfFor) && (
+              {sheet.cf && sheet.cf.some((r) => (cfBox ? r.box && r.box.c1 === cfBox.c1 && r.box.r1 === cfBox.r1 && r.box.c2 === cfBox.c2 && r.box.r2 === cfBox.r2 : r.col === cfFor && !r.box)) && (
                 <>
                   <div className="taol-menu-sep" />
                   <p className="taol-menu-label">Règles actives :</p>
                   {sheet.cf
-                    .filter((r) => r.col === cfFor)
+                    .filter((r) => (cfBox ? r.box && r.box.c1 === cfBox.c1 && r.box.r1 === cfBox.r1 && r.box.c2 === cfBox.c2 && r.box.r2 === cfBox.r2 : r.col === cfFor && !r.box))
                     .map((r, i) => (
                       <div key={i} className="taol-menu-row">
                         <span className="taol-cf-chip" style={{ background: r.bg }} />
                         <span>
-                          {indexToCol(r.col)} {r.op} {r.value}
+                          {r.box ? `${keyOf(r.box.c1, r.box.r1)}:${keyOf(r.box.c2, r.box.r2)}` : indexToCol(r.col ?? 0)}{' '}
+                          {r.op} {String(r.value)}
+                          {r.op === 'between' && r.value2 !== undefined ? ` … ${r.value2}` : ''}
+                          {r.kind === 'databar' ? ' (barre)' : ''}
                         </span>
                         <button
                           type="button"

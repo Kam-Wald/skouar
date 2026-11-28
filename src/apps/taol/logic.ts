@@ -584,12 +584,19 @@ export function recalcWorkbook(wb: Workbook): void {
 
 const NUM_RE = /^[+-]?[0-9]+([.,][0-9]+)?$/
 
+const PCT_RE = /^([+-]?[0-9]+(?:[.,][0-9]+)?)\s*%$/
+const DATE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/
+const DATE_FR_RE = /^\d{1,2}\/\d{1,2}\/\d{4}$/
+
 export function parseInput(text: string): Cell {
   const t = text.trim()
   if (t.startsWith('=')) return { f: t.slice(1).trim() }
   if (NUM_RE.test(t)) return { v: parseFloat(t.replace(',', '.')) }
+  const pct = PCT_RE.exec(t)
+  if (pct) return { v: parseFloat(pct[1].replace(',', '.')) / 100 }
   if (t.toUpperCase() === 'VRAI') return { v: true }
   if (t.toUpperCase() === 'FAUX') return { v: false }
+  if (DATE_ISO_RE.test(t) || DATE_FR_RE.test(t)) return { v: t, s: { numFmt: 'date' } }
   return { v: text }
 }
 
@@ -799,7 +806,15 @@ export function searchCells(sh: Sheet, q: string): { col: number; row: number }[
 
 // ---------- Mise en forme (PR B) ----------
 
-export type NumFmt = 'general' | 'number' | 'percent' | 'euro' | 'date' | 'text'
+export type NumFmt = 'general' | 'number' | 'integer' | 'percent' | 'euro' | 'date' | 'time' | 'text'
+
+export interface BorderSpec {
+  w: number
+  style?: 'solid' | 'dashed' | 'dotted'
+  color?: string
+}
+
+export type Borders = Partial<Record<'t' | 'b' | 'l' | 'r', BorderSpec>>
 
 export interface CellStyle {
   bold?: boolean
@@ -811,8 +826,10 @@ export interface CellStyle {
   bg?: string
   align?: 'left' | 'center' | 'right'
   numFmt?: NumFmt
+  decimals?: number
   spark?: boolean
   comment?: string
+  borders?: Borders
 }
 
 export interface Box {
@@ -822,11 +839,16 @@ export interface Box {
   r2: number
 }
 
+export type CfOp = '>' | '<' | '=' | '<>' | 'between' | 'contains'
+
 export interface CfRule {
-  col: number
-  op: '>' | '<'
-  value: number
+  col?: number
+  box?: Box
+  op: CfOp
+  value: number | string
+  value2?: number
   bg: string
+  kind?: 'bg' | 'databar'
 }
 
 export function fmtNumRaw(n: number): string {
@@ -834,22 +856,30 @@ export function fmtNumRaw(n: number): string {
 }
 
 export function fmtWithStyle(v: CellValue, s?: CellStyle): string {
-  if (s?.numFmt && s.numFmt !== 'general' && typeof v === 'number') {
-    if (s.numFmt === 'percent') return `${fmtNumRaw(v * 100)} %`
-    if (s.numFmt === 'euro') return `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €`
-    if (s.numFmt === 'number') return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    if (s.numFmt === 'text') return String(v)
-  }
-  if (s?.numFmt === 'date') {
-    if (typeof v === 'string') {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
-      if (m) return `${m[3]}/${m[2]}/${m[1]}`
-    }
-    if (typeof v === 'number') {
+  const fmt = s?.numFmt ?? 'general'
+  if (fmt === 'text') return String(v ?? '')
+  if (fmt !== 'general' && typeof v === 'number') {
+    const dec = s?.decimals
+    if (fmt === 'percent') return `${(v * 100).toLocaleString('fr-FR', { minimumFractionDigits: dec ?? 0, maximumFractionDigits: dec ?? 2 })} %`
+    if (fmt === 'euro') return `${v.toLocaleString('fr-FR', { minimumFractionDigits: dec ?? 2, maximumFractionDigits: dec ?? 2 })} €`
+    if (fmt === 'number') return v.toLocaleString('fr-FR', { minimumFractionDigits: dec ?? 2, maximumFractionDigits: dec ?? 2 })
+    if (fmt === 'integer') return Math.round(v).toLocaleString('fr-FR', { maximumFractionDigits: 0 })
+    if (fmt === 'date') {
       const { y, m, d } = serialToYmd(v)
       return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
     }
+    if (fmt === 'time') {
+      const mins = Math.round(v * 1440)
+      return `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+    }
   }
+  if (fmt === 'date' && typeof v === 'string') {
+    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`
+    const fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v)
+    if (fr) return `${fr[1].padStart(2, '0')}/${fr[2].padStart(2, '0')}/${fr[3]}`
+  }
+  if (fmt === 'time' && typeof v === 'string') return v
   return fmtDisplay(v)
 }
 
@@ -863,6 +893,10 @@ export function applyStyle(sh: Sheet, box: Box, patch: StylePatch): void {
       const next: CellStyle = { ...cell.s }
       for (const [k, val] of Object.entries(patch)) {
         if (val === undefined) continue
+        if (k === 'borders' && val !== null && typeof val === 'object') {
+          next.borders = { ...next.borders, ...(val as Borders) }
+          continue
+        }
         if (val === null || val === '') delete (next as Record<string, unknown>)[k]
         else (next as Record<string, unknown>)[k] = val
       }
@@ -897,8 +931,68 @@ export function unmergeAt(sh: Sheet, c: number, r: number): void {
 }
 
 export function cfMatch(rule: CfRule, v: CellValue): boolean {
-  if (typeof v !== 'number') return false
-  return rule.op === '>' ? v > rule.value : v < rule.value
+  const val = typeof rule.value === 'number' ? rule.value : String(rule.value)
+  switch (rule.op) {
+    case '>':
+      return typeof v === 'number' && v > Number(rule.value)
+    case '<':
+      return typeof v === 'number' && v < Number(rule.value)
+    case '=':
+      return compareValues(v, val) === 0
+    case '<>':
+      return compareValues(v, val) !== 0
+    case 'between':
+      return typeof v === 'number' && v >= Number(rule.value) && v <= Number(rule.value2 ?? rule.value)
+    case 'contains':
+      return typeof v === 'string' && v.toLowerCase().includes(String(rule.value).toLowerCase())
+    default:
+      return false
+  }
+}
+
+export function cfBoxOf(sh: Sheet, rule: CfRule): Box | null {
+  if (rule.box) return rule.box
+  if (rule.col !== undefined) return { c1: rule.col, r1: 0, c2: rule.col, r2: usedRange(sh).maxR }
+  return null
+}
+
+export function boxMax(sh: Sheet, box: Box): number {
+  let max = 0
+  for (let r = box.r1; r <= box.r2; r++) {
+    for (let c = box.c1; c <= box.c2; c++) {
+      const cell = sh.cells[keyOf(c, r)]
+      if (cell && typeof cell.v === 'number') max = Math.max(max, Math.abs(cell.v))
+    }
+  }
+  return max
+}
+
+export function applyBorders(sh: Sheet, box: Box, mode: 'all' | 'outer' | 'none', b: BorderSpec): void {
+  for (let r = box.r1; r <= box.r2; r++) {
+    for (let c = box.c1; c <= box.c2; c++) {
+      const key = keyOf(c, r)
+      const cell = sh.cells[key] ?? (sh.cells[key] = {})
+      if (mode === 'none') {
+        if (cell.s) {
+          delete cell.s.borders
+          if (Object.keys(cell.s).length === 0) delete cell.s
+        }
+        continue
+      }
+      const sides: (keyof Borders)[] =
+        mode === 'all'
+          ? ['t', 'b', 'l', 'r']
+          : [
+              ...(r === box.r1 ? (['t'] as const) : []),
+              ...(r === box.r2 ? (['b'] as const) : []),
+              ...(c === box.c1 ? (['l'] as const) : []),
+              ...(c === box.c2 ? (['r'] as const) : [])
+            ]
+      const cur: Borders = { ...cell.s?.borders }
+      for (const side of sides) cur[side] = { ...b }
+      cell.s = { ...cell.s, borders: cur }
+    }
+  }
 }
 
 export function colSparkMax(sh: Sheet, col: number): number {
@@ -1033,16 +1127,33 @@ function shiftSheetMeta(sh: Sheet, axis: Axis, at: number, delta: number): void 
     sh.widths = shiftKeyed(sh.widths, at, delta)
     sh.validations = shiftKeyed(sh.validations, at, delta)
     sh.hiddenCols = shiftKeyed(sh.hiddenCols, at, delta)
-    if (sh.cf) {
-      const out: CfRule[] = []
-      for (const r of sh.cf) {
-        const c = shiftRefCoord(r.col, at, delta)
-        if (c !== null) out.push({ ...r, col: c })
-      }
-      sh.cf = out
-    }
   } else {
     sh.hiddenRows = shiftKeyed(sh.hiddenRows, at, delta)
+  }
+  if (sh.cf) {
+    const isDel = delta < 0
+    const nd = Math.abs(delta)
+    const out: CfRule[] = []
+    for (const r of sh.cf) {
+      if (r.box) {
+        const a1 = axis === 'row' ? r.box.r1 : r.box.c1
+        const a2 = axis === 'row' ? r.box.r2 : r.box.c2
+        if (isDel && a1 >= at && a2 < at + nd) continue
+        const s1 = shiftEdgeCoord(a1, at, delta)
+        const s2 = shiftEdgeCoord(a2, at, delta)
+        out.push({ ...r, box: axis === 'row' ? { ...r.box, r1: s1, r2: s2 } : { ...r.box, c1: s1, c2: s2 } })
+      } else if (r.col !== undefined) {
+        if (axis !== 'col') {
+          out.push(r)
+          continue
+        }
+        const c = shiftRefCoord(r.col, at, delta)
+        if (c !== null) out.push({ ...r, col: c })
+      } else {
+        out.push(r)
+      }
+    }
+    sh.cf = out
   }
 }
 

@@ -467,3 +467,67 @@ describe('confort de saisie (PR E)', () => {
     expect(sh.hiddenCols).toBeUndefined()
   })
 })
+
+describe('présentation (PR F)', () => {
+  it('fmtWithStyle : entier, décimales, heure, % avec décimales, date FR en chaîne', async () => {
+    const { fmtWithStyle, dateToSerial } = await import('../src/apps/taol/logic')
+    expect(fmtWithStyle(1234.56, { numFmt: 'integer' })).toMatch(/1.235/)
+    expect(fmtWithStyle(1.5, { numFmt: 'number', decimals: 3 })).toContain('1,500')
+    expect(fmtWithStyle(0.5, { numFmt: 'percent', decimals: 1 })).toBe('50,0 %')
+    expect(fmtWithStyle(14 / 24 + 30 / 1440, { numFmt: 'time' })).toBe('14:30')
+    expect(fmtWithStyle('5/1/2026', { numFmt: 'date' })).toBe('05/01/2026')
+    expect(fmtWithStyle('14:30', { numFmt: 'time' })).toBe('14:30')
+    expect(fmtWithStyle(dateToSerial(2026, 12, 31), { numFmt: 'date' })).toBe('31/12/2026')
+  })
+
+  it('parseInput : "50%" stocke 0.5, les dates prennent le format date', async () => {
+    const { parseInput } = await import('../src/apps/taol/logic')
+    expect(parseInput('50%')).toEqual({ v: 0.5 })
+    expect(parseInput('12,5 %')).toEqual({ v: 0.125 })
+    expect(parseInput('2026-01-05')).toEqual({ v: '2026-01-05', s: { numFmt: 'date' } })
+    expect(parseInput('5/1/2026')).toEqual({ v: '5/1/2026', s: { numFmt: 'date' } })
+    expect(parseInput('12,5')).toEqual({ v: 12.5 })
+  })
+
+  it('applyBorders : toutes / contour / effacer', async () => {
+    const { applyBorders } = await import('../src/apps/taol/logic')
+    const sh: Sheet = { id: 's', name: 'F', cells: {} }
+    applyBorders(sh, { c1: 0, r1: 0, c2: 1, r2: 1 }, 'all', { w: 2, style: 'dashed', color: '#ff0000' })
+    expect(sh.cells.A1.s?.borders?.t).toEqual({ w: 2, style: 'dashed', color: '#ff0000' })
+    expect(sh.cells.B2.s?.borders?.r).toEqual({ w: 2, style: 'dashed', color: '#ff0000' })
+    const sh2: Sheet = { id: 's', name: 'F', cells: {} }
+    applyBorders(sh2, { c1: 0, r1: 0, c2: 1, r2: 1 }, 'outer', { w: 1 })
+    expect(sh2.cells.A1.s?.borders).toEqual({ t: { w: 1 }, l: { w: 1 } })
+    expect(sh2.cells.B2.s?.borders).toEqual({ b: { w: 1 }, r: { w: 1 } })
+    expect(sh2.cells.B1.s?.borders).toEqual({ t: { w: 1 }, r: { w: 1 } })
+    applyBorders(sh2, { c1: 0, r1: 0, c2: 1, r2: 1 }, 'none', { w: 1 })
+    expect(sh2.cells.A1.s).toBeUndefined()
+  })
+
+  it('cfMatch : nouvelles opérateurs', async () => {
+    const { cfMatch } = await import('../src/apps/taol/logic')
+    expect(cfMatch({ op: '=', value: 'Pom', bg: '#fff' }, 'pom')).toBe(true)
+    expect(cfMatch({ op: '<>', value: 5, bg: '#fff' }, 6)).toBe(true)
+    expect(cfMatch({ op: 'between', value: 10, value2: 20, bg: '#fff' }, 15)).toBe(true)
+    expect(cfMatch({ op: 'between', value: 10, value2: 20, bg: '#fff' }, 25)).toBe(false)
+    expect(cfMatch({ op: 'contains', value: 'ail', bg: '#fff' }, 'aileron')).toBe(true)
+    expect(cfMatch({ op: '>', value: 10, bg: '#fff' }, 11)).toBe(true)
+  })
+
+  it('cfBoxOf + boxMax + décalage des règles à plage (PR C)', async () => {
+    const { cfBoxOf, boxMax, insertRowsWb } = await import('../src/apps/taol/logic')
+    const sh: Sheet = {
+      id: 's1',
+      name: 'F',
+      cells: { A1: { v: 5 }, A2: { v: 50 }, B2: { v: 1 } },
+      cf: [{ box: { c1: 0, r1: 0, c2: 1, r2: 1 }, op: '>', value: 10, bg: '#fee2e2' }, { col: 1, op: '<', value: 5, bg: '#e0f2fe' }]
+    }
+    const wb: Workbook = { sheets: [sh], activeSheetId: 's1', activeCell: 'A1' }
+    expect(cfBoxOf(sh, sh.cf![0])).toEqual({ c1: 0, r1: 0, c2: 1, r2: 1 })
+    expect(cfBoxOf(sh, sh.cf![1])).toEqual({ c1: 1, r1: 0, c2: 1, r2: 1 })
+    expect(boxMax(sh, { c1: 0, r1: 0, c2: 0, r2: 1 })).toBe(50)
+    insertRowsWb(wb, 's1', 1, 1)
+    expect(sh.cf![0].box).toEqual({ c1: 0, r1: 0, c2: 1, r2: 2 })
+    expect(sh.cf![1].col).toBe(1)
+  })
+})
