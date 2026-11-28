@@ -3,8 +3,10 @@ import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
 import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../shared/Settings'
 import { apps } from '../registry'
+import CourbesView from './CourbesView'
 import CycleView from './CycleView'
 import HomeView from './HomeView'
+import JournalView from './JournalView'
 import Onboarding from './Onboarding'
 import PreventifView from './PreventifView'
 import ProfilView from './ProfilView'
@@ -136,6 +138,10 @@ export default function RacineApp() {
         <PreventifView refs={refs} onChanged={reload} />
       ) : view === 'profil' ? (
         <ProfilView profile={profile ?? emptyProfile()} events={events} onChanged={reload} />
+      ) : view === 'journal' ? (
+        <JournalView events={events} onChanged={reload} />
+      ) : view === 'courbes' ? (
+        <CourbesView events={events} refs={refs} onChanged={reload} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
