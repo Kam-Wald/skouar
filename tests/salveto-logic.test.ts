@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   BODY_ZONES,
   addDays,
+  bandeauAccueil,
   bienfaits,
   clampInt,
   cooccurrences,
@@ -9,6 +10,7 @@ import {
   dayOf,
   diffDays,
   dernieresValeurs,
+  echeancesPreventives,
   eventsOfType,
   eventsOnDay,
   fmtDay,
@@ -22,15 +24,18 @@ import {
   normalizeTrigger,
   phaseOfDay,
   prevision,
+  rdvTries,
   seedConfig,
   seedRefs,
   sortEventsDesc,
   timeOf,
   toLocalISO,
+  todayDay,
   touchEvent,
   upsertRef,
   validateEvent,
   type RefItem,
+  type SalvetoConfig,
   type SalvetoEvent,
   type SalvetoRefs
 } from '../src/apps/salveto/logic'
@@ -328,5 +333,94 @@ describe('Salveto logic — jours + cycle menstruel (S5)', () => {
     expect(labelOfEvent(mk('a', 'cycle', '2025-01-01T08:00:00', { fin: '2025-01-05T22:00:00', flux: 'abondant' }))).toBe(
       'Règles 01/01/2025 → 05/01/2025 · flux abondant'
     )
+  })
+})
+
+describe('Salveto logic — RDV, ordonnances, préventif, bandeau (S6)', () => {
+  const mk = (id: string, type: SalvetoEvent['type'], date: string, extra: Partial<SalvetoEvent>): SalvetoEvent => ({
+    id,
+    type,
+    date,
+    createdAt: date,
+    updatedAt: date,
+    ...extra
+  })
+
+  it('rdvTries sépare à venir (asc) et passés (desc) selon aujourd’hui', () => {
+    const today = todayDay()
+    const evs = [
+      mk('p', 'rdv', `${addDays(today, -10)}T10:00:00`, { label: 'passé' }),
+      mk('a', 'rdv', `${addDays(today, 3)}T14:00:00`, { label: 'dans 3 j' }),
+      mk('b', 'rdv', `${addDays(today, 10)}T09:00:00`, { label: 'dans 10 j' })
+    ]
+    const { aVenir, passes } = rdvTries(evs)
+    expect(aVenir.map((e) => e.id)).toEqual(['a', 'b'])
+    expect(passes.map((e) => e.id)).toEqual(['p'])
+  })
+
+  it('echeancesPreventives calcule prochaine échéance, retard et jours restants', () => {
+    const today = todayDay()
+    const refs: SalvetoRefs = {
+      version: 1,
+      items: [
+        {
+          id: 'dent',
+          kind: 'preventif',
+          label: 'Dentiste',
+          periodiciteJours: 365,
+          derniereVisite: addDays(today, -400),
+          createdAt: ''
+        },
+        { id: 'opht', kind: 'preventif', label: 'Ophtalmo', periodiciteJours: 730, derniereVisite: addDays(today, -100), createdAt: '' }
+      ]
+    }
+    const e = echeancesPreventives(refs)
+    expect(e.length).toBe(2)
+    const dent = e.find((x) => x.ref.id === 'dent')!
+    expect(dent.enRetard).toBe(true)
+    expect(dent.prochaine).toBe(addDays(addDays(today, -400), 365))
+    const opht = e.find((x) => x.ref.id === 'opht')!
+    expect(opht.enRetard).toBe(false)
+    expect(opht.dansJours).toBe(630)
+  })
+
+  it('bandeauAccueil : RDV proche, ordonnance à renouveler, preventif échu, rappel moral non noté', () => {
+    const today = todayDay()
+    const cfg: SalvetoConfig = { version: 1, onboarded: true, desktopOnly: true, activeSuivis: ['moral'] }
+    const refs: SalvetoRefs = {
+      version: 1,
+      items: [
+        { id: 'dent', kind: 'preventif', label: 'Dentiste', periodiciteJours: 365, derniereVisite: addDays(today, -400), createdAt: '' }
+      ]
+    }
+    const evs = [
+      mk('r', 'rdv', `${addDays(today, 3)}T14:00:00`, { label: 'Dr Martin' }),
+      mk('o', 'ordonnance', `${addDays(today, -30)}T09:00:00`, { medecin: 'Dr Martin', contenu: 'Doliprane', aRenouveler: true })
+    ]
+    const b = bandeauAccueil(evs, refs, cfg)
+    expect(b.some((x) => x.kind === 'rdv' && x.texte.includes('Dr Martin dans 3 jours'))).toBe(true)
+    expect(b.some((x) => x.kind === 'ordonnance' && x.texte.includes('à renouveler'))).toBe(true)
+    expect(b.some((x) => x.kind === 'preventif' && x.texte.includes('Dentiste') && x.texte.includes('dépassée'))).toBe(true)
+    expect(b.some((x) => x.kind === 'saisie' && x.texte.includes('moral du jour'))).toBe(true)
+    // moral noté aujourd’hui → plus de rappel de saisie
+    const b2 = bandeauAccueil([...evs, mk('m', 'moral', `${today}T08:00:00`, { value: 4 })], refs, cfg)
+    expect(b2.some((x) => x.kind === 'saisie')).toBe(false)
+    // suivi moral désactivé → pas de rappel non plus
+    const cfg2 = { ...cfg, activeSuivis: [] }
+    expect(bandeauAccueil(evs, refs, cfg2).some((x) => x.kind === 'saisie')).toBe(false)
+  })
+
+  it('labelOfEvent rdv / ordonnance', () => {
+    expect(labelOfEvent(mk('r', 'rdv', '2025-01-10T14:30:00', { label: 'Dr Martin', lieu: 'Centre', motif: 'contrôle' }))).toBe(
+      'RDV Dr Martin le 10/01/2025 à 14:30 · Centre · contrôle'
+    )
+    expect(labelOfEvent(mk('o', 'ordonnance', '2025-01-10T09:00:00', { medecin: 'Dr Martin', aRenouveler: true, fin: '2025-02-10T23:00:00' }))).toBe(
+      'Ordonnance de Dr Martin · à renouveler · fin le 10/02/2025'
+    )
+  })
+
+  it('migrateConfig : questionsRdv défaut [] et conservé si présent', () => {
+    expect(migrateConfig({ version: 1, onboarded: true, activeSuivis: [] })?.questionsRdv).toEqual([])
+    expect(migrateConfig({ version: 1, onboarded: true, activeSuivis: [], questionsRdv: ['Q1', 42] })?.questionsRdv).toEqual(['Q1'])
   })
 })

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
+import { OrdonnancesView, PreventifView, RdvView } from './MedViews'
 import QuickSaisie from './QuickSaisie'
 import {
   ALL_SUIVIS,
+  bandeauAccueil,
   bienfaits,
   cooccurrences,
   cyclesOf,
@@ -23,6 +25,7 @@ import {
   sortEventsDesc,
   timeOf,
   todayDay,
+  touchEvent,
   upsertRef,
   type RefItem,
   type SalvetoConfig,
@@ -34,17 +37,17 @@ import { loadConfig, loadEvents, loadRefs, saveConfig, saveEvent, saveRefs } fro
 
 const LOGO = `${import.meta.env.BASE_URL}app-icons/salveto.svg`
 
-type View = 'accueil' | 'traitements' | 'cycle'
+type View = 'accueil' | 'traitements' | 'cycle' | 'rdv' | 'ordonnances' | 'preventif'
 
 const NAV: { label: string; icon: string; view?: View; soon?: boolean }[] = [
   { label: 'Accueil', icon: '🏠', view: 'accueil' },
   { label: 'Journal', icon: '📖', soon: true },
   { label: 'Courbes', icon: '📈', soon: true },
   { label: 'Cycle', icon: '🌸', view: 'cycle' },
-  { label: 'RDV', icon: '🗓️', soon: true },
-  { label: 'Ordonnances', icon: '📄', soon: true },
+  { label: 'RDV', icon: '🗓️', view: 'rdv' },
+  { label: 'Ordonnances', icon: '📄', view: 'ordonnances' },
   { label: 'Traitements', icon: '💊', view: 'traitements' },
-  { label: 'Préventif', icon: '🩺', soon: true },
+  { label: 'Préventif', icon: '🩺', view: 'preventif' },
   { label: 'Profil santé', icon: '🧾', soon: true },
   { label: 'Rapports', icon: '🗂️', soon: true },
   { label: 'Paramètres', icon: '⚙️', soon: true }
@@ -164,6 +167,20 @@ export default function SalvetoApp() {
     })
   }
 
+  const onUpdateEvent = (e: SalvetoEvent): void => {
+    const t = touchEvent(e)
+    void saveEvent(t)
+    setEvents((prev) => sortEventsDesc(prev.map((x) => (x.id === t.id ? t : x))))
+    notify('Événement mis à jour')
+  }
+
+  const onSaveConfig = (c: SalvetoConfig): void => {
+    saveConfig(c)
+    setConfig(c)
+  }
+
+  const bandeau = bandeauAccueil(events, refs, config)
+
   const onSaveEvent = (e: SalvetoEvent): void => {
     void saveEvent(e)
     setEvents((prev) => sortEventsDesc([...prev, e]))
@@ -200,7 +217,37 @@ export default function SalvetoApp() {
       }
     >
       <div className="salveto-main">
-        {view === 'cycle' ? (
+        {view === 'rdv' ? (
+          <RdvView
+            events={events}
+            refs={refs}
+            config={config}
+            onSaveEvent={onSaveEvent}
+            onUpdateEvent={onUpdateEvent}
+            onUpsertRef={onUpsertRef}
+            onSaveConfig={onSaveConfig}
+          />
+        ) : view === 'ordonnances' ? (
+          <OrdonnancesView
+            events={events}
+            refs={refs}
+            config={config}
+            onSaveEvent={onSaveEvent}
+            onUpdateEvent={onUpdateEvent}
+            onUpsertRef={onUpsertRef}
+            onSaveConfig={onSaveConfig}
+          />
+        ) : view === 'preventif' ? (
+          <PreventifView
+            events={events}
+            refs={refs}
+            config={config}
+            onSaveEvent={onSaveEvent}
+            onUpdateEvent={onUpdateEvent}
+            onUpsertRef={onUpsertRef}
+            onSaveConfig={onSaveConfig}
+          />
+        ) : view === 'cycle' ? (
           <>
             <h1 className="sa-h1">Cycle menstruel</h1>
             {cycles.length === 0 ? (
@@ -325,6 +372,18 @@ export default function SalvetoApp() {
         ) : (
           <>
         <h1 className="sa-h1">Accueil</h1>
+        {bandeau.length > 0 && (
+          <div className="sa-bandeau" role="status">
+            <p className="sa-bandeau-title">Rappels passifs (uniquement à l’ouverture de l’app) :</p>
+            <ul className="sa-bandeau-list">
+              {bandeau.map((b, i) => (
+                <li key={i} className={`sa-bandeau-item sa-bandeau-${b.kind}`}>
+                  {b.texte}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="sa-muted">Saisie rapide — {quick.length} suivis actifs.</p>
         <div className="sa-quick">
           {quick.map((s) => (

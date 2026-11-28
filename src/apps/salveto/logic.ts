@@ -47,6 +47,7 @@ export interface SalvetoConfig {
   onboarded: boolean
   desktopOnly: boolean
   activeSuivis: SuiviId[]
+  questionsRdv?: string[]
 }
 
 export function seedConfig(): SalvetoConfig {
@@ -66,7 +67,8 @@ export function migrateConfig(raw: unknown): SalvetoConfig | undefined {
     version: 1,
     onboarded: r.onboarded === true,
     desktopOnly: r.desktopOnly !== false,
-    activeSuivis: active
+    activeSuivis: active,
+    questionsRdv: Array.isArray(r.questionsRdv) ? r.questionsRdv.filter((x): x is string => typeof x === 'string') : []
   } as SalvetoConfig
 }
 
@@ -124,6 +126,15 @@ export interface SalvetoEvent {
   effet?: string
   fin?: string
   flux?: string
+  lieu?: string
+  motif?: string
+  statut?: string
+  medecin?: string
+  contenu?: string
+  aRenouveler?: boolean
+  crDiag?: string
+  crExamens?: string
+  crProchaine?: string
   notes?: string
   createdAt: string
   updatedAt: string
@@ -240,9 +251,9 @@ export function labelOfEvent(e: SalvetoEvent): string {
     case 'cycle':
       return `Règles ${fmtDay(dayOf(e.date))}${e.fin ? ` → ${fmtDay(dayOf(e.fin))}` : ''}${e.flux ? ` · flux ${e.flux}` : ''}${e.notes ? ` · ${e.notes}` : ''}`
     case 'rdv':
-      return `RDV ${e.label ?? ''}`
+      return `RDV ${e.label ?? ''} le ${fmtDay(dayOf(e.date))} à ${timeOf(e.date)}${e.lieu ? ` · ${e.lieu}` : ''}${e.motif ? ` · ${e.motif}` : ''}`
     case 'ordonnance':
-      return `Ordonnance ${e.label ?? ''}`
+      return `Ordonnance${e.medecin ? ` de ${e.medecin}` : ''}${e.aRenouveler ? ' · à renouveler' : ''}${e.fin ? ` · fin le ${fmtDay(dayOf(e.fin))}` : ''}`
     case 'marqueur':
       return `📌 ${e.label ?? ''}`
     default:
@@ -453,9 +464,98 @@ export function phaseOfDay(cycles: CycleInfo[], day: string): string {
   return ''
 }
 
+/* ---------- RDV, ordonnances, échéancier préventif (8, 10, 11) ---------- */
+
+export function rdvTries(events: SalvetoEvent[]): { aVenir: SalvetoEvent[]; passes: SalvetoEvent[] } {
+  const today = todayDay()
+  const rdvs = eventsOfType(events, 'rdv')
+  const aVenir = rdvs.filter((e) => dayOf(e.date) >= today).sort((a, b) => (a.date < b.date ? -1 : 1))
+  const passes = sortEventsDesc(rdvs.filter((e) => dayOf(e.date) < today))
+  return { aVenir, passes }
+}
+
+export interface EcheancePreventif {
+  ref: RefItem
+  derniere: string
+  prochaine: string
+  enRetard: boolean
+  dansJours: number
+}
+
+export function echeancesPreventives(refs: SalvetoRefs): EcheancePreventif[] {
+  const today = todayDay()
+  return refs.items
+    .filter((r) => r.kind === 'preventif' && r.derniereVisite && r.periodiciteJours && r.periodiciteJours > 0)
+    .map((r) => {
+      const prochaine = addDays(r.derniereVisite!, r.periodiciteJours!)
+      return {
+        ref: r,
+        derniere: r.derniereVisite!,
+        prochaine,
+        enRetard: prochaine < today,
+        dansJours: diffDays(today, prochaine)
+      }
+    })
+    .sort((a, b) => a.prochaine.localeCompare(b.prochaine))
+}
+
+export interface BandeauItem {
+  kind: 'rdv' | 'ordonnance' | 'preventif' | 'saisie'
+  texte: string
+}
+
+export function bandeauAccueil(events: SalvetoEvent[], refs: SalvetoRefs, config: SalvetoConfig): BandeauItem[] {
+  const out: BandeauItem[] = []
+  const today = todayDay()
+  const { aVenir } = rdvTries(events)
+  const prochain = aVenir[0]
+  if (prochain) {
+    const j = diffDays(today, dayOf(prochain.date))
+    const qui = prochain.label ?? 'sans nom'
+    out.push({
+      kind: 'rdv',
+      texte:
+        j <= 0
+          ? `RDV ${qui} aujourd’hui à ${timeOf(prochain.date)}`
+          : j === 1
+            ? `RDV ${qui} demain (${fmtDay(dayOf(prochain.date))})`
+            : `RDV ${qui} dans ${j} jours (${fmtDay(dayOf(prochain.date))})`
+    })
+  }
+  for (const o of sortEventsDesc(eventsOfType(events, 'ordonnance'))) {
+    const qui = o.medecin ? ` de ${o.medecin}` : ''
+    if (o.aRenouveler) {
+      out.push({
+        kind: 'ordonnance',
+        texte: `Ordonnance${qui} à renouveler${o.fin ? ` (fin le ${fmtDay(dayOf(o.fin))})` : ''}`
+      })
+    } else if (o.fin) {
+      const j = diffDays(today, dayOf(o.fin))
+      if (j >= 0 && j <= 14) {
+        out.push({
+          kind: 'ordonnance',
+          texte: `Ordonnance${qui} se termine dans ${j} j (${fmtDay(dayOf(o.fin))})`
+        })
+      }
+    }
+  }
+  for (const e of echeancesPreventives(refs)) {
+    if (e.enRetard || e.dansJours <= 7) {
+      out.push({
+        kind: 'preventif',
+        texte: `${e.ref.label} : dernière visite le ${fmtDay(e.derniere)}, échéance ${e.enRetard ? 'dépassée' : `dans ${e.dansJours} j`} (${fmtDay(e.prochaine)})`
+      })
+    }
+  }
+  if (config.activeSuivis.includes('moral') && !eventsOnDay(events, today).some((e) => e.type === 'moral')) {
+    out.push({ kind: 'saisie', texte: 'Ton moral du jour n’est pas encore noté' })
+  }
+  return out
+}
+
 /* ---------- Entités de référence (16.C) : traitements, constantes ---------- */
 
-export type RefKind = 'traitement' | 'constante'
+export type RefKind = 'traitement' | 'constante' | 'preventif'
 
 export interface RefItem {
   id: string
@@ -463,6 +563,8 @@ export interface RefItem {
   label: string
   unite?: string
   seuil?: number
+  periodiciteJours?: number
+  derniereVisite?: string
   createdAt: string
 }
 
@@ -471,7 +573,7 @@ export interface SalvetoRefs {
   items: RefItem[]
 }
 
-export const REF_KINDS: RefKind[] = ['traitement', 'constante']
+export const REF_KINDS: RefKind[] = ['traitement', 'constante', 'preventif']
 
 export function seedRefs(): SalvetoRefs {
   return { version: 1, items: [] }
