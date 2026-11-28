@@ -39,6 +39,13 @@ export function validatePayload(type: EventType, p: Record<string, unknown>): st
       if (typeof v === 'string' && v.trim()) return null
       return 'Valeur requise'
     }
+    case 'rdv':
+      if (typeof p.date !== 'number' || !isFinite(p.date)) return 'Date du RDV requise'
+      return String(p.praticien ?? '').trim() ? null : 'Praticien requis'
+    case 'ordonnance':
+      if (typeof p.date !== 'number' || !isFinite(p.date)) return 'Date de l’ordonnance requise'
+      if (!String(p.medecin ?? '').trim()) return 'Médecin requis'
+      return String(p.contenu ?? '').trim() ? null : 'Contenu requis'
     default:
       return null
   }

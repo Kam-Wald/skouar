@@ -357,3 +357,63 @@
   margin: 16px 0 4px;
   font-size: 15px;
 }
+
+.ra-bandeau {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.ra-bandeau ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.ra-bandeau li {
+  font-size: 14px;
+  padding: 2px 0;
+}
+
+.ra-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--muted);
+}
+
+.ra-badge.a-venir {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ra-badge.passe {
+  color: var(--muted);
+}
+
+.ra-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ra-entry input,
+.ra-view input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.ra-view input:focus-visible {
+  border-color: var(--accent);
+}
