@@ -6,6 +6,8 @@ import { apps } from '../registry'
 import CycleView from './CycleView'
 import HomeView from './HomeView'
 import Onboarding from './Onboarding'
+import PreventifView from './PreventifView'
+import RdvView from './RdvView'
 import TraitementsView from './TraitementsView'
 import { DEFAULT_RACINE_SETTINGS, listEvents, listRefs, TRACKERS, type EventType, type HealthEvent, type RacineSettings, type RefEntity } from './store'
 
@@ -122,6 +124,10 @@ export default function RacineApp() {
         <TraitementsView events={events} refs={refs} onChanged={reload} />
       ) : view === 'cycle' ? (
         <CycleView events={events} onChanged={reload} />
+      ) : view === 'rdv' ? (
+        <RdvView events={events} onChanged={reload} />
+      ) : view === 'preventif' ? (
+        <PreventifView refs={refs} onChanged={reload} />
       ) : (
         <section className="ra-view">
           <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>

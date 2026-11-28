@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { notify } from '../../shared/notify'
+import { bandeauItems } from './agenda'
 import { allCrisisTriggers, crisisCoOccurrences } from './crise'
 import { addEvent, ensureRef, fmtDay, fmtTime, summarize, todayEvents, validatePayload } from './events'
 import { constanteLastValue } from './mesures'
@@ -74,9 +75,21 @@ export default function HomeView({ activeTrackers, events, refs, onChanged }: Pr
   const today = todayEvents(events)
   const criseNow = crise ? events.find((e) => e.id === crise.id) ?? crise : null
 
+  const bandeau = bandeauItems(events, refs, Date.now())
+
   return (
     <section className="ra-view">
       <h2>Accueil</h2>
+      {bandeau.length > 0 && (
+        <div className="ra-bandeau" role="status" aria-label="Rappels passifs">
+          <strong>Rappels (passifs, à l’ouverture uniquement) :</strong>
+          <ul>
+            {bandeau.map((b, i) => (
+              <li key={i}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="ra-muted">{events.length} entrée(s) au total — {today.length} aujourd’hui.</p>
       <div className="ra-quick-grid">
         {QUICK.filter(([t]) => activeTrackers.includes(t)).map(([t, label]) => (
