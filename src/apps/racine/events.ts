@@ -1,4 +1,5 @@
 import { uid } from '../../shared/db'
+import { effetLabel, isEffet } from './traitement'
 import { listRefs, makeEvent, saveEvent, saveRef, type EventType, type HealthEvent, type RefEntity } from './store'
 
 export const LEVEL_LABELS: Record<'moral' | 'energie', string[]> = {
@@ -28,6 +29,9 @@ export function validatePayload(type: EventType, p: Record<string, unknown>): st
       return isNum(p.intensite) && p.intensite >= 1 && p.intensite <= 10 ? null : 'Intensité 1 à 10 requise'
     case 'habitude':
       return String(p.name ?? '').trim() ? null : 'Nom de l’habitude requis'
+    case 'traitement':
+      if (!String(p.refId ?? '').trim()) return 'Traitement requis'
+      return isEffet(p.effet) ? null : 'Effet requis (aucun / léger / marqué / négatif)'
     default:
       return null
   }
@@ -63,7 +67,7 @@ export function summarize(e: HealthEvent): string {
     case 'cycle':
       return `Cycle du ${fmtDay(Number(p.debut))} au ${fmtDay(Number(p.fin))}`
     case 'traitement':
-      return `Effet « ${p.name} » : ${p.effet}`
+      return `Effet « ${p.name} » : ${effetLabel(String(p.effet ?? ''))}`
     case 'rdv':
       return `RDV ${p.praticien}${p.motif ? ` — ${p.motif}` : ''}`
     case 'ordonnance':

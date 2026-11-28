@@ -69,7 +69,7 @@ export interface Attachment {
   createdAt: number
 }
 
-export const TRACKERS: EventType[] = ['moral', 'energie', 'poids', 'crise', 'sommeil', 'symptome', 'habitude', 'note', 'cycle']
+export const TRACKERS: EventType[] = ['moral', 'energie', 'poids', 'crise', 'sommeil', 'symptome', 'habitude', 'traitement', 'note', 'cycle']
 
 export const TRACKER_LABELS: Record<EventType, string> = {
   moral: 'Moral',
