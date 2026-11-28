@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import AppShell from '../../shared/AppShell'
 import { notify } from '../../shared/notify'
+import { loadAppSettings, saveAppSettings, SETTINGS_EVENT } from '../../shared/Settings'
 import { apps } from '../registry'
-import { listEvents } from './store'
+import HomeView from './HomeView'
+import Onboarding from './Onboarding'
+import { DEFAULT_RACINE_SETTINGS, listEvents, TRACKERS, type EventType, type HealthEvent, type RacineSettings } from './store'
 
 const app = apps.find((a) => a.id === 'racine')!
 
@@ -20,16 +23,30 @@ const LABELS: [View, string][] = [
   ['rapports', 'Rapports']
 ]
 
+function loadSettings(): RacineSettings {
+  const raw = loadAppSettings('racine') as Partial<RacineSettings>
+  return {
+    onboarded: raw.onboarded === true,
+    trackers: { ...DEFAULT_RACINE_SETTINGS.trackers, ...(raw.trackers ?? {}) }
+  }
+}
+
 export default function RacineApp() {
   const [view, setView] = useState<View>('home')
   const [toast, setToast] = useState('')
-  const [count, setCount] = useState(0)
+  const [events, setEvents] = useState<HealthEvent[]>([])
+  const [settings, setSettings] = useState<RacineSettings>(loadSettings)
+
+  const reload = async (): Promise<void> => {
+    const ev = await listEvents()
+    setEvents(ev)
+  }
 
   useEffect(() => {
     let alive = true
     void listEvents()
       .then((ev) => {
-        if (alive) setCount(ev.length)
+        if (alive) setEvents(ev)
       })
       .catch(() => {
         if (alive) notify('Lecture impossible — état vide en mémoire, rien n’est écrit')
@@ -37,6 +54,12 @@ export default function RacineApp() {
     return () => {
       alive = false
     }
+  }, [])
+
+  useEffect(() => {
+    const on = () => setSettings(loadSettings())
+    window.addEventListener(SETTINGS_EVENT, on)
+    return () => window.removeEventListener(SETTINGS_EVENT, on)
   }, [])
 
   useEffect(() => {
@@ -51,6 +74,28 @@ export default function RacineApp() {
     return () => clearTimeout(t)
   }, [toast])
 
+  const persist = (s: RacineSettings): void => {
+    setSettings(s)
+    saveAppSettings('racine', { onboarded: s.onboarded, trackers: s.trackers }, true)
+  }
+
+  if (!settings.onboarded) {
+    return (
+      <>
+        <Onboarding
+          onDone={(trackers) => persist({ onboarded: true, trackers })}
+        />
+        {toast && (
+          <div className="toast" role="status">
+            {toast}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  const activeTrackers = TRACKERS.filter((t) => settings.trackers[t] !== false)
+
   const sidebar = (
     <>
       <p className="ra-side-label">Racine</p>
@@ -64,14 +109,14 @@ export default function RacineApp() {
 
   return (
     <AppShell appId="racine" appName="Racine" logo={app.logo!} sidebar={sidebar}>
-      <section className="ra-view">
-        <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
-        {view === 'home' ? (
-          <p className="ra-muted">{count} entrée(s) dans le journal. La saisie rapide, les courbes, le profil et les rapports arrivent par sous-parties.</p>
-        ) : (
+      {view === 'home' ? (
+        <HomeView activeTrackers={activeTrackers} events={events} onChanged={reload} />
+      ) : (
+        <section className="ra-view">
+          <h2>{LABELS.find(([v]) => v === view)?.[1] ?? 'Racine'}</h2>
           <p className="ra-muted">Cette vue arrive dans une prochaine sous-partie.</p>
-        )}
-      </section>
+        </section>
+      )}
       {toast && (
         <div className="toast" role="status">
           {toast}

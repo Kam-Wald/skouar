@@ -26,6 +26,7 @@ async function renderApp() {
   const div = document.createElement('div')
   document.body.appendChild(div)
   const root = createRoot(div)
+  localStorage.setItem('skouar:settings', JSON.stringify({ apps: { racine: { onboarded: true, trackers: {} } } }))
   await React.act(async () => {
     root.render(React.createElement(MemoryRouter, { initialEntries: ['/app/racine'] }, React.createElement(RacineApp)))
   })
