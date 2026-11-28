@@ -24,10 +24,11 @@ interface Props {
   activeTrackers: EventType[]
   events: HealthEvent[]
   refs: RefEntity[]
+  onUrgence: () => void
   onChanged: () => Promise<void>
 }
 
-export default function HomeView({ activeTrackers, events, refs, onChanged }: Props): JSX.Element {
+export default function HomeView({ activeTrackers, events, refs, onUrgence, onChanged }: Props): JSX.Element {
   const [entry, setEntry] = useState<EventType | null>(null)
   const [crise, setCrise] = useState<HealthEvent | null>(null)
 
@@ -91,6 +92,11 @@ export default function HomeView({ activeTrackers, events, refs, onChanged }: Pr
         </div>
       )}
       <p className="ra-muted">{events.length} entrée(s) au total — {today.length} aujourd’hui.</p>
+      <div className="ra-form-row">
+        <button type="button" className="ra-urgence-btn" aria-label="Carte d’urgence" onClick={onUrgence}>
+          🚨 Carte d’urgence
+        </button>
+      </div>
       <div className="ra-quick-grid">
         {QUICK.filter(([t]) => activeTrackers.includes(t)).map(([t, label]) => (
           <button
