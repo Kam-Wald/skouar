@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { notify } from '../../shared/notify'
+import { allCrisisTriggers, crisisCoOccurrences } from './crise'
 import { addEvent, ensureRef, fmtTime, summarize, todayEvents, validatePayload } from './events'
 import QuickEntry from './QuickEntry'
 import { makeEvent, saveEvent, TRACKER_LABELS, type EventType, type HealthEvent } from './store'
@@ -62,13 +63,12 @@ export default function HomeView({ activeTrackers, events, onChanged }: Props): 
       return
     }
     await saveEvent({ ...ev, payload, note: note || ev.note })
-    setCrise(null)
-    setEntry(null)
     await onChanged()
     notify('Crise mise à jour')
   }
 
   const today = todayEvents(events)
+  const criseNow = crise ? events.find((e) => e.id === crise.id) ?? crise : null
 
   return (
     <section className="ra-view">
@@ -89,7 +89,9 @@ export default function HomeView({ activeTrackers, events, onChanged }: Props): 
       {entry && (
         <QuickEntry
           type={entry}
-          criseEvent={crise}
+          criseEvent={criseNow}
+          allTriggers={allCrisisTriggers(events)}
+          coOcc={crisisCoOccurrences(events)}
           onSave={(p, n) => void onSave(p, n)}
           onSaveCrise={(ev, p, n) => void onSaveCrise(ev, p, n)}
           onClose={() => {

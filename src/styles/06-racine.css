@@ -202,3 +202,70 @@
 .ra-note {
   color: var(--muted);
 }
+
+.ra-bodymap {
+  position: relative;
+  width: 160px;
+  margin: 4px 0 10px;
+}
+
+.ra-bodymap-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.ra-zone {
+  position: absolute;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.ra-zone:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.ra-zone.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 0.85;
+}
+
+.ra-triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ra-trig-btn {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.ra-trig-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.ra-cooc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
